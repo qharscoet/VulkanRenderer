@@ -1,0 +1,127 @@
+#define VK_USE_PLATFORM_WIN32_KHR
+#define NOMINMAX //Why msvc
+#include <vulkan/vulkan.h>
+#include <GLFW/glfw3.h>
+
+#include <optional>
+#include <vector>
+
+struct SwapChainSupportDetails {
+	VkSurfaceCapabilitiesKHR capabilities;
+	std::vector<VkSurfaceFormatKHR> formats;
+	std::vector<VkPresentModeKHR> presentModes;
+};
+
+struct QueueFamilyIndices {
+	std::optional<uint32_t> graphicsFamily;
+	std::optional<uint32_t> presentFamily;
+
+	bool isComplete() {
+		return graphicsFamily.has_value() && presentFamily.has_value();
+	}
+};
+
+class Device {
+private:
+	GLFWwindow* window = nullptr;
+	VkInstance instance = VK_NULL_HANDLE;
+	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
+	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+
+	VkDevice device = VK_NULL_HANDLE;
+	VkQueue graphicsQueue = VK_NULL_HANDLE;
+
+	VkSurfaceKHR surface;
+	VkQueue presentQueue;
+
+	VkSwapchainKHR swapChain = VK_NULL_HANDLE;
+	std::vector<VkImage> swapChainImages;
+	VkFormat swapChainImageFormat;
+	VkExtent2D swapChainExtent;
+
+	std::vector<VkImageView> swapChainImageViews;
+
+	VkRenderPass renderPass;
+	VkDescriptorSetLayout descriptorSetLayout;
+	VkPipelineLayout pipelineLayout;
+	VkPipeline graphicsPipeline;
+
+	VkBuffer vertexBuffer;
+	VkDeviceMemory vertexBufferMemory;
+	VkBuffer indexBuffer;
+	VkDeviceMemory indexBufferMemory;
+
+	std::vector<VkBuffer> uniformBuffers;
+	std::vector<VkDeviceMemory> uniformBuffersMemory;
+	std::vector<void*> uniformBuffersMapped;
+
+	VkDescriptorPool descriptorPool;
+	std::vector<VkDescriptorSet> descriptorSets;
+
+	std::vector<VkFramebuffer> swapChainFramebuffers;
+
+	VkCommandPool commandPool;
+	std::vector<VkCommandBuffer> commandBuffers;
+
+	const int MAX_FRAMES_IN_FLIGHT = 2;
+	std::vector<VkSemaphore>  imageAvailableSemaphores;
+	std::vector<VkSemaphore>  renderFinishedSemaphores;
+	std::vector<VkFence>  inFlightFences;
+	uint32_t current_frame = 0;
+
+
+private:
+
+	void initVulkan();
+	void cleanupVulkan();
+
+	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
+	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+	bool isDeviceSuitable(VkPhysicalDevice device);
+	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
+
+	void cleanupSwapChain();
+	void recreateSwapChain();
+
+	VkShaderModule createShaderModule(const std::vector<char>& code);
+
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& out_buffer, VkDeviceMemory& out_bufferMemory);
+	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+
+	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+	void updateUniformBuffer(uint32_t currentImage);
+
+	void createInstance();
+	void setupDebugMessenger();
+	void createSurface();
+	void pickPhysicalDevice();
+	void createLogicalDevice();
+	void createSwapChain();
+	void createImageViews();
+	void createRenderPass();
+	void createDescriptorSetLayout();
+	void createGraphicsPipeline();
+	void createFrameBuffers();
+	void createCommandPool();
+	void createVertexBuffer();
+	void createIndexBuffer();
+	void createUniformBuffers();
+	void createDescriptorPool();
+	void createDescriptorSets();
+	void createCommandBuffer();
+	void createSyncObjects();
+
+public:
+	bool framebufferResized = false; //public for now but may change
+
+	Device();
+	~Device();
+
+	void init(GLFWwindow* window);
+	void cleanup();
+
+	void drawFrame();
+	void waitIdle();
+};

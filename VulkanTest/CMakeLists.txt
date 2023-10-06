@@ -6,8 +6,10 @@ find_package(glfw3 CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 
+file(GLOB SOURCES "./*.cpp")
+
 # Ajoutez une source à l'exécutable de ce projet.
-add_executable (VulkanTest "VulkanTest.cpp" "VulkanTest.h")
+add_executable (VulkanTest ${SOURCES})
 target_link_libraries(VulkanTest PRIVATE glfw Vulkan::Vulkan )
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
