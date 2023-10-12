@@ -35,42 +35,6 @@ const bool enableValidationLayers = false;
 const bool enableValidationLayers = true;
 #endif
 
-struct Vertex {
-	glm::vec2 pos;
-	glm::vec3 color;
-
-	static VkVertexInputBindingDescription getBindingDescription() {
-		VkVertexInputBindingDescription bindingDescription{};
-		bindingDescription.binding = 0;
-		bindingDescription.stride = sizeof(Vertex);
-		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-		return bindingDescription;
-	}
-
-	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
-		std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
-
-		attributeDescriptions[0].binding = 0;
-		attributeDescriptions[0].location = 0;
-		attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
-		attributeDescriptions[0].offset = offsetof(Vertex, pos);
-
-		attributeDescriptions[1].binding = 0;
-		attributeDescriptions[1].location = 1;
-		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[1].offset = offsetof(Vertex, color);
-
-		return attributeDescriptions;
-	}
-};
-
-struct UniformBufferObject {
-	glm::mat4 model;
-	glm::mat4 view;
-	glm::mat4 proj;
-};
-
 const std::vector<Vertex> vertices = {
 	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
 	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
@@ -1193,8 +1157,8 @@ void Device::initVulkan() {
 	createGraphicsPipeline();
 	createFrameBuffers();
 	createCommandPool();
-	createVertexBuffer();
-	createIndexBuffer();
+	// createVertexBuffer();
+	// createIndexBuffer();
 	createUniformBuffers();
 	createDescriptorPool();
 	createDescriptorSets();
@@ -1341,4 +1305,68 @@ void Device::cleanupVulkan() {
 	vkDestroySurfaceKHR(instance, surface, nullptr);
 	vkDestroyDevice(device, nullptr);
 	vkDestroyInstance(instance, nullptr);
+}
+
+
+
+
+Buffer Device::createLocalBuffer(size_t size, VkBufferUsageFlags usage, void* src_data) {
+
+	Buffer ret_buffer;
+
+	createBuffer(size,
+		VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, //Important high speed memory
+		ret_buffer.buffer, ret_buffer.memory);
+
+	ret_buffer.mapped_memory = nullptr;
+
+
+	if(src_data) {
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingMemory;
+		createBuffer(size,
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			stagingBuffer, stagingMemory);
+
+		void* data;
+		vkMapMemory(device, stagingMemory, 0, size, 0, &data);
+		memcpy(data, src_data, size);
+		vkUnmapMemory(device, stagingMemory);
+
+
+		copyBuffer(stagingBuffer, ret_buffer.buffer, size);
+		vkDestroyBuffer(device, stagingBuffer, nullptr);
+		vkFreeMemory(device, stagingMemory, nullptr);
+	}
+
+
+	return ret_buffer;
+}
+
+
+Buffer Device::createVertexBuffer(size_t size,void* src_data) {
+	return createLocalBuffer(size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, src_data );
+}
+
+Buffer Device::createIndexBuffer(size_t size,void* src_data) {
+	return createLocalBuffer(size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, src_data );
+}
+
+void Device::destroyBuffer(Buffer buffer) {
+	vkDestroyBuffer(device, buffer.buffer, nullptr);
+	vkFreeMemory(device, buffer.memory, nullptr);
+}
+
+void Device::setVertexBuffer(Buffer vertexBuffer)
+{
+	this->vertexBuffer = vertexBuffer.buffer;
+	this->vertexBufferMemory = vertexBuffer.memory;
+}
+
+void Device::setIndexBuffer(Buffer indexBuffer)
+{
+	this->indexBuffer = indexBuffer.buffer;
+	this->indexBufferMemory = indexBuffer.memory;
 }

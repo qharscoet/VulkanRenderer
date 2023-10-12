@@ -26,6 +26,20 @@ private:
 	Device m_device;
 	GLFWwindow* window = nullptr;
 
+	Buffer vertexBuffer;
+	Buffer indexBuffer;
+
+	const std::vector<Vertex> vertices = {
+		{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+		{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+		{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+		{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+	};
+
+	const std::vector<uint16_t> indices = {
+		0, 1, 2, 2, 3, 0
+	};
+
 	void initWindow() {
 		glfwInit();
 
@@ -35,6 +49,18 @@ private:
 
 		glfwSetWindowUserPointer(window, this);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+	}
+
+	void initBuffers() {
+		vertexBuffer = m_device.createVertexBuffer(vertices.size()* sizeof(vertices[0]), (void*)vertices.data());
+		indexBuffer = m_device.createIndexBuffer(indices.size()* sizeof(indices[0]), (void*)indices.data());
+		m_device.setVertexBuffer(vertexBuffer);
+		m_device.setIndexBuffer(indexBuffer);
+	}
+
+	void cleanupBuffers() {
+		m_device.destroyBuffer(vertexBuffer);
+		m_device.destroyBuffer(indexBuffer);
 	}
 
 
@@ -57,18 +83,14 @@ public:
 	void run() {
 		initWindow();
 		m_device.init(window);
+		initBuffers();
 
 		mainLoop();
 
+		cleanupBuffers();
 		m_device.cleanup();
 		cleanupWindow();
 	}
-
-
-
-
-
-	
 };
 
 int main() {

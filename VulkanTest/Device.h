@@ -2,9 +2,11 @@
 #define NOMINMAX //Why msvc
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 
 #include <optional>
 #include <vector>
+#include <array>
 
 struct SwapChainSupportDetails {
 	VkSurfaceCapabilitiesKHR capabilities;
@@ -19,6 +21,48 @@ struct QueueFamilyIndices {
 	bool isComplete() {
 		return graphicsFamily.has_value() && presentFamily.has_value();
 	}
+};
+
+struct Buffer {
+	VkBuffer buffer;
+	VkDeviceMemory memory;
+	void* mapped_memory;
+};
+
+struct Vertex {
+	glm::vec2 pos;
+	glm::vec3 color;
+
+	static VkVertexInputBindingDescription getBindingDescription() {
+		VkVertexInputBindingDescription bindingDescription{};
+		bindingDescription.binding = 0;
+		bindingDescription.stride = sizeof(Vertex);
+		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+		return bindingDescription;
+	}
+
+	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
+		std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+
+		attributeDescriptions[0].binding = 0;
+		attributeDescriptions[0].location = 0;
+		attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+		attributeDescriptions[0].offset = offsetof(Vertex, pos);
+
+		attributeDescriptions[1].binding = 0;
+		attributeDescriptions[1].location = 1;
+		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+		attributeDescriptions[1].offset = offsetof(Vertex, color);
+
+		return attributeDescriptions;
+	}
+};
+
+struct UniformBufferObject {
+	glm::mat4 model;
+	glm::mat4 view;
+	glm::mat4 proj;
 };
 
 class Device {
@@ -124,4 +168,14 @@ public:
 
 	void drawFrame();
 	void waitIdle();
+
+private:
+	Buffer createLocalBuffer(size_t size,VkBufferUsageFlags usage,  void* src_data = nullptr);
+
+public:
+	Buffer createVertexBuffer(size_t size, void* src_data = nullptr);
+	Buffer createIndexBuffer(size_t size, void* src_data = nullptr);
+	void destroyBuffer(Buffer buffer);
+	void setVertexBuffer(Buffer vertexBuffer);
+	void setIndexBuffer(Buffer indexBuffer);
 };
