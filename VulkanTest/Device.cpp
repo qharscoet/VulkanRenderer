@@ -1283,11 +1283,11 @@ void Device::cleanupVulkan() {
 		DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
 	}
 
-	vkDestroyBuffer(device, vertexBuffer, nullptr);
-	vkFreeMemory(device, vertexBufferMemory, nullptr);
+	// vkDestroyBuffer(device, vertexBuffer, nullptr);
+	// vkFreeMemory(device, vertexBufferMemory, nullptr);
 
-	vkDestroyBuffer(device, indexBuffer, nullptr);
-	vkFreeMemory(device, indexBufferMemory, nullptr);
+	// vkDestroyBuffer(device, indexBuffer, nullptr);
+	// vkFreeMemory(device, indexBufferMemory, nullptr);
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroyBuffer(device, uniformBuffers[i], nullptr);
