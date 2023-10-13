@@ -36,6 +36,27 @@ struct Buffer {
 	void* mapped_memory;
 };
 
+
+struct Texture {
+	int height;
+	int width;
+	int channels;
+	unsigned char* pixels;
+	VkDeviceSize size;
+};
+
+struct ImageDesc {
+	VkFormat format;
+	VkImageTiling tiling;
+	VkImageUsageFlags usage_flags;
+	VkMemoryPropertyFlags memory_properties;
+};
+
+struct GpuImage {
+	VkImage image;
+	VkDeviceMemory memory;
+};
+
 struct Vertex {
 	glm::vec2 pos;
 	glm::vec3 color;
@@ -109,6 +130,8 @@ private:
 	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> descriptorSets;
 
+	GpuImage image;
+
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 
 	VkCommandPool commandPool;
@@ -140,6 +163,8 @@ private:
 
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& out_buffer, VkDeviceMemory& out_bufferMemory);
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+
+	void createImage(Texture tex, ImageDesc desc, GpuImage& out_image);
 
 	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
@@ -185,6 +210,8 @@ public:
 	void setVertexBuffer(Buffer vertexBuffer);
 	void setIndexBuffer(Buffer indexBuffer);
 
+	GpuImage createTexture(Texture tex);
+	void destroyImage(GpuImage image);
 
 	void updateUniformBuffer(const UniformBufferObject& ubo);
 	VkExtent2D getExtent() { return swapChainExtent;};

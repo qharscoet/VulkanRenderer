@@ -866,6 +866,44 @@ void Device::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryP
 	vkBindBufferMemory(device, out_buffer, out_bufferMemory, 0);
 }
 
+void Device::createImage(Texture tex, ImageDesc desc, GpuImage& out_image) {
+	VkImageCreateInfo imageInfo{};
+	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageInfo.extent.width = static_cast<uint32_t>(tex.width);
+	imageInfo.extent.height = static_cast<uint32_t>(tex.height);
+	imageInfo.extent.depth = 1;
+	imageInfo.mipLevels = 1;
+	imageInfo.arrayLayers = 1;
+
+	imageInfo.format = desc.format;// VK_FORMAT_R8G8B8A8_SRGB;
+	imageInfo.tiling = desc.tiling;// VK_IMAGE_TILING_OPTIMAL;
+	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	imageInfo.usage = desc.usage_flags;// VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageInfo.flags = 0; // Optional
+
+	if (vkCreateImage(device, &imageInfo, nullptr, &out_image.image) != VK_SUCCESS) {
+		throw std::runtime_error("image creation has failed bruh");
+	}
+
+
+	VkMemoryRequirements memRequirements;
+	vkGetImageMemoryRequirements(device, out_image.image, &memRequirements);
+
+	VkMemoryAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size;
+	allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, desc.memory_properties);// VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+	if (vkAllocateMemory(device, &allocInfo, nullptr, &out_image.memory) != VK_SUCCESS) {
+		throw std::runtime_error("failed to allocate image memory!");
+	}
+
+	vkBindImageMemory(device, out_image.image, out_image.memory, 0);
+}
+
 /* TODO : use a separate command pool */
 void Device::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
 	VkCommandBufferAllocateInfo allocInfo{};
@@ -1341,6 +1379,11 @@ void Device::destroyBuffer(Buffer buffer) {
 	vkFreeMemory(device, buffer.memory, nullptr);
 }
 
+void Device::destroyImage(GpuImage image) {
+	vkDestroyImage(device, image.image, nullptr);
+	vkFreeMemory(device, image.memory, nullptr);
+}
+
 void Device::setVertexBuffer(Buffer vertexBuffer)
 {
 	this->vertexBuffer = vertexBuffer.buffer;
@@ -1351,4 +1394,28 @@ void Device::setIndexBuffer(Buffer indexBuffer)
 {
 	this->indexBuffer = indexBuffer.buffer;
 	this->indexBufferMemory = indexBuffer.memory;
+}
+
+GpuImage Device::createTexture(Texture tex) 
+{
+	GpuImage ret_image;
+	Buffer stagingBuffer;
+	createBuffer(tex.size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer.buffer, stagingBuffer.memory);
+
+	void* data;
+	vkMapMemory(device, stagingBuffer.memory, 0, tex.size, 0, &data);
+	memcpy(data, tex.pixels, static_cast<size_t>(tex.size));
+	vkUnmapMemory(device, stagingBuffer.memory);
+
+	ImageDesc desc = {
+		.format = VK_FORMAT_R8G8B8A8_SRGB,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage_flags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+	};
+
+	createImage(tex, desc, ret_image);
+	destroyBuffer(stagingBuffer);
+
+	return ret_image;
 }

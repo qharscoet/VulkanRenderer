@@ -12,9 +12,24 @@
 
 #include "Device.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
 	auto app = reinterpret_cast<Device*>(glfwGetWindowUserPointer(window));
 	app->framebufferResized = true;
+}
+
+Texture createTextureImage(const char* path) {
+	int texWidth, texHeight, texChannels;
+	stbi_uc* pixels = stbi_load(path, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+	VkDeviceSize imageSize = texWidth * texHeight * 4;
+
+	if (!pixels) {
+		throw std::runtime_error("failed to load texture image!");
+	}
+
+	return { texWidth, texHeight, texChannels, pixels, imageSize };
 }
 
 
@@ -29,6 +44,7 @@ private:
 
 	Buffer vertexBuffer;
 	Buffer indexBuffer;
+	GpuImage texture;
 
 	const std::vector<Vertex> vertices = {
 		{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
@@ -59,10 +75,24 @@ private:
 		m_device.setIndexBuffer(indexBuffer);
 	}
 
+	void initTextures() {
+		Texture tex = createTextureImage("assets/texture.jpg");
+
+		texture = m_device.createTexture(tex);
+
+		stbi_image_free(tex.pixels);
+		tex.pixels = nullptr;
+	}
+
+	void cleanupTextures() {
+		m_device.destroyImage(texture);
+	}
+
 	void cleanupBuffers() {
 		m_device.destroyBuffer(vertexBuffer);
 		m_device.destroyBuffer(indexBuffer);
 	}
+
 
 
 	void cleanupWindow() {
@@ -104,9 +134,11 @@ public:
 		initWindow();
 		m_device.init(window);
 		initBuffers();
+		initTextures();
 
 		mainLoop();
 
+		cleanupTextures();
 		cleanupBuffers();
 		m_device.cleanup();
 		cleanupWindow();
