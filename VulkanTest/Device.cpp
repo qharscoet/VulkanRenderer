@@ -11,15 +11,9 @@
 #include <fstream>
 #include <array>
 
-#define GLM_FORCE_RADIANS
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 
-
-#include <chrono>
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -1167,20 +1161,8 @@ void Device::initVulkan() {
 }
 
 //TODO : get rid of glm and try our hands at a math library
-void Device::updateUniformBuffer(uint32_t currentImage) {
-	static auto startTime = std::chrono::high_resolution_clock::now();
-
-	auto currentTime = std::chrono::high_resolution_clock::now();
-
-	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-	UniformBufferObject ubo{};
-	ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
-	ubo.proj[1][1] *= -1;
-
-	memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+void Device::updateUniformBuffer(const UniformBufferObject& ubo) {
+	memcpy(uniformBuffersMapped[current_frame], &ubo, sizeof(ubo));
 }
 
 void Device::drawFrame() {
@@ -1205,7 +1187,7 @@ void Device::drawFrame() {
 	vkResetCommandBuffer(commandBuffers[current_frame], 0);
 
 	recordCommandBuffer(commandBuffers[current_frame], imageIndex);
-	updateUniformBuffer(current_frame);
+	//updateUniformBuffer(current_frame);
 
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;

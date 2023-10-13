@@ -1,12 +1,19 @@
+#pragma once
+
 #define VK_USE_PLATFORM_WIN32_KHR
 #define NOMINMAX //Why msvc
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
+
+#define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <optional>
 #include <vector>
 #include <array>
+
+typedef VkExtent2D Dimensions;
 
 struct SwapChainSupportDetails {
 	VkSurfaceCapabilitiesKHR capabilities;
@@ -135,7 +142,6 @@ private:
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
 	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-	void updateUniformBuffer(uint32_t currentImage);
 
 	void createInstance();
 	void setupDebugMessenger();
@@ -178,4 +184,8 @@ public:
 	void destroyBuffer(Buffer buffer);
 	void setVertexBuffer(Buffer vertexBuffer);
 	void setIndexBuffer(Buffer indexBuffer);
+
+
+	void updateUniformBuffer(const UniformBufferObject& ubo);
+	VkExtent2D getExtent() { return swapChainExtent;};
 };
