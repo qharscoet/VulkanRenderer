@@ -181,6 +181,7 @@ private:
 	void createLogicalDevice();
 	void createSwapChain();
 	void createImageViews();
+
 	void createRenderPass();
 	void createDescriptorSetLayout();
 	void createGraphicsPipeline();
@@ -217,6 +218,16 @@ public:
 
 	GpuImage createTexture(Texture tex);
 	void destroyImage(GpuImage image);
+	VkImageView createImageView(VkImage image, VkFormat format);
+	void destoryImageView(VkImageView image_view) {
+		vkDestroyImageView(device, image_view, nullptr);
+	}
+
+	void destroySampler(VkSampler sampler) {
+		vkDestroySampler(device, sampler, nullptr);
+	}
+
+	VkSampler createTextureSampler();
 
 	void updateUniformBuffer(const UniformBufferObject& ubo);
 	VkExtent2D getExtent() { return swapChainExtent;};

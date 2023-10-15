@@ -20,7 +20,7 @@ void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
 	app->framebufferResized = true;
 }
 
-Texture createTextureImage(const char* path) {
+Texture loadTexture(const char* path) {
 	int texWidth, texHeight, texChannels;
 	stbi_uc* pixels = stbi_load(path, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 	VkDeviceSize imageSize = texWidth * texHeight * 4;
@@ -45,6 +45,8 @@ private:
 	Buffer vertexBuffer;
 	Buffer indexBuffer;
 	GpuImage texture;
+	VkImageView textureImageView;
+	VkSampler sampler;
 
 	const std::vector<Vertex> vertices = {
 		{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
@@ -69,23 +71,28 @@ private:
 	}
 
 	void initBuffers() {
-		vertexBuffer = m_device.createVertexBuffer(vertices.size()* sizeof(vertices[0]), (void*)vertices.data());
-		indexBuffer = m_device.createIndexBuffer(indices.size()* sizeof(indices[0]), (void*)indices.data());
+		vertexBuffer = m_device.createVertexBuffer(vertices.size() * sizeof(vertices[0]), (void*)vertices.data());
+		indexBuffer = m_device.createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
 		m_device.setVertexBuffer(vertexBuffer);
 		m_device.setIndexBuffer(indexBuffer);
 	}
 
 	void initTextures() {
-		Texture tex = createTextureImage("assets/texture.jpg");
+		Texture tex = loadTexture("assets/texture.jpg");
 
 		texture = m_device.createTexture(tex);
-
 		stbi_image_free(tex.pixels);
 		tex.pixels = nullptr;
+
+		textureImageView = m_device.createImageView(texture.image, VK_FORMAT_R8G8B8A8_SRGB);
+		sampler = m_device.createTextureSampler();
 	}
 
 	void cleanupTextures() {
 		m_device.destroyImage(texture);
+		m_device.destoryImageView(textureImageView);
+		m_device.destroySampler(sampler);
+		
 	}
 
 	void cleanupBuffers() {
