@@ -49,10 +49,10 @@ private:
 	VkSampler sampler;
 
 	const std::vector<Vertex> vertices = {
-		{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-		{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-		{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-		{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+		{.pos = {-0.5f, -0.5f}, .color = {1.0f, 0.0f, 0.0f},	.texCoord = {0.0f, 0.0f} },
+		{.pos = {0.5f, -0.5f},	.color = {0.0f, 1.0f, 0.0f},	.texCoord = {1.0f, 0.0f} },
+		{.pos = {0.5f, 0.5f},	.color = {0.0f, 0.0f, 1.0f},	.texCoord = {1.0f, 1.0f} },
+		{.pos = {-0.5f, 0.5f},	.color = {1.0f, 1.0f, 1.0f},	.texCoord = {0.0f, 1.0f} },
 	};
 
 	const std::vector<uint16_t> indices = {
@@ -86,6 +86,8 @@ private:
 
 		textureImageView = m_device.createImageView(texture.image, VK_FORMAT_R8G8B8A8_SRGB);
 		sampler = m_device.createTextureSampler();
+
+		m_device.updateDescriptorSets(textureImageView, sampler);
 	}
 
 	void cleanupTextures() {
