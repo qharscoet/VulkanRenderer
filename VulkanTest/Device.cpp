@@ -1,4 +1,5 @@
 #include "Device.h"
+#include "FileUtils.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -8,7 +9,6 @@
 #include <optional>
 #include <algorithm>
 #include <limits>
-#include <fstream>
 #include <array>
 
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -519,23 +519,6 @@ void Device::createImageViews() {
 	for (size_t i = 0; i < swapChainImages.size(); i++) {
 		swapChainImageViews[i] = createImageView(swapChainImages[i], swapChainImageFormat);
 	}
-}
-
-static std::vector<char> readFile(const std::string& filename) {
-	std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-	if (!file.is_open()) {
-		throw std::runtime_error("failed to open file!");
-	}
-
-	size_t fileSize = (size_t)file.tellg();
-	std::vector<char> buffer(fileSize);
-
-	file.seekg(0);
-	file.read(buffer.data(), fileSize);
-	file.close();
-
-	return buffer;
 }
 
 VkShaderModule Device::createShaderModule(const std::vector<char>& code) {
@@ -1216,15 +1199,15 @@ void Device::initVulkan() {
 	createSwapChain();
 	createImageViews();
 	createRenderPass();
-	createDescriptorSetLayout();
-	createGraphicsPipeline();
+	//createDescriptorSetLayout();
+	//createGraphicsPipeline();
 	createFrameBuffers();
 	createCommandPool();
 	// createVertexBuffer();
 	// createIndexBuffer();
 	createUniformBuffers();
-	createDescriptorPool();
-	createDescriptorSets();
+	//createDescriptorPool();
+	//createDescriptorSets();
 	createCommandBuffer();
 	createSyncObjects();
 }

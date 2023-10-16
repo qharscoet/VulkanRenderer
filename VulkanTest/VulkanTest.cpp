@@ -48,6 +48,9 @@ private:
 	VkImageView textureImageView;
 	VkSampler sampler;
 
+	Pipeline pipeline;
+	VkDescriptorPool descriptorPool;
+
 	const std::vector<Vertex> vertices = {
 		{.pos = {-0.5f, -0.5f}, .color = {1.0f, 0.0f, 0.0f},	.texCoord = {0.0f, 0.0f} },
 		{.pos = {0.5f, -0.5f},	.color = {0.0f, 1.0f, 0.0f},	.texCoord = {1.0f, 0.0f} },
@@ -88,6 +91,36 @@ private:
 		sampler = m_device.createTextureSampler();
 
 		m_device.updateDescriptorSets(textureImageView, sampler);
+	}
+
+	void initPipeline() {
+		PipelineDesc desc = {
+			.vertexShader = "./shaders/basic.vert.spv",
+			.pixelShader = "./shaders/basic.frag.spv",
+
+			.blendMode = BlendMode::Opaque,
+			.bindings = {
+				{
+					.slot = 0,
+					.type = BindingType::UBO,
+					.stageFlags = e_Vertex,
+				},
+				{
+					.slot = 1,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				}
+			}
+		};
+
+		pipeline = m_device.createPipeline(desc);
+		descriptorPool = m_device.createDescriptorPool(desc.bindings.data(), desc.bindings.size());
+		
+		m_device.setPipeline(pipeline);
+		m_device.setDescriptorPool(descriptorPool);
+		m_device.createDescriptorSets();
+
+	
 	}
 
 	void cleanupTextures() {
@@ -142,6 +175,7 @@ public:
 	void run() {
 		initWindow();
 		m_device.init(window);
+		initPipeline();
 		initBuffers();
 		initTextures();
 

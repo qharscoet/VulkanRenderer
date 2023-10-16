@@ -13,6 +13,8 @@
 #include <vector>
 #include <array>
 
+#include "Pipeline.h"
+
 typedef VkExtent2D Dimensions;
 
 struct SwapChainSupportDetails {
@@ -199,7 +201,7 @@ private:
 	void createIndexBuffer();
 	void createUniformBuffers();
 	void createDescriptorPool();
-	void createDescriptorSets();
+	//void createDescriptorSets();
 	void createSyncObjects();
 
 public:
@@ -241,4 +243,19 @@ public:
 	VkExtent2D getExtent() { return swapChainExtent;};
 
 	void updateDescriptorSets(VkImageView imageView, VkSampler sampler);
+
+
+	//Defined in Pipeline.cpp for now,, will probably make them independant at some point
+private:
+
+	VkDescriptorSetLayout createDescriptorSetLayout(BindingDesc* bindings, size_t count);
+	void createDescriptorSets(VkDescriptorSetLayout layout, VkDescriptorPool pool);
+public:
+
+	Pipeline createPipeline(PipelineDesc desc);
+	void setPipeline(Pipeline pipeline);
+
+	VkDescriptorPool createDescriptorPool(BindingDesc* bindingDescs, size_t count);
+	void setDescriptorPool(VkDescriptorPool pool);
+	void createDescriptorSets();
 };
