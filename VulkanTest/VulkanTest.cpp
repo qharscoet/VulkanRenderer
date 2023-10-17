@@ -29,7 +29,7 @@ Texture loadTexture(const char* path) {
 		throw std::runtime_error("failed to load texture image!");
 	}
 
-	return { texWidth, texHeight, texChannels, pixels, imageSize };
+	return { (uint32_t)texWidth, (uint32_t)texHeight, texChannels, pixels, imageSize };
 }
 
 
@@ -44,22 +44,29 @@ private:
 
 	Buffer vertexBuffer;
 	Buffer indexBuffer;
+
 	GpuImage texture;
-	VkImageView textureImageView;
+	//VkImageView textureImageView;
 	VkSampler sampler;
 
 	Pipeline pipeline;
 	VkDescriptorPool descriptorPool;
 
 	const std::vector<Vertex> vertices = {
-		{.pos = {-0.5f, -0.5f}, .color = {1.0f, 0.0f, 0.0f},	.texCoord = {0.0f, 0.0f} },
-		{.pos = {0.5f, -0.5f},	.color = {0.0f, 1.0f, 0.0f},	.texCoord = {1.0f, 0.0f} },
-		{.pos = {0.5f, 0.5f},	.color = {0.0f, 0.0f, 1.0f},	.texCoord = {1.0f, 1.0f} },
-		{.pos = {-0.5f, 0.5f},	.color = {1.0f, 1.0f, 1.0f},	.texCoord = {0.0f, 1.0f} },
+		{.pos = {-0.5f, -0.5f, 0.0f},	.color = {1.0f, 0.0f, 0.0f},	.texCoord = {0.0f, 0.0f} },
+		{.pos = {0.5f, -0.5f, 0.0f},	.color = {0.0f, 1.0f, 0.0f},	.texCoord = {1.0f, 0.0f} },
+		{.pos = {0.5f, 0.5f, 0.0f},		.color = {0.0f, 0.0f, 1.0f},	.texCoord = {1.0f, 1.0f} },
+		{.pos = {-0.5f, 0.5f, 0.0f},	.color = {1.0f, 1.0f, 1.0f},	.texCoord = {0.0f, 1.0f} },
+
+		{.pos = {-0.5f, -0.5f, -0.5f},	.color = {1.0f, 0.0f, 0.0f},	.texCoord = {0.0f, 0.0f} },
+		{.pos = {0.5f, -0.5f, -0.5f},	.color = {0.0f, 1.0f, 0.0f},	.texCoord = {1.0f, 0.0f} },
+		{.pos = {0.5f, 0.5f, -0.5f},		.color = {0.0f, 0.0f, 1.0f},	.texCoord = {1.0f, 1.0f} },
+		{.pos = {-0.5f, 0.5f, -0.5f},	.color = {1.0f, 1.0f, 1.0f},	.texCoord = {0.0f, 1.0f} },
 	};
 
 	const std::vector<uint16_t> indices = {
-		0, 1, 2, 2, 3, 0
+		0, 1, 2, 2, 3, 0,
+		4, 5, 6, 6, 7, 4
 	};
 
 	void initWindow() {
@@ -80,6 +87,7 @@ private:
 		m_device.setIndexBuffer(indexBuffer);
 	}
 
+	//TODO update the API to make param as out rather than return ?
 	void initTextures() {
 		Texture tex = loadTexture("assets/texture.jpg");
 
@@ -87,10 +95,10 @@ private:
 		stbi_image_free(tex.pixels);
 		tex.pixels = nullptr;
 
-		textureImageView = m_device.createImageView(texture.image, VK_FORMAT_R8G8B8A8_SRGB);
+		//textureImageView = m_device.createImageView(texture.image, VK_FORMAT_R8G8B8A8_SRGB);
 		sampler = m_device.createTextureSampler();
 
-		m_device.updateDescriptorSets(textureImageView, sampler);
+		m_device.updateDescriptorSets(texture.view, sampler);
 	}
 
 	void initPipeline() {
@@ -125,7 +133,7 @@ private:
 
 	void cleanupTextures() {
 		m_device.destroyImage(texture);
-		m_device.destoryImageView(textureImageView);
+		//m_device.destoryImageView(textureImageView);
 		m_device.destroySampler(sampler);
 		
 	}
