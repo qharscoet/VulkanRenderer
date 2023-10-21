@@ -3,6 +3,8 @@
 
 #include <chrono>
 
+#include "FileUtils.h"
+
 
 /* Optional TODOs :
 	- Use the transfer queue for staging buffer
@@ -12,25 +14,11 @@
 
 #include "Device.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
-
 void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
 	auto app = reinterpret_cast<Device*>(glfwGetWindowUserPointer(window));
 	app->framebufferResized = true;
 }
 
-Texture loadTexture(const char* path) {
-	int texWidth, texHeight, texChannels;
-	stbi_uc* pixels = stbi_load(path, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-	VkDeviceSize imageSize = texWidth * texHeight * 4;
-
-	if (!pixels) {
-		throw std::runtime_error("failed to load texture image!");
-	}
-
-	return { (uint32_t)texWidth, (uint32_t)texHeight, texChannels, pixels, imageSize };
-}
 
 
 class HelloTriangleApplication {
@@ -92,10 +80,8 @@ private:
 		Texture tex = loadTexture("assets/texture.jpg");
 
 		texture = m_device.createTexture(tex);
-		stbi_image_free(tex.pixels);
-		tex.pixels = nullptr;
+		freeTexturePixels(&tex);
 
-		//textureImageView = m_device.createImageView(texture.image, VK_FORMAT_R8G8B8A8_SRGB);
 		sampler = m_device.createTextureSampler();
 
 		m_device.updateDescriptorSets(texture.view, sampler);

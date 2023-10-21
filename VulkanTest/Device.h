@@ -15,6 +15,7 @@
 #include <array>
 
 #include "Pipeline.h"
+#include "FileUtils.h"
 
 typedef VkExtent2D Dimensions;
 
@@ -37,15 +38,6 @@ struct Buffer {
 	VkBuffer buffer;
 	VkDeviceMemory memory;
 	void* mapped_memory;
-};
-
-
-struct Texture {
-	uint32_t height;
-	uint32_t width;
-	int channels;
-	unsigned char* pixels;
-	VkDeviceSize size;
 };
 
 struct ImageDesc {
@@ -202,16 +194,10 @@ private:
 	void createImageViews();
 
 	void createRenderPass();
-	void createDescriptorSetLayout();
-	void createGraphicsPipeline();
 	void createDepthBufferResources();
 	void createFrameBuffers();
 	void createCommandPool();
-	void createVertexBuffer();
-	void createIndexBuffer();
 	void createUniformBuffers();
-	void createDescriptorPool();
-	//void createDescriptorSets();
 	void createSyncObjects();
 
 public:
