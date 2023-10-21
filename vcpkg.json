@@ -2,7 +2,8 @@
   "dependencies": [
     "glfw3",
     "glm",
-    "stb"
+    "stb",
+    "tinyobjloader"
   ],
   "builtin-baseline": "c95000e1b5bb62884de08d5e952993c8bced9db6"
 }

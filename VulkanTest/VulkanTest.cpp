@@ -40,7 +40,7 @@ private:
 	Pipeline pipeline;
 	VkDescriptorPool descriptorPool;
 
-	const std::vector<Vertex> vertices = {
+	const std::vector<MeshVertex> vertices = {
 		{.pos = {-0.5f, -0.5f, 0.0f},	.color = {1.0f, 0.0f, 0.0f},	.texCoord = {0.0f, 0.0f} },
 		{.pos = {0.5f, -0.5f, 0.0f},	.color = {0.0f, 1.0f, 0.0f},	.texCoord = {1.0f, 0.0f} },
 		{.pos = {0.5f, 0.5f, 0.0f},		.color = {0.0f, 0.0f, 1.0f},	.texCoord = {1.0f, 1.0f} },
@@ -48,11 +48,11 @@ private:
 
 		{.pos = {-0.5f, -0.5f, -0.5f},	.color = {1.0f, 0.0f, 0.0f},	.texCoord = {0.0f, 0.0f} },
 		{.pos = {0.5f, -0.5f, -0.5f},	.color = {0.0f, 1.0f, 0.0f},	.texCoord = {1.0f, 0.0f} },
-		{.pos = {0.5f, 0.5f, -0.5f},		.color = {0.0f, 0.0f, 1.0f},	.texCoord = {1.0f, 1.0f} },
+		{.pos = {0.5f, 0.5f, -0.5f},	.color = {0.0f, 0.0f, 1.0f},	.texCoord = {1.0f, 1.0f} },
 		{.pos = {-0.5f, 0.5f, -0.5f},	.color = {1.0f, 1.0f, 1.0f},	.texCoord = {0.0f, 1.0f} },
 	};
 
-	const std::vector<uint16_t> indices = {
+	const std::vector<uint32_t> indices = {
 		0, 1, 2, 2, 3, 0,
 		4, 5, 6, 6, 7, 4
 	};
@@ -79,6 +79,26 @@ private:
 		indexBuffer = m_device.createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
 		m_device.setVertexBuffer(vertexBuffer);
 		m_device.setIndexBuffer(indexBuffer);
+	}
+
+	void loadViking() {
+		Mesh  viking_mesh;
+		loadObj("assets/viking_room.obj", &viking_mesh);
+
+		vertexBuffer = m_device.createVertexBuffer(viking_mesh.vertices.size() * sizeof(viking_mesh.vertices[0]), (void*)viking_mesh.vertices.data());
+		indexBuffer = m_device.createIndexBuffer(viking_mesh.indices.size() * sizeof(viking_mesh.indices[0]), (void*)viking_mesh.indices.data());
+		m_device.setVertexBuffer(vertexBuffer);
+		m_device.setIndexBuffer(indexBuffer);
+
+
+		Texture tex = loadTexture("assets/viking_room.png");
+
+		texture = m_device.createTexture(tex);
+		freeTexturePixels(&tex);
+
+		sampler = m_device.createTextureSampler();
+
+		m_device.updateDescriptorSets(texture.view, sampler);
 	}
 
 
@@ -183,8 +203,9 @@ public:
 		initWindow();
 		m_device.init(window);
 		initPipeline();
-		initBuffers();
-		initTextures();
+		loadViking();
+		//initBuffers();
+		//initTextures();
 
 		mainLoop();
 

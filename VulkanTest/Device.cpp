@@ -881,17 +881,17 @@ void Device::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
 	scissor.extent = swapChainExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	VkBuffer vertexBuffers[] = { vertexBuffer };
+	VkBuffer vertexBuffers[] = { vertexBuffer.buffer };
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-	vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+	vkCmdBindIndexBuffer(commandBuffer, indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 	//UBO
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[current_frame], 0, nullptr);
 
 	//Actual draw !
 	//vkCmdDraw(commandBuffer, 3, 1, 0, 0);
-	vkCmdDrawIndexed(commandBuffer, 12, 1, 0, 0, 0);
+	vkCmdDrawIndexed(commandBuffer, index_count, 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -1137,7 +1137,12 @@ Buffer Device::createVertexBuffer(size_t size,void* src_data) {
 }
 
 Buffer Device::createIndexBuffer(size_t size,void* src_data) {
-	return createLocalBuffer(size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, src_data );
+	Buffer buff =  createLocalBuffer(size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, src_data );
+	buff.size = size;
+	buff.stride = sizeof(uint32_t);
+	buff.count = size / buff.stride;
+
+	return buff;
 }
 
 void Device::destroyBuffer(Buffer buffer) {
@@ -1153,14 +1158,15 @@ void Device::destroyImage(GpuImage image) {
 
 void Device::setVertexBuffer(Buffer vertexBuffer)
 {
-	this->vertexBuffer = vertexBuffer.buffer;
-	this->vertexBufferMemory = vertexBuffer.memory;
+	this->vertexBuffer.buffer = vertexBuffer.buffer;
+	this->vertexBuffer.memory = vertexBuffer.memory;
 }
 
 void Device::setIndexBuffer(Buffer indexBuffer)
 {
-	this->indexBuffer = indexBuffer.buffer;
-	this->indexBufferMemory = indexBuffer.memory;
+	this->indexBuffer.buffer = indexBuffer.buffer;
+	this->indexBuffer.memory = indexBuffer.memory;
+	this->index_count = indexBuffer.count;
 }
 
 GpuImage Device::createTexture(Texture tex) 

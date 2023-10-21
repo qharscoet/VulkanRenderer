@@ -38,6 +38,10 @@ struct Buffer {
 	VkBuffer buffer;
 	VkDeviceMemory memory;
 	void* mapped_memory;
+
+	size_t size;
+	size_t count;
+	size_t stride;
 };
 
 struct ImageDesc {
@@ -125,10 +129,9 @@ private:
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
 
-	VkBuffer vertexBuffer;
-	VkDeviceMemory vertexBufferMemory;
-	VkBuffer indexBuffer;
-	VkDeviceMemory indexBufferMemory;
+	Buffer vertexBuffer;
+	Buffer indexBuffer;
+	size_t index_count;
 
 	std::vector<VkBuffer> uniformBuffers;
 	std::vector<VkDeviceMemory> uniformBuffersMemory;
