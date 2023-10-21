@@ -64,7 +64,7 @@ private:
 		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 		window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 
-		glfwSetWindowUserPointer(window, this);
+		glfwSetWindowUserPointer(window, &m_device);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 	}
 

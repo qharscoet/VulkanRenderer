@@ -1043,6 +1043,7 @@ void Device::waitIdle()
 }
 
 void Device::cleanupSwapChain() {
+	destroyImage(depthBuffer);
 
 	for (auto framebuffer : swapChainFramebuffers) {
 		vkDestroyFramebuffer(device, framebuffer, nullptr);
@@ -1052,7 +1053,6 @@ void Device::cleanupSwapChain() {
 		vkDestroyImageView(device, imageView, nullptr);
 	}
 
-	destroyImage(depthBuffer);
 	vkDestroySwapchainKHR(device, swapChain, nullptr);
 }
 
