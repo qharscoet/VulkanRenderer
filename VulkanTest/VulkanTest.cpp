@@ -68,12 +68,25 @@ private:
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 	}
 
+
+	void cleanupWindow() {
+		glfwDestroyWindow(window);
+		glfwTerminate();
+	}
+
 	void initBuffers() {
 		vertexBuffer = m_device.createVertexBuffer(vertices.size() * sizeof(vertices[0]), (void*)vertices.data());
 		indexBuffer = m_device.createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
 		m_device.setVertexBuffer(vertexBuffer);
 		m_device.setIndexBuffer(indexBuffer);
 	}
+
+
+	void cleanupBuffers() {
+		m_device.destroyBuffer(vertexBuffer);
+		m_device.destroyBuffer(indexBuffer);
+	}
+
 
 	//TODO update the API to make param as out rather than return ?
 	void initTextures() {
@@ -86,6 +99,14 @@ private:
 
 		m_device.updateDescriptorSets(texture.view, sampler);
 	}
+
+	void cleanupTextures() {
+		m_device.destroyImage(texture);
+		//m_device.destoryImageView(textureImageView);
+		m_device.destroySampler(sampler);
+
+	}
+
 
 	void initPipeline() {
 		PipelineDesc desc = {
@@ -104,7 +125,11 @@ private:
 					.type = BindingType::ImageSampler,
 					.stageFlags = e_Pixel,
 				}
-			}
+			},
+
+			.useDefaultRenderPass = true,
+			.colorAttachment = 1,
+			.hasDepth = true,
 		};
 
 		pipeline = m_device.createPipeline(desc);
@@ -117,24 +142,12 @@ private:
 	
 	}
 
-	void cleanupTextures() {
-		m_device.destroyImage(texture);
-		//m_device.destoryImageView(textureImageView);
-		m_device.destroySampler(sampler);
-		
-	}
-
-	void cleanupBuffers() {
-		m_device.destroyBuffer(vertexBuffer);
-		m_device.destroyBuffer(indexBuffer);
+	void destroyPipeline() {
+		m_device.destroyPipeline(pipeline);
 	}
 
 
 
-	void cleanupWindow() {
-		glfwDestroyWindow(window);
-		glfwTerminate();
-	}
 
 	void updateUniformBuffer() {
 		static auto startTime = std::chrono::high_resolution_clock::now();
@@ -177,6 +190,7 @@ public:
 
 		cleanupTextures();
 		cleanupBuffers();
+		destroyPipeline();
 		m_device.cleanup();
 		cleanupWindow();
 	}

@@ -28,9 +28,14 @@ struct PipelineDesc {
 	const char* vertexShader;
 	const char* pixelShader;
 
+	//Descriptors params
 	BlendMode blendMode;
 	std::vector<BindingDesc> bindings;
-	//size_t bindingsCount;
+	
+	//RenderPass params
+	bool useDefaultRenderPass;
+	uint8_t colorAttachment;
+	bool hasDepth;
 };
 
 struct Pipeline {

@@ -95,6 +95,79 @@ void Device::createDescriptorSets(VkDescriptorSetLayout layout, VkDescriptorPool
 	}
 }
 
+VkRenderPass Device::createRenderPass(uint8_t colorAttachement_count, bool hasDepth)
+{
+	// This is basically our output for this pass
+
+	VkRenderPass out_renderPass;
+
+	std::vector<VkAttachmentDescription> colorAttachments;
+	std::vector<VkAttachmentReference> colorAttachmentRefs;
+	colorAttachments.resize(colorAttachement_count);
+	colorAttachmentRefs.resize(colorAttachement_count);
+
+	for (size_t i = 0; i < colorAttachments.size(); i++)
+	{
+		colorAttachments[i].format = swapChainImageFormat;
+		colorAttachments[i].samples = VK_SAMPLE_COUNT_1_BIT;
+		colorAttachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		colorAttachments[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		colorAttachments[i].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		colorAttachments[i].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		colorAttachments[i].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		colorAttachments[i].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+		colorAttachmentRefs[i].attachment = i;
+		colorAttachmentRefs[i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	}
+
+	VkAttachmentDescription depthAttachment{};
+	depthAttachment.format = findDepthFormat();
+	depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+	VkAttachmentReference depthAttachmentRef{};
+	depthAttachmentRef.attachment = colorAttachement_count;
+	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription subpass{};
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.colorAttachmentCount = colorAttachement_count;
+	subpass.pColorAttachments = colorAttachmentRefs.data();
+	subpass.pDepthStencilAttachment = hasDepth? &depthAttachmentRef: nullptr;
+
+	std::array<VkAttachmentDescription, 2> attachments = { colorAttachments[0], depthAttachment};
+	VkRenderPassCreateInfo renderPassInfo{};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassInfo.attachmentCount = attachments.size();
+	renderPassInfo.pAttachments = attachments.data();
+	renderPassInfo.subpassCount = 1;
+	renderPassInfo.pSubpasses = &subpass;
+
+
+	VkSubpassDependency dependency{};
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.dstSubpass = 0;
+	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | (hasDepth?VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT:0);
+	dependency.srcAccessMask = 0;
+	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | (hasDepth?VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT:0);
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+	renderPassInfo.dependencyCount = 1;
+	renderPassInfo.pDependencies = &dependency;
+
+	if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &out_renderPass) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create render pass!");
+	}
+
+	return out_renderPass;
+}
+
 Pipeline Device::createPipeline(PipelineDesc desc)
 {
 	Pipeline out_pipeline;
@@ -259,6 +332,8 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 		throw std::runtime_error("failed to create pipeline layout!");
 	}
 
+	VkRenderPass renderPass = desc.useDefaultRenderPass? defaultRenderPass: createRenderPass(desc.colorAttachment, desc.hasDepth);
+
 	// FINALLY ! 
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -301,9 +376,21 @@ void Device::setPipeline(Pipeline pipeline)
 {
 	descriptorSetLayout = pipeline.descriptorSetLayout;
 	graphicsPipeline = pipeline.graphicsPipeline;
+	currentRenderPass = pipeline.renderPass;
 }
 
 void Device::setDescriptorPool(VkDescriptorPool pool)
 {
 	descriptorPool = pool;
+}
+
+void Device::destroyPipeline(Pipeline pipeline)
+{
+	vkDestroyDescriptorSetLayout(device, pipeline.descriptorSetLayout, nullptr);
+	vkDestroyPipeline(device, pipeline.graphicsPipeline, nullptr);
+	vkDestroyPipelineLayout(device, pipeline.pipelineLayout, nullptr);
+
+	if(pipeline.renderPass != defaultRenderPass)
+		vkDestroyRenderPass(device, pipeline.renderPass, nullptr);
+
 }

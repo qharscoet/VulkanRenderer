@@ -119,7 +119,8 @@ private:
 
 	std::vector<VkImageView> swapChainImageViews;
 
-	VkRenderPass renderPass;
+	VkRenderPass defaultRenderPass;
+	VkRenderPass currentRenderPass;
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
@@ -193,7 +194,7 @@ private:
 	void createSwapChain();
 	void createImageViews();
 
-	void createRenderPass();
+	void createDefaultRenderPass();
 	void createDepthBufferResources();
 	void createFrameBuffers();
 	void createCommandPool();
@@ -243,12 +244,15 @@ public:
 	//Defined in Pipeline.cpp for now,, will probably make them independant at some point
 private:
 
+	VkRenderPass createRenderPass(uint8_t colorAttachement_count, bool hasDepth);
 	VkDescriptorSetLayout createDescriptorSetLayout(BindingDesc* bindings, size_t count);
 	void createDescriptorSets(VkDescriptorSetLayout layout, VkDescriptorPool pool);
+
 public:
 
 	Pipeline createPipeline(PipelineDesc desc);
 	void setPipeline(Pipeline pipeline);
+	void destroyPipeline(Pipeline pipeline);
 
 	VkDescriptorPool createDescriptorPool(BindingDesc* bindingDescs, size_t count);
 	void setDescriptorPool(VkDescriptorPool pool);
