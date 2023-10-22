@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <limits>
 #include <array>
+#include <variant>
 
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
@@ -670,7 +671,8 @@ void Device::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize siz
 }
 
 void Device::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
-	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+	
+	MyCommandBuffer commandBuffer = getCommandBuffer();
 
 	VkBufferImageCopy region{};
 	region.bufferOffset = 0;
@@ -697,8 +699,6 @@ void Device::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, u
 		1,
 		&region
 	);
-
-	endSingleTimeCommands(commandBuffer);
 }
 
 //void Device::createVertexBuffer() {
@@ -1178,7 +1178,7 @@ void Device::generateMipmaps(VkImage image, VkFormat format, int32_t texWidth, i
 		throw std::runtime_error("texture image format does not support linear blitting!");
 	}
 
-	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+	MyCommandBuffer commandBuffer = getCommandBuffer();
 
 	VkImageMemoryBarrier barrier{};
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1266,8 +1266,6 @@ void Device::generateMipmaps(VkImage image, VkFormat format, int32_t texWidth, i
 		0, nullptr,
 		0, nullptr,
 		1, &barrier);
-
-	endSingleTimeCommands(commandBuffer);
 }
 
 GpuImage Device::createTexture(Texture tex) 
@@ -1295,6 +1293,7 @@ GpuImage Device::createTexture(Texture tex)
 
 	createImage(desc, ret_image);
 
+	setupCommandBuffer();
 	//Transition to enable copying, copying and transition to pixel shader usable
 	transitionImageLayout(ret_image.image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels);
 	copyBufferToImage(stagingBuffer.buffer, ret_image.image, static_cast<uint32_t>(tex.width), static_cast<uint32_t>(tex.height));
@@ -1303,6 +1302,7 @@ GpuImage Device::createTexture(Texture tex)
 	else 
 		transitionImageLayout(ret_image.image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mipLevels);
 
+	flushCommandBuffer();
 	
 	destroyBuffer(stagingBuffer);
 
@@ -1336,7 +1336,7 @@ VkSampler Device::createTextureSampler(uint32_t mipLevels) {
 
 	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	samplerInfo.mipLodBias = 0.0f;
-	samplerInfo.minLod = mipLevels/2;
+	samplerInfo.minLod = 0;
 	samplerInfo.maxLod = mipLevels;
 
 	VkSampler sampler;
@@ -1426,10 +1426,25 @@ void Device::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
 	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 }
 
+void Device::setupCommandBuffer()
+{
+	tmpCommandBuffer = beginSingleTimeCommands();
+}
+
+void Device::flushCommandBuffer()
+{
+	endSingleTimeCommands(tmpCommandBuffer);
+	tmpCommandBuffer = VK_NULL_HANDLE;
+}
+
+Device::MyCommandBuffer Device::getCommandBuffer()
+{
+	return tmpCommandBuffer ? MyCommandBuffer(tmpCommandBuffer) : std::move(ScopedCommandBuffer(this));
+}
 
 void Device::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels) {
-	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
-
+	MyCommandBuffer commandBuffer = getCommandBuffer();
+	
 	VkImageMemoryBarrier barrier{};
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 	barrier.oldLayout = oldLayout;
@@ -1476,6 +1491,4 @@ void Device::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout
 		0, nullptr,
 		1, & barrier
 		);
-
-	endSingleTimeCommands(commandBuffer);
 }

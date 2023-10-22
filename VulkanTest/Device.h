@@ -13,6 +13,7 @@
 #include <optional>
 #include <vector>
 #include <array>
+#include <variant>
 
 #include "Pipeline.h"
 #include "FileUtils.h"
@@ -185,11 +186,7 @@ private:
 	VkShaderModule createShaderModule(const std::vector<char>& code);
 
 	void createCommandBuffer();
-	VkCommandBuffer beginSingleTimeCommands();
-	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
 	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-
-	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
 
 	void createInstance();
 	void setupDebugMessenger();
@@ -221,10 +218,54 @@ public:
 
 // Buffer and Texture stuff
 private:
+
+	class MyCommandBuffer;
+	class ScopedCommandBuffer {
+	private :
+		VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+		Device* parent_device = nullptr;
+	public:
+		friend class MyCommandBuffer;
+		ScopedCommandBuffer(Device* device) 
+			:parent_device(device)
+			{ this->commandBuffer = device->beginSingleTimeCommands(); };
+		ScopedCommandBuffer(ScopedCommandBuffer&& o) noexcept 
+			: parent_device(std::exchange(o.parent_device, nullptr)),
+			  commandBuffer(std::exchange(o.commandBuffer, VK_NULL_HANDLE)) {}
+		~ScopedCommandBuffer() { if(commandBuffer) parent_device->endSingleTimeCommands(commandBuffer); commandBuffer = nullptr; };
+		operator VkCommandBuffer() const { return commandBuffer; }
+	};
+
+	class MyCommandBuffer {
+	private:
+		std::variant<VkCommandBuffer, ScopedCommandBuffer> cb;
+	public:
+		MyCommandBuffer(VkCommandBuffer commandBuffer)
+			:cb(commandBuffer) {};
+		MyCommandBuffer(ScopedCommandBuffer&& o)
+			:cb(std::move(o)) {};
+
+		operator VkCommandBuffer() const
+		{
+			if (cb.index() == 0)
+				return std::get<VkCommandBuffer>(cb);
+			else
+				return std::get<ScopedCommandBuffer>(cb).commandBuffer;
+		}
+	};
+
+	VkCommandBuffer tmpCommandBuffer = VK_NULL_HANDLE;
+	void setupCommandBuffer();
+	void flushCommandBuffer();
+	MyCommandBuffer getCommandBuffer();
+	VkCommandBuffer beginSingleTimeCommands();
+	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
+
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& out_buffer, VkDeviceMemory& out_bufferMemory);
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 	Buffer createLocalBuffer(size_t size,VkBufferUsageFlags usage,  void* src_data = nullptr);
 	
+	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
 	void generateMipmaps(VkImage image, VkFormat format, int32_t texWidth, int32_t texheight, uint32_t mipLevels);
 	void createImage(ImageDesc desc, GpuImage& out_image);
 	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
