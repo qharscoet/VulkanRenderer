@@ -96,7 +96,7 @@ private:
 		texture = m_device.createTexture(tex);
 		freeTexturePixels(&tex);
 
-		sampler = m_device.createTextureSampler();
+		sampler = m_device.createTextureSampler(texture.mipLevels);
 
 		m_device.updateDescriptorSets(texture.view, sampler);
 	}
@@ -115,7 +115,7 @@ private:
 		texture = m_device.createTexture(tex);
 		freeTexturePixels(&tex);
 
-		sampler = m_device.createTextureSampler();
+		sampler = m_device.createTextureSampler(texture.mipLevels);
 
 		m_device.updateDescriptorSets(texture.view, sampler);
 	}

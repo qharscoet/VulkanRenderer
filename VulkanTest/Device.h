@@ -47,6 +47,7 @@ struct Buffer {
 struct ImageDesc {
 	uint32_t width;
 	uint32_t height;
+	uint32_t mipLevels;
 	VkFormat format;
 	VkImageTiling tiling;
 	VkImageUsageFlags usage_flags;
@@ -57,6 +58,13 @@ struct GpuImage {
 	VkImage image;
 	VkDeviceMemory memory;
 	VkImageView view;
+	uint32_t mipLevels;
+};
+
+struct BarrierDesc {
+	VkImageLayout oldLayout;
+	VkImageLayout newLayout;
+	uint32_t mipLevels;
 };
 
 struct Vertex {
@@ -176,18 +184,12 @@ private:
 
 	VkShaderModule createShaderModule(const std::vector<char>& code);
 
-	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& out_buffer, VkDeviceMemory& out_bufferMemory);
-	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-
-	void createImage(ImageDesc desc, GpuImage& out_image);
-	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
-
 	void createCommandBuffer();
 	VkCommandBuffer beginSingleTimeCommands();
 	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
 	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
-	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
 
 	void createInstance();
 	void setupDebugMessenger();
@@ -219,8 +221,14 @@ public:
 
 // Buffer and Texture stuff
 private:
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& out_buffer, VkDeviceMemory& out_bufferMemory);
+	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 	Buffer createLocalBuffer(size_t size,VkBufferUsageFlags usage,  void* src_data = nullptr);
-
+	
+	void generateMipmaps(VkImage image, VkFormat format, int32_t texWidth, int32_t texheight, uint32_t mipLevels);
+	void createImage(ImageDesc desc, GpuImage& out_image);
+	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
+	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 public:
 	Buffer createVertexBuffer(size_t size, void* src_data = nullptr);
 	Buffer createIndexBuffer(size_t size, void* src_data = nullptr);
@@ -230,16 +238,15 @@ public:
 
 	GpuImage createTexture(Texture tex);
 	void destroyImage(GpuImage image);
-	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 
 	void destroySampler(VkSampler sampler) {
 		vkDestroySampler(device, sampler, nullptr);
 	}
 
-	VkSampler createTextureSampler();
+	VkSampler createTextureSampler(uint32_t mipLevels);
 
 	void updateUniformBuffer(const UniformBufferObject& ubo);
-	VkExtent2D getExtent() { return swapChainExtent;};
+	Dimensions getExtent() { return swapChainExtent;};
 
 	void updateDescriptorSets(VkImageView imageView, VkSampler sampler);
 
