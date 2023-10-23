@@ -36,6 +36,7 @@ struct PipelineDesc {
 	bool useDefaultRenderPass;
 	uint8_t colorAttachment;
 	bool hasDepth;
+	bool useMsaa;
 };
 
 struct Pipeline {

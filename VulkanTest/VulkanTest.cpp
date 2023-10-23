@@ -150,6 +150,7 @@ private:
 			.useDefaultRenderPass = true,
 			.colorAttachment = 1,
 			.hasDepth = true,
+			.useMsaa = true
 		};
 
 		pipeline = m_device.createPipeline(desc);

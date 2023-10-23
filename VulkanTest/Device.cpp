@@ -313,6 +313,21 @@ SwapChainSupportDetails Device::querySwapChainSupport(VkPhysicalDevice device) {
 	return details;
 }
 
+VkSampleCountFlagBits Device::getMaxUsableSampleCount(VkPhysicalDevice physicalDevice) {
+	VkPhysicalDeviceProperties physicalDeviceProperties;
+	vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
+
+	VkSampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts & physicalDeviceProperties.limits.framebufferDepthSampleCounts;
+	if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
+	if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
+	if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
+	if (counts & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
+	if (counts & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
+	if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
+
+	return VK_SAMPLE_COUNT_1_BIT;
+}
+
 bool Device::isDeviceSuitable(VkPhysicalDevice device) {
 	QueueFamilyIndices indices = findQueueFamilies(device);
 	bool extensionsSupported = checkDeviceExtensionSupport(device);
@@ -345,6 +360,7 @@ void Device::pickPhysicalDevice() {
 	for (const auto& device : devices) {
 		if (isDeviceSuitable(device)) {
 			physicalDevice = device;
+			msaaSamples = getMaxUsableSampleCount(physicalDevice);
 			break;
 		}
 	}
@@ -543,7 +559,7 @@ VkShaderModule Device::createShaderModule(const std::vector<char>& code) {
 }
 
 void Device::createDefaultRenderPass() {
-	defaultRenderPass = createRenderPass(1, true);
+	defaultRenderPass = createRenderPass(1, true, true);
 }
 
 
@@ -553,8 +569,9 @@ void Device::createFrameBuffers() {
 
 	for (size_t i = 0; i < swapChainImageViews.size(); i++) {
 		VkImageView attachments[] = {
+			colorTarget.view,
+			depthBuffer.view,
 			swapChainImageViews[i],
-			depthBuffer.view
 		};
 
 		VkFramebufferCreateInfo framebufferInfo{};
@@ -640,7 +657,7 @@ void Device::createImage(ImageDesc desc, GpuImage& out_image) {
 	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	imageInfo.usage = desc.usage_flags;// VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageInfo.samples = desc.numSamples;
 	imageInfo.flags = 0; // Optional
 
 	if (vkCreateImage(device, &imageInfo, nullptr, &out_image.image) != VK_SUCCESS) {
@@ -946,6 +963,7 @@ void Device::recreateSwapChain() {
 
 	createSwapChain();
 	createImageViews();
+	createColorResources();
 	createDepthBufferResources();
 	createFrameBuffers();
 }
@@ -961,6 +979,7 @@ void Device::initVulkan() {
 	createDefaultRenderPass();
 	//createDescriptorSetLayout();
 	//createGraphicsPipeline();
+	createColorResources();
 	createDepthBufferResources();
 	createFrameBuffers();
 	createCommandPool();
@@ -1017,7 +1036,7 @@ void Device::initImGui(){
 	init_info.Subpass = 0;
 	init_info.MinImageCount = 2;
 	init_info.ImageCount = 2;
-	init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+	init_info.MSAASamples = msaaSamples;
 	init_info.Allocator = nullptr;
 	init_info.CheckVkResultFn = check_vk_result;
 
@@ -1145,6 +1164,7 @@ void Device::waitIdle()
 
 void Device::cleanupSwapChain() {
 	destroyImage(depthBuffer);
+	destroyImage(colorTarget);
 
 	for (auto framebuffer : swapChainFramebuffers) {
 		vkDestroyFramebuffer(device, framebuffer, nullptr);
@@ -1193,8 +1213,6 @@ void Device::cleanupVulkan() {
 	vkDestroyDevice(device, nullptr);
 	vkDestroyInstance(instance, nullptr);
 }
-
-
 
 
 Buffer Device::createLocalBuffer(size_t size, VkBufferUsageFlags usage, void* src_data) {
@@ -1476,12 +1494,30 @@ bool Device::hasStencilComponent(VkFormat format) {
 	return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
+void Device::createColorResources() {
+	ImageDesc desc = {
+	.width = swapChainExtent.width,
+	.height = swapChainExtent.height,
+	.mipLevels = 1,
+	.numSamples = msaaSamples,
+	.format = swapChainImageFormat,
+	.tiling = VK_IMAGE_TILING_OPTIMAL,
+	.usage_flags = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+	.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+	};
+
+	createImage(desc, colorTarget);
+	colorTarget.view = createImageView(colorTarget.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+
+}
+
 void Device::createDepthBufferResources() {
 
 	ImageDesc desc = {
 		.width = swapChainExtent.width,
 		.height = swapChainExtent.height,
 		.mipLevels = 1,
+		.numSamples = msaaSamples,
 		.format = findDepthFormat(),
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
 		.usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -1539,7 +1575,7 @@ void Device::flushCommandBuffer()
 	tmpCommandBuffer = VK_NULL_HANDLE;
 }
 
-Device::MyCommandBuffer Device::getCommandBuffer()
+inline Device::MyCommandBuffer Device::getCommandBuffer()
 {
 	return tmpCommandBuffer ? MyCommandBuffer(tmpCommandBuffer) : std::move(ScopedCommandBuffer(this));
 }

@@ -95,7 +95,8 @@ void Device::createDescriptorSets(VkDescriptorSetLayout layout, VkDescriptorPool
 	}
 }
 
-VkRenderPass Device::createRenderPass(uint8_t colorAttachement_count, bool hasDepth)
+//TODO : define properly depth and resolve
+VkRenderPass Device::createRenderPass(uint8_t colorAttachement_count, bool hasDepth, bool useMsaa)
 {
 	// This is basically our output for this pass
 
@@ -109,13 +110,13 @@ VkRenderPass Device::createRenderPass(uint8_t colorAttachement_count, bool hasDe
 	for (size_t i = 0; i < colorAttachments.size(); i++)
 	{
 		colorAttachments[i].format = swapChainImageFormat;
-		colorAttachments[i].samples = VK_SAMPLE_COUNT_1_BIT;
+		colorAttachments[i].samples = useMsaa?msaaSamples:VK_SAMPLE_COUNT_1_BIT;
 		colorAttachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		colorAttachments[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		colorAttachments[i].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		colorAttachments[i].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		colorAttachments[i].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		colorAttachments[i].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		colorAttachments[i].finalLayout = useMsaa ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL: VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
 		colorAttachmentRefs[i].attachment = i;
 		colorAttachmentRefs[i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -123,7 +124,7 @@ VkRenderPass Device::createRenderPass(uint8_t colorAttachement_count, bool hasDe
 
 	VkAttachmentDescription depthAttachment{};
 	depthAttachment.format = findDepthFormat();
-	depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	depthAttachment.samples = useMsaa ? msaaSamples : VK_SAMPLE_COUNT_1_BIT;
 	depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -135,13 +136,28 @@ VkRenderPass Device::createRenderPass(uint8_t colorAttachement_count, bool hasDe
 	depthAttachmentRef.attachment = colorAttachement_count;
 	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
+	VkAttachmentDescription colorAttachmentResolve{};
+	colorAttachmentResolve.format = swapChainImageFormat;
+	colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
+	colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+	VkAttachmentReference colorAttachmentResolveRef{};
+	colorAttachmentResolveRef.attachment = colorAttachement_count + 1;
+	colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
 	VkSubpassDescription subpass{};
 	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 	subpass.colorAttachmentCount = colorAttachement_count;
 	subpass.pColorAttachments = colorAttachmentRefs.data();
 	subpass.pDepthStencilAttachment = hasDepth? &depthAttachmentRef: nullptr;
+	subpass.pResolveAttachments = useMsaa ? &colorAttachmentResolveRef : nullptr;
 
-	std::array<VkAttachmentDescription, 2> attachments = { colorAttachments[0], depthAttachment};
+	std::array<VkAttachmentDescription, 3> attachments = { colorAttachments[0], depthAttachment, colorAttachmentResolve };
 	VkRenderPassCreateInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	renderPassInfo.attachmentCount = attachments.size();
@@ -262,7 +278,7 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	VkPipelineMultisampleStateCreateInfo multisampling{};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.sampleShadingEnable = VK_FALSE;
-	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisampling.rasterizationSamples = desc.useMsaa ? msaaSamples : VK_SAMPLE_COUNT_1_BIT;
 	multisampling.minSampleShading = 1.0f; // Optional
 	multisampling.pSampleMask = nullptr; // Optional
 	multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
@@ -332,7 +348,7 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 		throw std::runtime_error("failed to create pipeline layout!");
 	}
 
-	VkRenderPass renderPass = desc.useDefaultRenderPass? defaultRenderPass: createRenderPass(desc.colorAttachment, desc.hasDepth);
+	VkRenderPass renderPass = desc.useDefaultRenderPass? defaultRenderPass: createRenderPass(desc.colorAttachment, desc.hasDepth, desc.useMsaa);
 
 	// FINALLY ! 
 	VkGraphicsPipelineCreateInfo pipelineInfo{};

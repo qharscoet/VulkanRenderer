@@ -49,6 +49,7 @@ struct ImageDesc {
 	uint32_t width;
 	uint32_t height;
 	uint32_t mipLevels;
+	VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT;
 	VkFormat format;
 	VkImageTiling tiling;
 	VkImageUsageFlags usage_flags;
@@ -151,11 +152,14 @@ private:
 
 	GpuImage image;
 	GpuImage depthBuffer;
+	GpuImage colorTarget;
 
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 
 	VkCommandPool commandPool;
 	std::vector<VkCommandBuffer> commandBuffers;
+
+	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 
 	const int MAX_FRAMES_IN_FLIGHT = 2;
 	std::vector<VkSemaphore>  imageAvailableSemaphores;
@@ -180,6 +184,8 @@ private:
 	VkFormat findDepthFormat();
 	bool hasStencilComponent(VkFormat format);
 
+	VkSampleCountFlagBits getMaxUsableSampleCount(VkPhysicalDevice physicalDevice);
+
 	bool isDeviceSuitable(VkPhysicalDevice device);
 	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 
@@ -200,6 +206,7 @@ private:
 	void createImageViews();
 
 	void createDefaultRenderPass();
+	void createColorResources();
 	void createDepthBufferResources();
 	void createFrameBuffers();
 	void createCommandPool();
@@ -300,7 +307,7 @@ public:
 	//Defined in Pipeline.cpp for now,, will probably make them independant at some point
 private:
 
-	VkRenderPass createRenderPass(uint8_t colorAttachement_count, bool hasDepth);
+	VkRenderPass createRenderPass(uint8_t colorAttachement_count, bool hasDepth, bool useMsaa);
 	VkDescriptorSetLayout createDescriptorSetLayout(BindingDesc* bindings, size_t count);
 	void createDescriptorSets(VkDescriptorSetLayout layout, VkDescriptorPool pool);
 
