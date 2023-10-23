@@ -167,7 +167,9 @@ private:
 	}
 
 	float zoom = 2.0f;
-	float rot = 0.0f;
+	float rotation[3] = { 1.0f, 0.0f, 0.0f };
+	float translate[3] = { 0.0f, 0.0f, 0.0f };
+	bool auto_rot = false;
 
 
 	void updateUniformBuffer() {
@@ -175,12 +177,15 @@ private:
 
 		auto currentTime = std::chrono::high_resolution_clock::now();
 
-		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+		float time = auto_rot *  std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 		
 		Dimensions dim = m_device.getExtent();
 
 		UniformBufferObject ubo{};
-		ubo.model = glm::rotate(glm::mat4(1.0f), rot * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		ubo.model = glm::translate(glm::mat4(1.0f), glm::vec3(translate[0], translate[1], translate[2]));
+		ubo.model = glm::rotate(ubo.model, time * rotation[0] * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		ubo.model = glm::rotate(ubo.model, time * rotation[1] * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		ubo.model = glm::rotate(ubo.model, time * rotation[2] * glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 		ubo.view = glm::lookAt(glm::vec3(zoom, zoom, zoom), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 		ubo.proj = glm::perspective(glm::radians(45.0f), dim.width / (float)dim.height, 0.1f, 10.0f);
 		ubo.proj[1][1] *= -1;
@@ -193,7 +198,7 @@ private:
 	{
 		ImGuiIO& io = ImGui::GetIO();
 
-		static bool show_demo_window = true;
+		static bool show_demo_window = false;
 		if (show_demo_window)
 			ImGui::ShowDemoWindow(&show_demo_window);
 
@@ -204,7 +209,9 @@ private:
 			ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
 
 			ImGui::SliderFloat("Zoom", &zoom, 0.0f, 2.0f);            // Edit 1 float using a slider from 0.0f to
-			ImGui::SliderFloat("Rot", &rot, 0.0f, 4.0f);            // Edit 1 float using a slider from 0.0f to
+			ImGui::SliderFloat3("Rot", rotation, 0.0f, 4.0f);            // Edit 1 float using a slider from 0.0f to
+			ImGui::SliderFloat3("Translate", translate, 0.0f, 1.0f);          // Edit 1 float using a slider from 0.0f to
+			ImGui::Checkbox("Auto Rotate", &auto_rot);
 
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 			ImGui::End();
