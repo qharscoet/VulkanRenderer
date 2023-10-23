@@ -5,7 +5,6 @@
 
 #include "FileUtils.h"
 
-
 /* Optional TODOs :
 	- Use the transfer queue for staging buffer
 	- Use separate commandPool for copy buffer */
@@ -13,6 +12,8 @@
 
 
 #include "Device.h"
+
+#include "imgui.h"
 
 void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
 	auto app = reinterpret_cast<Device*>(glfwGetWindowUserPointer(window));
@@ -67,7 +68,6 @@ private:
 		glfwSetWindowUserPointer(window, &m_device);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 	}
-
 
 	void cleanupWindow() {
 		glfwDestroyWindow(window);
@@ -166,7 +166,8 @@ private:
 		m_device.destroyPipeline(pipeline);
 	}
 
-
+	float zoom = 2.0f;
+	float rot = 0.0f;
 
 
 	void updateUniformBuffer() {
@@ -179,8 +180,8 @@ private:
 		Dimensions dim = m_device.getExtent();
 
 		UniformBufferObject ubo{};
-		ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		ubo.model = glm::rotate(glm::mat4(1.0f), rot * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		ubo.view = glm::lookAt(glm::vec3(zoom, zoom, zoom), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 		ubo.proj = glm::perspective(glm::radians(45.0f), dim.width / (float)dim.height, 0.1f, 10.0f);
 		ubo.proj[1][1] *= -1;
 
@@ -188,9 +189,33 @@ private:
 		//memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
 	}
 
+	void drawImGui()
+	{
+		ImGuiIO& io = ImGui::GetIO();
+
+		static bool show_demo_window = true;
+		if (show_demo_window)
+			ImGui::ShowDemoWindow(&show_demo_window);
+
+		{
+
+			ImGui::Begin("Params");                          // Create a window called "Hello, world!" and append into it.
+
+			ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+
+			ImGui::SliderFloat("Zoom", &zoom, 0.0f, 2.0f);            // Edit 1 float using a slider from 0.0f to
+			ImGui::SliderFloat("Rot", &rot, 0.0f, 4.0f);            // Edit 1 float using a slider from 0.0f to
+
+			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+			ImGui::End();
+		}
+	}
+
 	void mainLoop() {
 		while (!glfwWindowShouldClose(window)) {
 			glfwPollEvents();
+			m_device.newImGuiFrame();
+			drawImGui();
 			updateUniformBuffer();
 			m_device.drawFrame();
 		}

@@ -163,11 +163,14 @@ private:
 	std::vector<VkFence>  inFlightFences;
 	uint32_t current_frame = 0;
 
-
+	VkDescriptorPool imgui_descriptorPool;
 private:
 
 	void initVulkan();
 	void cleanupVulkan();
+
+	void initImGui();
+	void cleanupImGui();
 
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
@@ -214,6 +217,8 @@ public:
 
 	void drawFrame();
 	void waitIdle();
+
+	void newImGuiFrame();
 
 
 // Buffer and Texture stuff

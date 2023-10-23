@@ -8,6 +8,7 @@ find_package(Vulkan REQUIRED)
 
 find_package(Stb REQUIRED)
 find_package(tinyobjloader CONFIG REQUIRED)    
+find_package(imgui CONFIG REQUIRED)
 
 
 file(GLOB SOURCES "./*.cpp")
@@ -15,7 +16,7 @@ file(GLOB SOURCES "./*.cpp")
 # Ajoutez une source à l'exécutable de ce projet.
 add_executable (VulkanTest ${SOURCES})
 target_include_directories(VulkanTest PRIVATE ${Stb_INCLUDE_DIR})
-target_link_libraries(VulkanTest PRIVATE glfw Vulkan::Vulkan tinyobjloader::tinyobjloader )
+target_link_libraries(VulkanTest PRIVATE glfw Vulkan::Vulkan tinyobjloader::tinyobjloader  imgui::imgui)
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET VulkanTest PROPERTY CXX_STANDARD 20)
