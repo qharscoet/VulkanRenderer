@@ -3,7 +3,8 @@
     "glfw3",
     "glm",
     "stb",
-    "tinyobjloader" ,
+    "tinyobjloader",
+    "tinygltf",
     {
       "name": "imgui",
       "features": [ "glfw-binding", "vulkan-binding" ]

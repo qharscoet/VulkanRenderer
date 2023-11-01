@@ -3,12 +3,18 @@
 #include <fstream>
 #include <unordered_map>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+//#define STB_IMAGE_IMPLEMENTATION
+//#include <stb_image.h>
 
 #define TINYOBJLOADER_IMPLEMENTATION // define this in only *one* .cc
 //#define TINYOBJLOADER_USE_MAPBOX_EARCUT
 #include <tiny_obj_loader.h>
+
+#define TINYGLTF_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+// #define TINYGLTF_NOEXCEPTION // optional. disable exception handling.
+#include <tiny_gltf.h>
 
 std::vector<char> readFile(const std::string& filename) {
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);
@@ -103,4 +109,122 @@ void loadObj(const char* path, Mesh* out_mesh)
 		}
 
 	}
+}
+
+size_t get_accessor_elem_size(const tinygltf::Accessor& accessor)
+{
+	int elem_size = 0;
+	switch (accessor.componentType)
+	{
+	case TINYGLTF_COMPONENT_TYPE_FLOAT: elem_size = sizeof(float); break;
+	case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: elem_size = sizeof(uint8_t); break;
+	default: break;
+	}
+
+	int elem_count = 0;
+	switch (accessor.type)
+	{
+	case TINYGLTF_TYPE_SCALAR: elem_count = 1; break;
+	case TINYGLTF_TYPE_VEC2: elem_count = 2; break;
+	case TINYGLTF_TYPE_VEC3: elem_count = 3; break;
+	}
+
+	return elem_size * elem_count;
+}
+
+
+struct AttributeInfo {
+	const uint8_t* start_addr;
+	const size_t elem_size;
+	const size_t count;
+	const size_t stride;
+};
+const AttributeInfo get_accessor_start_addr(const tinygltf::Model& model, size_t mesh_idx, std::string attr)
+{
+	const tinygltf::Mesh& m = model.meshes[mesh_idx];
+
+	int accessor_idx = m.primitives[0].attributes.at(attr);
+	const tinygltf::Accessor& accessor = model.accessors[accessor_idx];
+	const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
+	const uint8_t* data = model.buffers[bufferView.buffer].data.data() + bufferView.byteOffset + accessor.byteOffset;
+
+	size_t elem_size = get_accessor_elem_size(accessor);
+	size_t stride = bufferView.byteStride > 0 ? bufferView.byteStride : elem_size;
+
+
+	return { data, elem_size, accessor.count, stride };
+}
+
+int loadGltf(const char* path, Mesh* out_mesh)
+{
+
+	tinygltf::Model model;
+	tinygltf::TinyGLTF loader;
+	std::string err;
+	std::string warn;
+
+	bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, path);
+	//bool ret = loader.LoadBinaryFromFile(&model, &err, &warn, argv[1]); // for binary glTF(.glb)
+
+	if (!warn.empty()) {
+		printf("Warn: %s\n", warn.c_str());
+	}
+
+	if (!err.empty()) {
+		printf("Err: %s\n", err.c_str());
+	}
+
+	if (!ret) {
+		printf("Failed to parse glTF\n");
+		return -1;
+	}
+
+	if (model.meshes.size() > 0)
+	{
+		const tinygltf::Mesh& m = model.meshes[0];
+		
+		{
+			/*int vertices_accessor_idx = m.primitives[0].attributes.at("POSITION");
+			const tinygltf::Accessor& vertices_accessor = model.accessors[vertices_accessor_idx];
+			const tinygltf::BufferView& vertices_bufferView = model.bufferViews[accessor.bufferView];
+			auto vertices_data = model.buffers[vertices_bufferView.buffer].data.data() + vertices_bufferView.byteOffset + vertices_accessor.byteOffset;
+	
+			size_t elem_size = get_accessor_elem_size(vertices_accessor);
+			size_t stride = vertices_bufferView.byteStride > 0 ? vertices_bufferView.byteStride : elem_size;
+			*/
+
+			const AttributeInfo pos_info = get_accessor_start_addr(model, 0, "POSITION");
+			const AttributeInfo texCoords_info = get_accessor_start_addr(model, 0, "TEXCOORD_0");
+			
+			for (int i = 0; i < pos_info.count; i++)
+			{
+				MeshVertex v = {};
+
+				memcpy(v.pos, pos_info.start_addr + i * pos_info.stride, pos_info.elem_size);
+				memcpy(v.texCoord, texCoords_info.start_addr + i * texCoords_info.stride, texCoords_info.elem_size);
+				v.color[0] = 1.0f;
+				v.color[1] = 1.0f;
+				v.color[2] = 1.0f;
+				out_mesh->vertices.push_back(v);
+			}
+		}
+
+		{
+			int indices_accessor_idx = m.primitives[0].indices;
+			const tinygltf::Accessor& accessor = model.accessors[indices_accessor_idx];
+			const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
+			auto data = model.buffers[bufferView.buffer].data.data() + bufferView.byteOffset + accessor.byteOffset;
+
+			size_t elem_size = get_accessor_elem_size(accessor);
+			size_t stride = bufferView.byteStride > 0 ? bufferView.byteStride : elem_size;
+			for (int i = 0; i < accessor.count; i++)
+			{
+
+				out_mesh->indices.push_back(*(data + i * stride));
+			}
+
+		}
+	}
+
+	return 0;
 }

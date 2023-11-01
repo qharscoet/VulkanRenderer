@@ -132,7 +132,8 @@ private:
 
 	void loadViking() {
 		Mesh  viking_mesh;
-		loadObj("assets/viking_room.obj", &viking_mesh);
+		loadGltf("assets/cube.gltf", &viking_mesh);
+		//loadObj("assets/viking_room.obj", &viking_mesh);
 
 		vertexBuffer = m_device.createVertexBuffer(viking_mesh.vertices.size() * sizeof(viking_mesh.vertices[0]), (void*)viking_mesh.vertices.data());
 		indexBuffer = m_device.createIndexBuffer(viking_mesh.indices.size() * sizeof(viking_mesh.indices[0]), (void*)viking_mesh.indices.data());
@@ -178,12 +179,12 @@ private:
 
 
 	void initPipeline() {
-		auto attributeDescriptions = Particle::getAttributeDescriptions();
+		auto attributeDescriptions = Vertex::getAttributeDescriptions();
 
 		PipelineDesc desc = {
 			.type = PipelineType::Graphics,
-			.vertexShader = "./shaders/particles.vert.spv",
-			.pixelShader = "./shaders/particles.frag.spv",
+			.vertexShader = "./shaders/basic.vert.spv",
+			.pixelShader = "./shaders/basic.frag.spv",
 
 			.attributeDescriptions = attributeDescriptions.data(),
 			.attributeDescriptionsCount = attributeDescriptions.size(),
@@ -204,8 +205,8 @@ private:
 
 			.useDefaultRenderPass = false,
 			.colorAttachment = 1,
-			.hasDepth = false,
-			.useMsaa = false
+			.hasDepth = true,
+			.useMsaa = true
 		};
 
 		pipeline = m_device.createPipeline(desc);
@@ -275,7 +276,7 @@ private:
 		ubo.model = glm::rotate(ubo.model, time * rotation[1] * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		ubo.model = glm::rotate(ubo.model, time * rotation[2] * glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 		ubo.view = glm::lookAt(glm::vec3(zoom, zoom, zoom), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.proj = glm::perspective(glm::radians(45.0f), dim.width / (float)dim.height, 0.1f, 10.0f);
+		ubo.proj = glm::perspective(glm::radians(45.0f), dim.width / (float)dim.height, 0.1f, 20.0f);
 		ubo.proj[1][1] *= -1;
 
 		m_device.updateUniformBuffer(&ubo, sizeof(UniformBufferObject));
@@ -307,7 +308,7 @@ private:
 
 			ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
 
-			ImGui::SliderFloat("Zoom", &zoom, 0.0f, 2.0f);            // Edit 1 float using a slider from 0.0f to
+			ImGui::SliderFloat("Zoom", &zoom, 0.0f, 10.0f);            // Edit 1 float using a slider from 0.0f to
 			ImGui::SliderFloat3("Rot", rotation, 0.0f, 4.0f);            // Edit 1 float using a slider from 0.0f to
 			ImGui::SliderFloat3("Translate", translate, 0.0f, 1.0f);          // Edit 1 float using a slider from 0.0f to
 			ImGui::Checkbox("Auto Rotate", &auto_rot);
@@ -323,7 +324,7 @@ private:
 			m_device.newImGuiFrame();
 			drawImGui();
 			updateUniformBuffer();
-			m_device.drawParticleFrame(computePipeline);
+			m_device.drawFrame();
 		}
 
 		m_device.waitIdle();
@@ -335,16 +336,16 @@ public:
 		m_device.init(window);
 		initPipeline();
 		initComputePipeline();
-		//loadViking();
+		loadViking();
 		//initBuffers();
 		//initTextures();
-		initParticlesBuffers();
+		//initParticlesBuffers();
 
 		mainLoop();
 
-		cleanupParticles();
-		//cleanupTextures();
-		//cleanupBuffers();
+		//cleanupParticles();
+		cleanupTextures();
+		cleanupBuffers();
 		destroyPipeline();
 		m_device.cleanup();
 		cleanupWindow();

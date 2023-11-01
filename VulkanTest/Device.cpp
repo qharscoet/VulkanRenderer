@@ -563,7 +563,7 @@ VkShaderModule Device::createShaderModule(const std::vector<char>& code) {
 }
 
 void Device::createDefaultRenderPass() {
-	defaultRenderPass = createRenderPass(1, false, false);
+	defaultRenderPass = createRenderPass(1, true, true);
 }
 
 
@@ -573,8 +573,8 @@ void Device::createFrameBuffers() {
 
 	for (size_t i = 0; i < swapChainImageViews.size(); i++) {
 		VkImageView attachments[] = {
-			//colorTarget.view,
-			//depthBuffer.view,
+			colorTarget.view,
+			depthBuffer.view,
 			swapChainImageViews[i],
 		};
 
@@ -1131,7 +1131,7 @@ void Device::initImGui(){
 	init_info.Subpass = 0;
 	init_info.MinImageCount = 2;
 	init_info.ImageCount = 2;
-	init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;// msaaSamples;
+	init_info.MSAASamples =  msaaSamples;
 	init_info.Allocator = nullptr;
 	init_info.CheckVkResultFn = check_vk_result;
 
