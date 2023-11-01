@@ -9,12 +9,14 @@ enum class BlendMode {
 
 enum class BindingType {
 	UBO,
-	ImageSampler
+	ImageSampler,
+	StorageBuffer
 };
 
 enum StageFlags {
 	e_Pixel		= (1 << 0),
 	e_Vertex	= (1 << 1),
+	e_Compute	= (1 << 2),
 };
 
 struct BindingDesc {
@@ -23,14 +25,27 @@ struct BindingDesc {
 	uint32_t stageFlags;
 
 };
+
+enum class PipelineType {
+	Graphics,
+	Compute
+};
+
 struct PipelineDesc {
 	
+	PipelineType type;
 	const char* vertexShader;
 	const char* pixelShader;
+	const char* computeShader;
+
+	VkVertexInputAttributeDescription* attributeDescriptions;
+	uint32_t attributeDescriptionsCount;
 
 	//Descriptors params
 	BlendMode blendMode;
 	std::vector<BindingDesc> bindings;
+
+	bool isWireframe;
 	
 	//RenderPass params
 	bool useDefaultRenderPass;

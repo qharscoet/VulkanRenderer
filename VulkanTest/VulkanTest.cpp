@@ -2,6 +2,7 @@
 #include <stdexcept>
 
 #include <chrono>
+#include <random>
 
 #include "FileUtils.h"
 
@@ -41,6 +42,13 @@ private:
 	Pipeline pipeline;
 	VkDescriptorPool descriptorPool;
 
+	std::vector<Buffer> particleStorageBuffers;
+	double lastTime;
+	double lastFrameTime;
+
+	Pipeline computePipeline;
+	VkDescriptorPool computeDescriptorPool;
+
 	const std::vector<MeshVertex> vertices = {
 		{.pos = {-0.5f, -0.5f, 0.0f},	.color = {1.0f, 0.0f, 0.0f},	.texCoord = {0.0f, 0.0f} },
 		{.pos = {0.5f, -0.5f, 0.0f},	.color = {0.0f, 1.0f, 0.0f},	.texCoord = {1.0f, 0.0f} },
@@ -79,6 +87,47 @@ private:
 		indexBuffer = m_device.createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
 		m_device.setVertexBuffer(vertexBuffer);
 		m_device.setIndexBuffer(indexBuffer);
+	}
+
+	void initParticlesBuffers() {
+		particleStorageBuffers.resize(2);
+		// Initialize particles
+		std::default_random_engine rndEngine((unsigned)time(nullptr));
+		std::uniform_real_distribution<float> rndDist(0.0f, 1.0f);
+
+		// Initial particle positions on a circle
+		std::vector<Particle> particles(PARTICLE_COUNT);
+		for (auto& particle : particles) {
+			float r = 0.25f * sqrt(rndDist(rndEngine));
+			float theta = rndDist(rndEngine) * 2 * 3.14159265358979323846;
+			float x = r * cos(theta) * HEIGHT / WIDTH;
+			float y = r * sin(theta);
+			particle.position = glm::vec2(x, y);
+			particle.velocity = glm::normalize(glm::vec2(x, y)) * 0.0025f;
+			particle.color = glm::vec4(rndDist(rndEngine), rndDist(rndEngine), rndDist(rndEngine), 1.0f);
+		}
+
+		VkDeviceSize bufferSize = sizeof(Particle) * PARTICLE_COUNT;
+
+		//TODO change this to not allocate the staging buffer 3 times
+		for (size_t i = 0; i < 2; i++) {
+			particleStorageBuffers[i] = m_device.createLocalBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, particles.data());
+			particleStorageBuffers[i].size = bufferSize;
+			particleStorageBuffers[i].stride = sizeof(Particle);
+			particleStorageBuffers[i].count = bufferSize / sizeof(Particle);
+		}
+
+		m_device.updateComputeDescriptorSets(particleStorageBuffers);
+		m_device.setVertexBuffer(particleStorageBuffers[0]);
+
+	}
+
+	void cleanupParticles()
+	{
+		for (int i = 0; i < 2; i++)
+		{
+			m_device.destroyBuffer(particleStorageBuffers[i]);
+		}
 	}
 
 	void loadViking() {
@@ -129,9 +178,15 @@ private:
 
 
 	void initPipeline() {
+		auto attributeDescriptions = Particle::getAttributeDescriptions();
+
 		PipelineDesc desc = {
-			.vertexShader = "./shaders/basic.vert.spv",
-			.pixelShader = "./shaders/basic.frag.spv",
+			.type = PipelineType::Graphics,
+			.vertexShader = "./shaders/particles.vert.spv",
+			.pixelShader = "./shaders/particles.frag.spv",
+
+			.attributeDescriptions = attributeDescriptions.data(),
+			.attributeDescriptionsCount = attributeDescriptions.size(),
 
 			.blendMode = BlendMode::Opaque,
 			.bindings = {
@@ -147,10 +202,10 @@ private:
 				}
 			},
 
-			.useDefaultRenderPass = true,
+			.useDefaultRenderPass = false,
 			.colorAttachment = 1,
-			.hasDepth = true,
-			.useMsaa = true
+			.hasDepth = false,
+			.useMsaa = false
 		};
 
 		pipeline = m_device.createPipeline(desc);
@@ -163,8 +218,40 @@ private:
 	
 	}
 
+	void initComputePipeline() 
+	{
+		PipelineDesc desc = {
+			.type = PipelineType::Compute,
+			.computeShader = "./shaders/particles.comp.spv",
+
+			.bindings = {
+				{
+					.slot = 0,
+					.type = BindingType::UBO,
+					.stageFlags = e_Compute,
+				},
+				{
+					.slot = 1,
+					.type = BindingType::StorageBuffer,
+					.stageFlags = e_Compute,
+				},
+				{
+					.slot = 2,
+					.type = BindingType::StorageBuffer,
+					.stageFlags = e_Compute,
+				}
+			},
+
+			.useDefaultRenderPass = false,
+		};
+
+		computePipeline = m_device.createComputePipeline(desc);
+		computePipeline.descriptorPool = m_device.createDescriptorPool(desc.bindings.data(), desc.bindings.size());
+		m_device.createComputeDescriptorSets(computePipeline);
+	}
 	void destroyPipeline() {
 		m_device.destroyPipeline(pipeline);
+		m_device.destroyPipeline(computePipeline);
 	}
 
 	float zoom = 2.0f;
@@ -191,8 +278,19 @@ private:
 		ubo.proj = glm::perspective(glm::radians(45.0f), dim.width / (float)dim.height, 0.1f, 10.0f);
 		ubo.proj[1][1] *= -1;
 
-		m_device.updateUniformBuffer(ubo);
+		m_device.updateUniformBuffer(&ubo, sizeof(UniformBufferObject));
 		//memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+	}
+
+	void updateParticleUniformBuffer()
+	{
+		double currentTime = glfwGetTime();
+		 lastFrameTime = (currentTime - lastTime) * 1000.0;
+		 lastTime = currentTime;
+
+		ParticleUBO ubo{};
+		ubo.deltaTime = lastFrameTime * 2.0f;
+		m_device.updateUniformBuffer(&ubo, sizeof(ParticleUBO));
 	}
 
 	void drawImGui()
@@ -225,7 +323,7 @@ private:
 			m_device.newImGuiFrame();
 			drawImGui();
 			updateUniformBuffer();
-			m_device.drawFrame();
+			m_device.drawParticleFrame(computePipeline);
 		}
 
 		m_device.waitIdle();
@@ -236,14 +334,17 @@ public:
 		initWindow();
 		m_device.init(window);
 		initPipeline();
-		loadViking();
+		initComputePipeline();
+		//loadViking();
 		//initBuffers();
 		//initTextures();
+		initParticlesBuffers();
 
 		mainLoop();
 
-		cleanupTextures();
-		cleanupBuffers();
+		cleanupParticles();
+		//cleanupTextures();
+		//cleanupBuffers();
 		destroyPipeline();
 		m_device.cleanup();
 		cleanupWindow();

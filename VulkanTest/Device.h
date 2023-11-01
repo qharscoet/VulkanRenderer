@@ -107,11 +107,40 @@ struct Vertex {
 	}
 };
 
+
+struct Particle {
+	glm::vec2 position;
+	glm::vec2 velocity;
+	glm::vec4 color;
+
+	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
+		std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+
+		attributeDescriptions[0].binding = 0;
+		attributeDescriptions[0].location = 0;
+		attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+		attributeDescriptions[0].offset = offsetof(Particle, position);
+
+		attributeDescriptions[1].binding = 0;
+		attributeDescriptions[1].location = 1;
+		attributeDescriptions[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		attributeDescriptions[1].offset = offsetof(Particle, color);
+
+		return attributeDescriptions;
+	}
+};
+
 struct UniformBufferObject {
 	glm::mat4 model;
 	glm::mat4 view;
 	glm::mat4 proj;
 };
+
+struct ParticleUBO {
+	float deltaTime = 1.0f;
+};
+
+const uint32_t PARTICLE_COUNT = 512;
 
 class Device {
 private:
@@ -122,6 +151,7 @@ private:
 
 	VkDevice device = VK_NULL_HANDLE;
 	VkQueue graphicsQueue = VK_NULL_HANDLE;
+	VkQueue computeQueue = VK_NULL_HANDLE;
 
 	VkSurfaceKHR surface;
 	VkQueue presentQueue;
@@ -140,7 +170,7 @@ private:
 	VkPipeline graphicsPipeline;
 
 	Buffer vertexBuffer;
-	Buffer indexBuffer;
+	Buffer indexBuffer = { VK_NULL_HANDLE, VK_NULL_HANDLE, 0 };
 	size_t index_count;
 
 	std::vector<VkBuffer> uniformBuffers;
@@ -149,6 +179,7 @@ private:
 
 	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> descriptorSets;
+	std::vector<VkDescriptorSet> computeDescriptorSets;
 
 	GpuImage image;
 	GpuImage depthBuffer;
@@ -158,12 +189,15 @@ private:
 
 	VkCommandPool commandPool;
 	std::vector<VkCommandBuffer> commandBuffers;
+	std::vector<VkCommandBuffer> computeCommandBuffers;
 
 	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 
 	const int MAX_FRAMES_IN_FLIGHT = 2;
 	std::vector<VkSemaphore>  imageAvailableSemaphores;
 	std::vector<VkSemaphore>  renderFinishedSemaphores;
+	std::vector<VkFence> computeInFlightFences;
+	std::vector<VkSemaphore> computeFinishedSemaphores;
 	std::vector<VkFence>  inFlightFences;
 	uint32_t current_frame = 0;
 
@@ -196,6 +230,7 @@ private:
 
 	void createCommandBuffer();
 	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+	void recordComputeCommandBuffer(VkCommandBuffer commandBuffer, const Pipeline& computePipeline);
 
 	void createInstance();
 	void setupDebugMessenger();
@@ -223,6 +258,7 @@ public:
 	void cleanup();
 
 	void drawFrame();
+	void drawParticleFrame(const Pipeline& computePipeline);
 	void waitIdle();
 
 	void newImGuiFrame();
@@ -275,7 +311,6 @@ private:
 
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& out_buffer, VkDeviceMemory& out_bufferMemory);
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-	Buffer createLocalBuffer(size_t size,VkBufferUsageFlags usage,  void* src_data = nullptr);
 	
 	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
 	void generateMipmaps(VkImage image, VkFormat format, int32_t texWidth, int32_t texheight, uint32_t mipLevels);
@@ -283,6 +318,7 @@ private:
 	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 public:
+	Buffer createLocalBuffer(size_t size,VkBufferUsageFlags usage,  void* src_data = nullptr);
 	Buffer createVertexBuffer(size_t size, void* src_data = nullptr);
 	Buffer createIndexBuffer(size_t size, void* src_data = nullptr);
 	void destroyBuffer(Buffer buffer);
@@ -298,26 +334,28 @@ public:
 
 	VkSampler createTextureSampler(uint32_t mipLevels);
 
-	void updateUniformBuffer(const UniformBufferObject& ubo);
+	void updateUniformBuffer(void* data, size_t size);
 	Dimensions getExtent() { return swapChainExtent;};
 
 	void updateDescriptorSets(VkImageView imageView, VkSampler sampler);
-
+	void updateComputeDescriptorSets(const std::vector<Buffer>& buffers);
 
 	//Defined in Pipeline.cpp for now,, will probably make them independant at some point
 private:
 
 	VkRenderPass createRenderPass(uint8_t colorAttachement_count, bool hasDepth, bool useMsaa);
 	VkDescriptorSetLayout createDescriptorSetLayout(BindingDesc* bindings, size_t count);
-	void createDescriptorSets(VkDescriptorSetLayout layout, VkDescriptorPool pool);
+	void createDescriptorSets(VkDescriptorSetLayout layout, VkDescriptorPool pool, VkDescriptorSet* out_sets);
 
 public:
 
 	Pipeline createPipeline(PipelineDesc desc);
+	Pipeline createComputePipeline(PipelineDesc desc);
 	void setPipeline(Pipeline pipeline);
 	void destroyPipeline(Pipeline pipeline);
 
 	VkDescriptorPool createDescriptorPool(BindingDesc* bindingDescs, size_t count);
 	void setDescriptorPool(VkDescriptorPool pool);
 	void createDescriptorSets();
+	void createComputeDescriptorSets(const Pipeline& computePipeline);
 };
