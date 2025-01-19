@@ -43,14 +43,19 @@ Texture loadTexture(const char* path) {
 		throw std::runtime_error("failed to load texture image!");
 	}
 
-	return { (uint32_t)texWidth, (uint32_t)texHeight, texChannels, pixels, imageSize };
+	std::vector<unsigned char> pixel_data;
+	pixel_data.resize(imageSize);
+	memcpy(&pixel_data[0], pixels, imageSize);
+
+	stbi_image_free(pixels);
+	return { (uint32_t)texWidth, (uint32_t)texHeight, texChannels, pixel_data, imageSize };
 }
 
 
 void freeTexturePixels(Texture* tex)
 {
-	stbi_image_free(tex->pixels);
-	tex->pixels = nullptr;
+	//stbi_image_free(tex->pixels);
+	//tex->pixels = nullptr;
 }
 
 void loadObj(const char* path, Mesh* out_mesh)
@@ -118,6 +123,7 @@ size_t get_accessor_elem_size(const tinygltf::Accessor& accessor)
 	{
 	case TINYGLTF_COMPONENT_TYPE_FLOAT: elem_size = sizeof(float); break;
 	case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: elem_size = sizeof(uint8_t); break;
+	case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: elem_size = sizeof(uint16_t); break;
 	default: break;
 	}
 
@@ -223,6 +229,21 @@ int loadGltf(const char* path, Mesh* out_mesh)
 				out_mesh->indices.push_back(*(data + i * stride));
 			}
 
+		}
+
+		for (const tinygltf::Texture& tex : model.textures)
+		{
+			tinygltf::Image& img = model.images[tex.source];
+
+			Texture t;
+			t.height = img.height;
+			t.width = img.width;
+			t.channels = img.component;
+			t.size = img.width * img.height * img.component ;
+			t.pixels = img.image;
+
+			out_mesh->textures.push_back(t);
+			
 		}
 	}
 

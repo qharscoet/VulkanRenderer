@@ -1580,7 +1580,7 @@ GpuImage Device::createTexture(Texture tex)
 
 	void* data;
 	vkMapMemory(device, stagingBuffer.memory, 0, tex.size, 0, &data);
-	memcpy(data, tex.pixels, static_cast<size_t>(tex.size));
+	memcpy(data, &tex.pixels[0], static_cast<size_t>(tex.size));
 	vkUnmapMemory(device, stagingBuffer.memory);
 
 	uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(tex.width, tex.height)))) + 1;

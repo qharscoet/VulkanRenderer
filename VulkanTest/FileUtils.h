@@ -10,7 +10,7 @@ struct Texture {
 	uint32_t height;
 	uint32_t width;
 	int channels;
-	unsigned char* pixels;
+	std::vector<unsigned char> pixels;
 	size_t size;
 };
 
@@ -24,6 +24,7 @@ struct MeshVertex
 struct Mesh {
 	std::vector<MeshVertex> vertices;
 	std::vector<uint32_t> indices;
+	std::vector<Texture> textures;
 };
 
 struct Scene {

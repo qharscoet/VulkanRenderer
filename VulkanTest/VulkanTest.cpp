@@ -65,7 +65,7 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
 	if (glfw_state.pressed)
 	{
 		rotation[0] += (xpos - glfw_state.mousepress_x)/glfw_state.width;
-		rotation[2] += (ypos - glfw_state.mousepress_y)/glfw_state.height;
+		rotation[1] += (ypos - glfw_state.mousepress_y)/glfw_state.height;
 
 
 		glfw_state.mousepress_x = xpos;
@@ -191,8 +191,7 @@ private:
 
 	void loadViking() {
 		Mesh  viking_mesh;
-		loadGltf("assets/cube.gltf", &viking_mesh);
-		//loadObj("assets/viking_room.obj", &viking_mesh);
+		loadObj("assets/viking_room.obj", &viking_mesh);
 
 		vertexBuffer = m_device.createVertexBuffer(viking_mesh.vertices.size() * sizeof(viking_mesh.vertices[0]), (void*)viking_mesh.vertices.data());
 		indexBuffer = m_device.createIndexBuffer(viking_mesh.indices.size() * sizeof(viking_mesh.indices[0]), (void*)viking_mesh.indices.data());
@@ -203,13 +202,33 @@ private:
 		Texture tex = loadTexture("assets/viking_room.png");
 
 		texture = m_device.createTexture(tex);
-		freeTexturePixels(&tex);
 
 		sampler = m_device.createTextureSampler(texture.mipLevels);
 
 		m_device.updateDescriptorSets(texture.view, sampler);
 	}
 
+
+	void loadCube()
+	{
+		Mesh  cube_mesh, cube_test;
+		loadGltf("assets/Cube/Cube.gltf", &cube_mesh);
+		//loadGltf("assets/cube.gltf", &cube_mesh);
+
+		vertexBuffer = m_device.createVertexBuffer(cube_mesh.vertices.size() * sizeof(cube_mesh.vertices[0]), (void*)cube_mesh.vertices.data());
+		indexBuffer = m_device.createIndexBuffer(cube_mesh.indices.size() * sizeof(cube_mesh.indices[0]), (void*)cube_mesh.indices.data());
+		m_device.setVertexBuffer(vertexBuffer);
+		m_device.setIndexBuffer(indexBuffer);
+
+
+		Texture tex = cube_mesh.textures.size() > 0 ? cube_mesh.textures[0] : loadTexture("assets/viking_room.png");
+
+		texture = m_device.createTexture(tex);
+
+		sampler = m_device.createTextureSampler(texture.mipLevels);
+
+		m_device.updateDescriptorSets(texture.view, sampler);
+	}
 
 	void cleanupBuffers() {
 		m_device.destroyBuffer(vertexBuffer);
@@ -390,7 +409,8 @@ public:
 		m_device.init(window);
 		initPipeline();
 		initComputePipeline();
-		loadViking();
+		//loadViking();
+		loadCube();
 		//initBuffers();
 		//initTextures();
 		//initParticlesBuffers();
