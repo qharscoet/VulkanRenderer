@@ -16,11 +16,63 @@
 
 #include "imgui.h"
 
+float zoom = 2.0f;
+float rotation[3] = { 1.0f, 0.0f, 0.0f };
+float translate[3] = { 0.0f, 0.0f, 0.0f };
+bool auto_rot = false;
+
+struct GLFW_state {
+	bool pressed;
+	double mousepress_x;
+	double mousepress_y;
+	int width;
+	int height;
+} glfw_state;
+
 void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
 	auto app = reinterpret_cast<Device*>(glfwGetWindowUserPointer(window));
 	app->framebufferResized = true;
+
+	glfw_state.width = width;
+	glfw_state.height = height;
+
 }
 
+
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+
+	if (button == GLFW_MOUSE_BUTTON_RIGHT)
+	{
+		switch (action) {
+		case GLFW_PRESS: glfw_state.pressed = true; break;
+		case GLFW_RELEASE: glfw_state.pressed = false; break;
+		default:break;
+		}
+
+		glfwGetCursorPos(window, &glfw_state.mousepress_x, &glfw_state.mousepress_y);
+	}
+}
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+	zoom -= yoffset * 0.1f;
+}
+
+static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
+{
+	if (glfw_state.pressed)
+	{
+		rotation[0] += (xpos - glfw_state.mousepress_x)/glfw_state.width;
+		rotation[2] += (ypos - glfw_state.mousepress_y)/glfw_state.height;
+
+
+		glfw_state.mousepress_x = xpos;
+		glfw_state.mousepress_y = ypos;
+	}
+
+}
 
 
 class HelloTriangleApplication {
@@ -75,6 +127,13 @@ private:
 
 		glfwSetWindowUserPointer(window, &m_device);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+
+		glfwSetMouseButtonCallback(window, mouse_button_callback);
+		glfwSetScrollCallback(window, scroll_callback);
+		glfwSetCursorPosCallback(window, cursor_position_callback);
+
+		glfw_state.width = WIDTH;
+		glfw_state.height = HEIGHT;
 	}
 
 	void cleanupWindow() {
@@ -255,18 +314,13 @@ private:
 		m_device.destroyPipeline(computePipeline);
 	}
 
-	float zoom = 2.0f;
-	float rotation[3] = { 1.0f, 0.0f, 0.0f };
-	float translate[3] = { 0.0f, 0.0f, 0.0f };
-	bool auto_rot = false;
-
 
 	void updateUniformBuffer() {
 		static auto startTime = std::chrono::high_resolution_clock::now();
 
 		auto currentTime = std::chrono::high_resolution_clock::now();
 
-		float time = auto_rot *  std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+		float time =  1.0f + (auto_rot *  std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count());
 		
 		Dimensions dim = m_device.getExtent();
 
