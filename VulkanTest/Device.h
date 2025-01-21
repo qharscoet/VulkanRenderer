@@ -200,6 +200,7 @@ private:
 	std::vector<VkSemaphore> computeFinishedSemaphores;
 	std::vector<VkFence>  inFlightFences;
 	uint32_t current_frame = 0;
+	uint32_t current_framebuffer_idx = 0;
 
 	VkDescriptorPool imgui_descriptorPool;
 private:
@@ -229,7 +230,7 @@ private:
 	VkShaderModule createShaderModule(const std::vector<char>& code);
 
 	void createCommandBuffer();
-	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+	void recordCommandBuffer(VkCommandBuffer commandBuffer);
 	void recordComputeCommandBuffer(VkCommandBuffer commandBuffer, const Pipeline& computePipeline);
 
 	void createInstance();
@@ -258,6 +259,8 @@ public:
 	void cleanup();
 
 	void drawFrame();
+	void beginDraw();
+	void endDraw();
 	void drawParticleFrame(const Pipeline& computePipeline);
 	void waitIdle();
 
@@ -343,7 +346,7 @@ public:
 	//Defined in Pipeline.cpp for now,, will probably make them independant at some point
 private:
 
-	VkRenderPass createRenderPass(uint8_t colorAttachement_count, bool hasDepth, bool useMsaa);
+	VkRenderPass createRenderPass(RenderPassDesc desc);
 	VkDescriptorSetLayout createDescriptorSetLayout(BindingDesc* bindings, size_t count);
 	void createDescriptorSets(VkDescriptorSetLayout layout, VkDescriptorPool pool, VkDescriptorSet* out_sets);
 
@@ -351,8 +354,12 @@ public:
 
 	Pipeline createPipeline(PipelineDesc desc);
 	Pipeline createComputePipeline(PipelineDesc desc);
+	RenderPass createRenderPassAndPipeline(RenderPassDesc renderPassDesc, PipelineDesc pipelineDesc);
 	void setPipeline(Pipeline pipeline);
 	void destroyPipeline(Pipeline pipeline);
+	void destroyRenderPass(RenderPass renderPass);
+
+	void recordRenderPass(VkCommandBuffer commandBuffer);
 
 	VkDescriptorPool createDescriptorPool(BindingDesc* bindingDescs, size_t count);
 	void setDescriptorPool(VkDescriptorPool pool);

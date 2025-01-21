@@ -46,10 +46,14 @@ struct PipelineDesc {
 	std::vector<BindingDesc> bindings;
 
 	bool isWireframe;
-	
-	//RenderPass params
-	bool useDefaultRenderPass;
-	uint8_t colorAttachment;
+
+	VkRenderPass renderPass;
+	bool useMsaa;
+};
+
+struct RenderPassDesc
+{
+	uint8_t colorAttachement_count;
 	bool hasDepth;
 	bool useMsaa;
 };
@@ -60,4 +64,10 @@ struct Pipeline {
 	VkDescriptorPool descriptorPool;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
+};
+
+struct RenderPass {
+	VkRenderPass renderPass;
+	
+	Pipeline pipeline;
 };

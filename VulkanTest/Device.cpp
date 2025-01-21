@@ -563,7 +563,13 @@ VkShaderModule Device::createShaderModule(const std::vector<char>& code) {
 }
 
 void Device::createDefaultRenderPass() {
-	defaultRenderPass = createRenderPass(1, true, true);
+
+	RenderPassDesc desc = {
+		.colorAttachement_count = 1,
+		.hasDepth = true,
+		.useMsaa = true,
+	};
+	defaultRenderPass = createRenderPass(desc);
 }
 
 
@@ -924,7 +930,7 @@ void Device::createCommandBuffer() {
 	}
 }
 
-void Device::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
+void Device::recordCommandBuffer(VkCommandBuffer commandBuffer) {
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.flags = 0; // Optional
@@ -933,25 +939,6 @@ void Device::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
 	if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
 		throw std::runtime_error("failed to begin recording command buffer!");
 	}
-
-	VkRenderPassBeginInfo renderPassInfo{};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassInfo.renderPass = currentRenderPass;
-	renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex];
-	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = swapChainExtent;
-
-	std::array<VkClearValue, 2> clearValues{};
-	clearValues[0].color = {0.0f, 0.0f, 0.0f, 1.0f};
-	clearValues[1].depthStencil = { 1.0f, 0 };
-
-	renderPassInfo.clearValueCount = clearValues.size();
-	renderPassInfo.pClearValues = clearValues.data();
-
-	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-
 	//These are define dynamic in the pipeline so we have to set them
 	VkViewport viewport{};
 	viewport.x = 0.0f;
@@ -962,33 +949,13 @@ void Device::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
 	viewport.maxDepth = 1.0f;
 	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
-
-
 	VkRect2D scissor{};
 	scissor.offset = { 0, 0 };
 	scissor.extent = swapChainExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	VkBuffer vertexBuffers[] = { vertexBuffer.buffer };
-	VkDeviceSize offsets[] = { 0 };
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+	recordRenderPass(commandBuffer);
 
-	if(indexBuffer.buffer != 0)
-		vkCmdBindIndexBuffer(commandBuffer, indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-	//UBO
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[current_frame], 0, nullptr);
-
-	//Actual draw !
-	if(indexBuffer.buffer != 0)
-		vkCmdDrawIndexed(commandBuffer, index_count, 1, 0, 0, 0);
-	else
-		vkCmdDraw(commandBuffer, PARTICLE_COUNT, 1, 0, 0);
-
-	ImGui::Render();
-	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
-
-	vkCmdEndRenderPass(commandBuffer);
 	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
 		throw std::runtime_error("failed to record command buffer!");
 	}
@@ -1184,11 +1151,13 @@ void Device::newImGuiFrame(){
 	ImGui::NewFrame();
 }
 
-void Device::drawFrame() {
+
+void Device::beginDraw()
+{
 	vkWaitForFences(device, 1, &inFlightFences[current_frame], VK_TRUE, UINT64_MAX);
 
 	uint32_t imageIndex;
-	VkResult res = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[current_frame], VK_NULL_HANDLE, &imageIndex);
+	VkResult res = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[current_frame], VK_NULL_HANDLE, &current_framebuffer_idx);
 
 	switch (res) {
 	case VK_ERROR_OUT_OF_DATE_KHR:
@@ -1202,11 +1171,11 @@ void Device::drawFrame() {
 
 	//We reset the fence only if we actually will submit work
 	vkResetFences(device, 1, &inFlightFences[current_frame]);
-
 	vkResetCommandBuffer(commandBuffers[current_frame], 0);
+}
 
-	recordCommandBuffer(commandBuffers[current_frame], imageIndex);
-	//updateUniformBuffer(current_frame);
+void Device::endDraw()
+{
 
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1237,7 +1206,7 @@ void Device::drawFrame() {
 	VkSwapchainKHR swapChains[] = { swapChain };
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = swapChains;
-	presentInfo.pImageIndices = &imageIndex;
+	presentInfo.pImageIndices = &current_framebuffer_idx;
 	VkResult result = vkQueuePresentKHR(presentQueue, &presentInfo);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
@@ -1249,6 +1218,12 @@ void Device::drawFrame() {
 	}
 
 	current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+void Device::drawFrame() {
+
+	recordCommandBuffer(commandBuffers[current_frame]);
+	//updateUniformBuffer(current_frame);
 }
 
 void Device::drawParticleFrame(const Pipeline& computePipeline) {
@@ -1275,8 +1250,7 @@ void Device::drawParticleFrame(const Pipeline& computePipeline) {
 
 	vkWaitForFences(device, 1, &inFlightFences[current_frame], VK_TRUE, UINT64_MAX);
 
-	uint32_t imageIndex;
-	VkResult res = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[current_frame], VK_NULL_HANDLE, &imageIndex);
+	VkResult res = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[current_frame], VK_NULL_HANDLE, &current_framebuffer_idx);
 
 	switch (res) {
 	case VK_ERROR_OUT_OF_DATE_KHR:
@@ -1293,7 +1267,7 @@ void Device::drawParticleFrame(const Pipeline& computePipeline) {
 
 	vkResetCommandBuffer(commandBuffers[current_frame], 0);
 
-	recordCommandBuffer(commandBuffers[current_frame], imageIndex);
+	recordCommandBuffer(commandBuffers[current_frame]);
 	//updateUniformBuffer(current_frame);
 
 	//VkSubmitInfo submitInfo{};
@@ -1325,7 +1299,7 @@ void Device::drawParticleFrame(const Pipeline& computePipeline) {
 	VkSwapchainKHR swapChains[] = { swapChain };
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = swapChains;
-	presentInfo.pImageIndices = &imageIndex;
+	presentInfo.pImageIndices = &current_framebuffer_idx;
 	VkResult result = vkQueuePresentKHR(presentQueue, &presentInfo);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
@@ -1387,7 +1361,7 @@ void Device::cleanupVulkan() {
 		vkDestroyBuffer(device, uniformBuffers[i], nullptr);
 		vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
 	}
-	vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+	//vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 
 
 	vkDestroyCommandPool(device, commandPool, nullptr);

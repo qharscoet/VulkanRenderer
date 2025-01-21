@@ -91,8 +91,8 @@ private:
 	//VkImageView textureImageView;
 	VkSampler sampler;
 
-	Pipeline pipeline;
-	VkDescriptorPool descriptorPool;
+	RenderPass renderPass;
+
 
 	std::vector<Buffer> particleStorageBuffers;
 	double lastTime;
@@ -279,19 +279,18 @@ private:
 					.type = BindingType::ImageSampler,
 					.stageFlags = e_Pixel,
 				}
-			},
+			}
+		};
 
-			.useDefaultRenderPass = false,
-			.colorAttachment = 1,
+		RenderPassDesc renderPassDesc = {
+			.colorAttachement_count = 1,
 			.hasDepth = true,
 			.useMsaa = true
 		};
 
-		pipeline = m_device.createPipeline(desc);
-		descriptorPool = m_device.createDescriptorPool(desc.bindings.data(), desc.bindings.size());
+		renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 		
-		m_device.setPipeline(pipeline);
-		m_device.setDescriptorPool(descriptorPool);
+		m_device.setPipeline(renderPass.pipeline);
 		m_device.createDescriptorSets();
 
 	
@@ -320,8 +319,6 @@ private:
 					.stageFlags = e_Compute,
 				}
 			},
-
-			.useDefaultRenderPass = false,
 		};
 
 		computePipeline = m_device.createComputePipeline(desc);
@@ -329,7 +326,7 @@ private:
 		m_device.createComputeDescriptorSets(computePipeline);
 	}
 	void destroyPipeline() {
-		m_device.destroyPipeline(pipeline);
+		m_device.destroyRenderPass(renderPass);
 		m_device.destroyPipeline(computePipeline);
 	}
 
@@ -397,7 +394,10 @@ private:
 			m_device.newImGuiFrame();
 			drawImGui();
 			updateUniformBuffer();
+			m_device.beginDraw();
 			m_device.drawFrame();
+			m_device.endDraw();
+			//m_device.drawParticleFrame(computePipeline);
 		}
 
 		m_device.waitIdle();
