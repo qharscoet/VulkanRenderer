@@ -84,12 +84,7 @@ private:
 	Device m_device;
 	GLFWwindow* window = nullptr;
 
-	Buffer vertexBuffer;
-	Buffer indexBuffer;
-
-	GpuImage texture;
-	//VkImageView textureImageView;
-	VkSampler sampler;
+	MeshPacket packet;
 
 	RenderPass renderPass;
 
@@ -142,10 +137,10 @@ private:
 	}
 
 	void initBuffers() {
-		vertexBuffer = m_device.createVertexBuffer(vertices.size() * sizeof(vertices[0]), (void*)vertices.data());
-		indexBuffer = m_device.createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
-		m_device.setVertexBuffer(vertexBuffer);
-		m_device.setIndexBuffer(indexBuffer);
+		packet.vertexBuffer = m_device.createVertexBuffer(vertices.size() * sizeof(vertices[0]), (void*)vertices.data());
+		packet.indexBuffer = m_device.createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
+		m_device.setVertexBuffer(packet.vertexBuffer);
+		m_device.setIndexBuffer(packet.indexBuffer);
 	}
 
 	void initParticlesBuffers() {
@@ -193,19 +188,17 @@ private:
 		Mesh  viking_mesh;
 		loadObj("assets/viking_room.obj", &viking_mesh);
 
-		vertexBuffer = m_device.createVertexBuffer(viking_mesh.vertices.size() * sizeof(viking_mesh.vertices[0]), (void*)viking_mesh.vertices.data());
-		indexBuffer = m_device.createIndexBuffer(viking_mesh.indices.size() * sizeof(viking_mesh.indices[0]), (void*)viking_mesh.indices.data());
-		m_device.setVertexBuffer(vertexBuffer);
-		m_device.setIndexBuffer(indexBuffer);
-
+		packet.vertexBuffer = m_device.createVertexBuffer(viking_mesh.vertices.size() * sizeof(viking_mesh.vertices[0]), (void*)viking_mesh.vertices.data());
+		packet.indexBuffer = m_device.createIndexBuffer(viking_mesh.indices.size() * sizeof(viking_mesh.indices[0]), (void*)viking_mesh.indices.data());
 
 		Texture tex = loadTexture("assets/viking_room.png");
 
-		texture = m_device.createTexture(tex);
+		packet.texture = m_device.createTexture(tex);
+		packet.sampler = m_device.createTextureSampler(packet.texture.mipLevels);
 
-		sampler = m_device.createTextureSampler(texture.mipLevels);
-
-		m_device.updateDescriptorSets(texture.view, sampler);
+		m_device.setVertexBuffer(packet.vertexBuffer);
+		m_device.setIndexBuffer(packet.indexBuffer);
+		m_device.updateDescriptorSets(packet.texture.view, packet.sampler);
 	}
 
 
@@ -215,24 +208,22 @@ private:
 		loadGltf("assets/Cube/Cube.gltf", &cube_mesh);
 		//loadGltf("assets/cube.gltf", &cube_mesh);
 
-		vertexBuffer = m_device.createVertexBuffer(cube_mesh.vertices.size() * sizeof(cube_mesh.vertices[0]), (void*)cube_mesh.vertices.data());
-		indexBuffer = m_device.createIndexBuffer(cube_mesh.indices.size() * sizeof(cube_mesh.indices[0]), (void*)cube_mesh.indices.data());
-		m_device.setVertexBuffer(vertexBuffer);
-		m_device.setIndexBuffer(indexBuffer);
-
+		packet.vertexBuffer = m_device.createVertexBuffer(cube_mesh.vertices.size() * sizeof(cube_mesh.vertices[0]), (void*)cube_mesh.vertices.data());
+		packet.indexBuffer = m_device.createIndexBuffer(cube_mesh.indices.size() * sizeof(cube_mesh.indices[0]), (void*)cube_mesh.indices.data());
 
 		Texture tex = cube_mesh.textures.size() > 0 ? cube_mesh.textures[0] : loadTexture("assets/viking_room.png");
 
-		texture = m_device.createTexture(tex);
+		packet.texture = m_device.createTexture(tex);
+		packet.sampler = m_device.createTextureSampler(packet.texture.mipLevels);
 
-		sampler = m_device.createTextureSampler(texture.mipLevels);
-
-		m_device.updateDescriptorSets(texture.view, sampler);
+		m_device.setVertexBuffer(packet.vertexBuffer);
+		m_device.setIndexBuffer(packet.indexBuffer);
+		m_device.updateDescriptorSets(packet.texture.view, packet.sampler);
 	}
 
 	void cleanupBuffers() {
-		m_device.destroyBuffer(vertexBuffer);
-		m_device.destroyBuffer(indexBuffer);
+		m_device.destroyBuffer(packet.vertexBuffer);
+		m_device.destroyBuffer(packet.indexBuffer);
 	}
 
 
@@ -240,18 +231,18 @@ private:
 	void initTextures() {
 		Texture tex = loadTexture("assets/texture.jpg");
 
-		texture = m_device.createTexture(tex);
+		packet.texture = m_device.createTexture(tex);
 		freeTexturePixels(&tex);
 
-		sampler = m_device.createTextureSampler(texture.mipLevels);
+		packet.sampler = m_device.createTextureSampler(packet.texture.mipLevels);
 
-		m_device.updateDescriptorSets(texture.view, sampler);
+		m_device.updateDescriptorSets(packet.texture.view, packet.sampler);
 	}
 
 	void cleanupTextures() {
-		m_device.destroyImage(texture);
+		m_device.destroyImage(packet.texture);
 		//m_device.destoryImageView(textureImageView);
-		m_device.destroySampler(sampler);
+		m_device.destroySampler(packet.sampler);
 
 	}
 

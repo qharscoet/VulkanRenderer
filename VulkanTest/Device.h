@@ -63,6 +63,15 @@ struct GpuImage {
 	uint32_t mipLevels;
 };
 
+
+struct MeshPacket {
+	Buffer vertexBuffer;
+	Buffer indexBuffer;
+
+	GpuImage texture;
+	VkSampler sampler;
+};
+
 struct BarrierDesc {
 	VkImageLayout oldLayout;
 	VkImageLayout newLayout;
