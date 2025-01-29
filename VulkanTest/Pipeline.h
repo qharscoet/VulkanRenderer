@@ -1,6 +1,7 @@
 #pragma once
 #include <vulkan/vulkan.h>
 #include <vector>
+#include <functional>
 
 
 enum class BlendMode {
@@ -52,11 +53,16 @@ struct PipelineDesc {
 	bool useMsaa;
 };
 
+//function pointer to a void(void) function
+typedef void(*DrawFunctionPtr)();
+
 struct RenderPassDesc
 {
 	uint8_t colorAttachement_count;
 	bool hasDepth;
 	bool useMsaa;
+
+	std::function<void()> drawFunction;
 };
 
 struct Pipeline {
@@ -72,4 +78,6 @@ struct RenderPass {
 	VkRenderPass renderPass;
 	
 	Pipeline pipeline;
+
+	std::function<void()> draw;
 };

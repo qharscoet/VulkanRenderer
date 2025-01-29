@@ -464,7 +464,7 @@ RenderPass Device::createRenderPassAndPipeline(RenderPassDesc renderPassDesc, Pi
 	pipelineDesc.useMsaa = renderPassDesc.useMsaa;
 	Pipeline pipeline = createPipeline(pipelineDesc);
 
-	return { renderpass, pipeline };
+	return { renderpass, pipeline, renderPassDesc.drawFunction };
 }
 void Device::setPipeline(Pipeline pipeline)
 {
@@ -475,6 +475,13 @@ void Device::setPipeline(Pipeline pipeline)
 	descriptorSets = pipeline.descriptorSets;
 
 	setDescriptorPool(pipeline.descriptorPool);
+}
+
+void Device::setPacket(MeshPacket packet)
+{
+	setVertexBuffer(packet.vertexBuffer);
+	setIndexBuffer(packet.indexBuffer);
+	updateDescriptorSet(packet.texture.view, packet.sampler, current_frame);
 }
 
 void Device::setDescriptorPool(VkDescriptorPool pool)

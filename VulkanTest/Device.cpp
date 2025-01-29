@@ -808,10 +808,9 @@ void Device::createComputeDescriptorSets(const Pipeline& computePipeline) {
 	createDescriptorSets(computePipeline.descriptorSetLayout, computePipeline.descriptorPool, computeDescriptorSets.data());
 }
 
-void Device::updateDescriptorSets(VkImageView imageView, VkSampler sampler) {
-	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+void Device::updateDescriptorSet(VkImageView imageView, VkSampler sampler, uint32_t set_index) {
 		VkDescriptorBufferInfo bufferInfo{};
-		bufferInfo.buffer = uniformBuffers[i];
+		bufferInfo.buffer = uniformBuffers[set_index];
 		bufferInfo.offset = 0;
 		bufferInfo.range = sizeof(UniformBufferObject);
 
@@ -820,9 +819,9 @@ void Device::updateDescriptorSets(VkImageView imageView, VkSampler sampler) {
 		imageInfo.imageView = imageView;
 		imageInfo.sampler = sampler;
 
-		std::array<VkWriteDescriptorSet,2> descriptorWrites{};
+		std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
 		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[0].dstSet = descriptorSets[i];
+		descriptorWrites[0].dstSet = descriptorSets[set_index];
 		descriptorWrites[0].dstBinding = 0;
 		descriptorWrites[0].dstArrayElement = 0;
 		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -832,7 +831,7 @@ void Device::updateDescriptorSets(VkImageView imageView, VkSampler sampler) {
 		descriptorWrites[0].pTexelBufferView = nullptr; // Optional
 
 		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[1].dstSet = descriptorSets[i];
+		descriptorWrites[1].dstSet = descriptorSets[set_index];
 		descriptorWrites[1].dstBinding = 1;
 		descriptorWrites[1].dstArrayElement = 0;
 		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -842,6 +841,11 @@ void Device::updateDescriptorSets(VkImageView imageView, VkSampler sampler) {
 		descriptorWrites[1].pTexelBufferView = nullptr; // Optional
 
 		vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
+}
+
+void Device::updateDescriptorSets(VkImageView imageView, VkSampler sampler) {
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		updateDescriptorSet(imageView, sampler, i);
 	}
 
 }

@@ -350,6 +350,7 @@ public:
 	Dimensions getExtent() { return swapChainExtent;};
 
 	void updateDescriptorSets(VkImageView imageView, VkSampler sampler);
+	void updateDescriptorSet(VkImageView imageView, VkSampler sampler, uint32_t set_index);
 	void updateComputeDescriptorSets(const std::vector<Buffer>& buffers);
 
 	//Defined in Pipeline.cpp for now,, will probably make them independant at some point
@@ -365,6 +366,7 @@ public:
 	Pipeline createComputePipeline(PipelineDesc desc);
 	RenderPass createRenderPassAndPipeline(RenderPassDesc renderPassDesc, PipelineDesc pipelineDesc);
 	void setPipeline(Pipeline pipeline);
+	void setPacket(MeshPacket packet);
 	void destroyPipeline(Pipeline pipeline);
 	void destroyRenderPass(RenderPass renderPass);
 

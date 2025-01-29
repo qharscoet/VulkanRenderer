@@ -216,9 +216,7 @@ private:
 		packet.texture = m_device.createTexture(tex);
 		packet.sampler = m_device.createTextureSampler(packet.texture.mipLevels);
 
-		m_device.setVertexBuffer(packet.vertexBuffer);
-		m_device.setIndexBuffer(packet.indexBuffer);
-		m_device.updateDescriptorSets(packet.texture.view, packet.sampler);
+		//m_device.setPacket(packet);
 	}
 
 	void cleanupBuffers() {
@@ -244,6 +242,11 @@ private:
 		//m_device.destoryImageView(textureImageView);
 		m_device.destroySampler(packet.sampler);
 
+	}
+
+
+	void drawRenderPass() {
+		m_device.setPacket(packet);
 	}
 
 
@@ -276,7 +279,8 @@ private:
 		RenderPassDesc renderPassDesc = {
 			.colorAttachement_count = 1,
 			.hasDepth = true,
-			.useMsaa = true
+			.useMsaa = true,
+			.drawFunction = [&]() { drawRenderPass(); }
 		};
 
 		renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
@@ -383,6 +387,7 @@ private:
 			drawImGui();
 			updateUniformBuffer();
 			m_device.beginDraw();
+			renderPass.draw();
 			m_device.drawFrame();
 			m_device.endDraw();
 			//m_device.drawParticleFrame(computePipeline);
