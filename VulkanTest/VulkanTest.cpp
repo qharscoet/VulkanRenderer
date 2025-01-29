@@ -291,9 +291,6 @@ private:
 		renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 		
 		m_device.setPipeline(renderPass.pipeline);
-		m_device.createDescriptorSets();
-
-	
 	}
 
 	void initComputePipeline() 

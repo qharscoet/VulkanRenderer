@@ -396,6 +396,9 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	out_pipeline.pipelineLayout = out_pipelineLayout;
 	out_pipeline.descriptorPool = createDescriptorPool(desc.bindings.data(), desc.bindings.size());;
 
+	out_pipeline.descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+	createDescriptorSets(setLayout, out_pipeline.descriptorPool, out_pipeline.descriptorSets.data());
+
 	return out_pipeline;
 }
 
@@ -469,6 +472,7 @@ void Device::setPipeline(Pipeline pipeline)
 	graphicsPipeline = pipeline.graphicsPipeline;
 	currentRenderPass = pipeline.renderPass;
 	pipelineLayout = pipeline.pipelineLayout;
+	descriptorSets = pipeline.descriptorSets;
 
 	setDescriptorPool(pipeline.descriptorPool);
 }

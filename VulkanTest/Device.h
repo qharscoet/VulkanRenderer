@@ -363,6 +363,5 @@ public:
 
 	VkDescriptorPool createDescriptorPool(BindingDesc* bindingDescs, size_t count);
 	void setDescriptorPool(VkDescriptorPool pool);
-	void createDescriptorSets();
 	void createComputeDescriptorSets(const Pipeline& computePipeline);
 };
