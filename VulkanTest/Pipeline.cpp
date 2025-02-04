@@ -466,22 +466,33 @@ RenderPass Device::createRenderPassAndPipeline(RenderPassDesc renderPassDesc, Pi
 
 	return { renderpass, pipeline, renderPassDesc.drawFunction };
 }
-void Device::setPipeline(Pipeline pipeline)
-{
-	descriptorSetLayout = pipeline.descriptorSetLayout;
-	graphicsPipeline = pipeline.graphicsPipeline;
-	currentRenderPass = pipeline.renderPass;
-	pipelineLayout = pipeline.pipelineLayout;
-	descriptorSets = pipeline.descriptorSets;
 
-	setDescriptorPool(pipeline.descriptorPool);
+void Device::setRenderPass(RenderPass renderPass)
+{
+	currentRenderPass = renderPass;
+
+	setDescriptorPool(renderPass.pipeline.descriptorPool);
 }
 
-void Device::setPacket(MeshPacket packet)
+void Device::drawPacket(MeshPacket packet)
 {
-	setVertexBuffer(packet.vertexBuffer);
-	setIndexBuffer(packet.indexBuffer);
 	updateDescriptorSet(packet.texture.view, packet.sampler, current_frame);
+
+
+	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
+
+	VkBuffer vertexBuffers[] = { packet.vertexBuffer.buffer };
+	VkDeviceSize offsets[] = { 0 };
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
+	if (indexBuffer.buffer != 0)
+		vkCmdBindIndexBuffer(commandBuffer, packet.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+	//Actual draw !
+	if (indexBuffer.buffer != 0)
+		vkCmdDrawIndexed(commandBuffer, packet.indexBuffer.count, 1, 0, 0, 0);
+	else
+		vkCmdDraw(commandBuffer, PARTICLE_COUNT, 1, 0, 0);
 }
 
 void Device::setDescriptorPool(VkDescriptorPool pool)
@@ -511,7 +522,7 @@ void Device::recordRenderPass(VkCommandBuffer commandBuffer)
 
 	VkRenderPassBeginInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassInfo.renderPass = currentRenderPass;
+	renderPassInfo.renderPass = currentRenderPass.renderPass;
 	renderPassInfo.framebuffer = swapChainFramebuffers[current_framebuffer_idx];
 	renderPassInfo.renderArea.offset = { 0, 0 };
 	renderPassInfo.renderArea.extent = swapChainExtent;
@@ -525,7 +536,7 @@ void Device::recordRenderPass(VkCommandBuffer commandBuffer)
 
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass.pipeline.graphicsPipeline);
 
 	VkBuffer vertexBuffers[] = { vertexBuffer.buffer };
 	VkDeviceSize offsets[] = { 0 };
@@ -535,13 +546,46 @@ void Device::recordRenderPass(VkCommandBuffer commandBuffer)
 		vkCmdBindIndexBuffer(commandBuffer, indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 	//UBO
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[current_frame], 0, nullptr);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass.pipeline.pipelineLayout, 0, 1, &currentRenderPass.pipeline.descriptorSets[current_frame], 0, nullptr);
 
 	//Actual draw !
 	if (indexBuffer.buffer != 0)
 		vkCmdDrawIndexed(commandBuffer, index_count, 1, 0, 0, 0);
 	else
 		vkCmdDraw(commandBuffer, PARTICLE_COUNT, 1, 0, 0);
+
+	ImGui::Render();
+	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+
+	vkCmdEndRenderPass(commandBuffer);
+
+}
+
+void Device::recordRenderPass(VkCommandBuffer commandBuffer, RenderPass renderPass)
+{
+
+	VkRenderPassBeginInfo renderPassInfo{};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderPassInfo.renderPass = renderPass.renderPass;
+	renderPassInfo.framebuffer = swapChainFramebuffers[current_framebuffer_idx];
+	renderPassInfo.renderArea.offset = { 0, 0 };
+	renderPassInfo.renderArea.extent = swapChainExtent;
+
+	std::array<VkClearValue, 2> clearValues{};
+	clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+	clearValues[1].depthStencil = { 1.0f, 0 };
+
+	renderPassInfo.clearValueCount = clearValues.size();
+	renderPassInfo.pClearValues = clearValues.data();
+
+	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderPass.pipeline.graphicsPipeline);
+
+	//UBO
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderPass.pipeline.pipelineLayout, 0, 1, &renderPass.pipeline.descriptorSets[current_frame], 0, nullptr);
+
+	renderPass.draw();
 
 	ImGui::Render();
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);

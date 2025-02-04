@@ -246,7 +246,7 @@ private:
 
 
 	void drawRenderPass() {
-		m_device.setPacket(packet);
+		m_device.drawPacket(packet);
 	}
 
 
@@ -285,7 +285,7 @@ private:
 
 		renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 		
-		m_device.setPipeline(renderPass.pipeline);
+		m_device.setRenderPass(renderPass);
 	}
 
 	void initComputePipeline() 
@@ -387,7 +387,7 @@ private:
 			drawImGui();
 			updateUniformBuffer();
 			m_device.beginDraw();
-			renderPass.draw();
+			//renderPass.draw();
 			m_device.drawFrame();
 			m_device.endDraw();
 			//m_device.drawParticleFrame(computePipeline);

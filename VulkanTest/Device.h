@@ -173,10 +173,9 @@ private:
 	std::vector<VkImageView> swapChainImageViews;
 
 	VkRenderPass defaultRenderPass;
-	VkRenderPass currentRenderPass;
-	VkDescriptorSetLayout descriptorSetLayout;
-	VkPipelineLayout pipelineLayout;
-	VkPipeline graphicsPipeline;
+
+
+	RenderPass currentRenderPass;
 
 	Buffer vertexBuffer;
 	Buffer indexBuffer = { VK_NULL_HANDLE, VK_NULL_HANDLE, 0 };
@@ -187,7 +186,6 @@ private:
 	std::vector<void*> uniformBuffersMapped;
 
 	VkDescriptorPool descriptorPool;
-	std::vector<VkDescriptorSet> descriptorSets;
 	std::vector<VkDescriptorSet> computeDescriptorSets;
 
 	GpuImage image;
@@ -365,12 +363,13 @@ public:
 	Pipeline createPipeline(PipelineDesc desc);
 	Pipeline createComputePipeline(PipelineDesc desc);
 	RenderPass createRenderPassAndPipeline(RenderPassDesc renderPassDesc, PipelineDesc pipelineDesc);
-	void setPipeline(Pipeline pipeline);
-	void setPacket(MeshPacket packet);
+	void setRenderPass(RenderPass renderPass);
+	void drawPacket(MeshPacket packet);
 	void destroyPipeline(Pipeline pipeline);
 	void destroyRenderPass(RenderPass renderPass);
 
 	void recordRenderPass(VkCommandBuffer commandBuffer);
+	void recordRenderPass(VkCommandBuffer commandBuffer, RenderPass renderPass);
 
 	VkDescriptorPool createDescriptorPool(BindingDesc* bindingDescs, size_t count);
 	void setDescriptorPool(VkDescriptorPool pool);

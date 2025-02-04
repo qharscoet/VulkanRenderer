@@ -821,7 +821,7 @@ void Device::updateDescriptorSet(VkImageView imageView, VkSampler sampler, uint3
 
 		std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
 		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[0].dstSet = descriptorSets[set_index];
+		descriptorWrites[0].dstSet = currentRenderPass.pipeline.descriptorSets[set_index];
 		descriptorWrites[0].dstBinding = 0;
 		descriptorWrites[0].dstArrayElement = 0;
 		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -831,7 +831,7 @@ void Device::updateDescriptorSet(VkImageView imageView, VkSampler sampler, uint3
 		descriptorWrites[0].pTexelBufferView = nullptr; // Optional
 
 		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[1].dstSet = descriptorSets[set_index];
+		descriptorWrites[1].dstSet = currentRenderPass.pipeline.descriptorSets[set_index];
 		descriptorWrites[1].dstBinding = 1;
 		descriptorWrites[1].dstArrayElement = 0;
 		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -941,7 +941,7 @@ void Device::recordCommandBuffer(VkCommandBuffer commandBuffer) {
 	scissor.extent = swapChainExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	recordRenderPass(commandBuffer);
+	recordRenderPass(commandBuffer, currentRenderPass);
 
 	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
 		throw std::runtime_error("failed to record command buffer!");
