@@ -54,6 +54,7 @@ struct ImageDesc {
 	VkImageTiling tiling;
 	VkImageUsageFlags usage_flags;
 	VkMemoryPropertyFlags memory_properties;
+	VkImageLayout initialLayout;
 };
 
 struct GpuImage {

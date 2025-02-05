@@ -568,6 +568,7 @@ void Device::createDefaultRenderPass() {
 		.colorAttachement_count = 1,
 		.hasDepth = true,
 		.useMsaa = true,
+		.doClear = true,
 	};
 	defaultRenderPass = createRenderPass(desc);
 }
@@ -664,7 +665,7 @@ void Device::createImage(ImageDesc desc, GpuImage& out_image) {
 
 	imageInfo.format = desc.format;// VK_FORMAT_R8G8B8A8_SRGB;
 	imageInfo.tiling = desc.tiling;// VK_IMAGE_TILING_OPTIMAL;
-	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	imageInfo.initialLayout = desc.initialLayout;// VK_IMAGE_LAYOUT_UNDEFINED;
 	imageInfo.usage = desc.usage_flags;// VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	imageInfo.samples = desc.numSamples;
@@ -1085,7 +1086,7 @@ void Device::initImGui(){
 	init_info.Subpass = 0;
 	init_info.MinImageCount = 2;
 	init_info.ImageCount = 2;
-	init_info.MSAASamples =  msaaSamples;
+	init_info.MSAASamples = msaaSamples;
 	init_info.Allocator = nullptr;
 	init_info.CheckVkResultFn = check_vk_result;
 
@@ -1554,6 +1555,7 @@ GpuImage Device::createTexture(Texture tex)
 		//TRANSFERS_SRC is for generating mips
 		.usage_flags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT| VK_IMAGE_USAGE_TRANSFER_SRC_BIT , 
 		.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
 
 	createImage(desc, ret_image);
@@ -1650,6 +1652,7 @@ void Device::createColorResources() {
 	.tiling = VK_IMAGE_TILING_OPTIMAL,
 	.usage_flags = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 	.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+	.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
 
 	createImage(desc, colorTarget);
@@ -1668,6 +1671,7 @@ void Device::createDepthBufferResources() {
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
 		.usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 		.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
 
 	createImage(desc, depthBuffer);

@@ -61,6 +61,7 @@ struct RenderPassDesc
 	uint8_t colorAttachement_count;
 	bool hasDepth;
 	bool useMsaa;
+	bool doClear;
 
 	std::function<void()> drawFunction;
 };

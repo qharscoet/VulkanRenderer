@@ -280,6 +280,7 @@ private:
 			.colorAttachement_count = 1,
 			.hasDepth = true,
 			.useMsaa = true,
+			.doClear = true,
 			.drawFunction = [&]() { drawRenderPass(); }
 		};
 

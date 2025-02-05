@@ -117,11 +117,13 @@ VkRenderPass Device::createRenderPass(RenderPassDesc desc)
 	colorAttachments.resize(desc.colorAttachement_count);
 	colorAttachmentRefs.resize(desc.colorAttachement_count);
 
+	VkAttachmentLoadOp loadOp = desc.doClear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+
 	for (size_t i = 0; i < colorAttachments.size(); i++)
 	{
 		colorAttachments[i].format = swapChainImageFormat;
 		colorAttachments[i].samples = desc.useMsaa ?msaaSamples: VK_SAMPLE_COUNT_1_BIT;
-		colorAttachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		colorAttachments[i].loadOp = loadOp;
 		colorAttachments[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		colorAttachments[i].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		colorAttachments[i].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -135,7 +137,7 @@ VkRenderPass Device::createRenderPass(RenderPassDesc desc)
 	VkAttachmentDescription depthAttachment{};
 	depthAttachment.format = findDepthFormat();
 	depthAttachment.samples = desc.useMsaa ? msaaSamples : VK_SAMPLE_COUNT_1_BIT;
-	depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	depthAttachment.loadOp = loadOp;
 	depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
