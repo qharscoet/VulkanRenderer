@@ -152,6 +152,10 @@ struct ParticleUBO {
 
 const uint32_t PARTICLE_COUNT = 512;
 
+struct DeviceOptions {
+	bool usesMsaa;
+};
+
 class Device {
 private:
 	GLFWwindow* window = nullptr;
@@ -174,9 +178,11 @@ private:
 	std::vector<VkImageView> swapChainImageViews;
 
 	VkRenderPass defaultRenderPass;
+	bool usesMsaa;
 
 
 	RenderPass currentRenderPass;
+	std::optional<RenderPass> nextRenderPass;
 
 	Buffer vertexBuffer;
 	Buffer indexBuffer = { VK_NULL_HANDLE, VK_NULL_HANDLE, 0 };
@@ -186,7 +192,6 @@ private:
 	std::vector<VkDeviceMemory> uniformBuffersMemory;
 	std::vector<void*> uniformBuffersMapped;
 
-	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> computeDescriptorSets;
 
 	GpuImage image;
@@ -257,13 +262,15 @@ private:
 	void createUniformBuffers();
 	void createSyncObjects();
 
+	VkSampleCountFlagBits getMsaaSamples() { return this->usesMsaa ? msaaSamples : VK_SAMPLE_COUNT_1_BIT; };
+
 public:
 	bool framebufferResized = false; //public for now but may change
 
 	Device();
 	~Device();
 
-	void init(GLFWwindow* window);
+	void init(GLFWwindow* window, DeviceOptions options);
 	void cleanup();
 
 	void drawFrame();
@@ -273,6 +280,14 @@ public:
 	void waitIdle();
 
 	void newImGuiFrame();
+	void setUsesMsaa(bool usesMsaa) {
+		if (usesMsaa != this->usesMsaa)
+		{
+			this->usesMsaa = usesMsaa;
+			this->framebufferResized = true; //This will trigger swapchain recreation
+		}
+
+	};
 
 
 // Buffer and Texture stuff
@@ -365,6 +380,7 @@ public:
 	Pipeline createComputePipeline(PipelineDesc desc);
 	RenderPass createRenderPassAndPipeline(RenderPassDesc renderPassDesc, PipelineDesc pipelineDesc);
 	void setRenderPass(RenderPass renderPass);
+	void setNextRenderPass(RenderPass renderPass);
 	void drawPacket(MeshPacket packet);
 	void destroyPipeline(Pipeline pipeline);
 	void destroyRenderPass(RenderPass renderPass);
@@ -373,6 +389,5 @@ public:
 	void recordRenderPass(VkCommandBuffer commandBuffer, RenderPass renderPass);
 
 	VkDescriptorPool createDescriptorPool(BindingDesc* bindingDescs, size_t count);
-	void setDescriptorPool(VkDescriptorPool pool);
 	void createComputeDescriptorSets(const Pipeline& computePipeline);
 };

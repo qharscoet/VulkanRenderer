@@ -44,9 +44,10 @@ Device::Device() {
 Device::~Device(){
 }
 
-void Device::init(GLFWwindow* window)
+void Device::init(GLFWwindow* window, DeviceOptions options)
 {
 	this->window = window;
+	this->usesMsaa = options.usesMsaa;
 	initVulkan();
 	initImGui();
 }
@@ -567,29 +568,36 @@ void Device::createDefaultRenderPass() {
 	RenderPassDesc desc = {
 		.colorAttachement_count = 1,
 		.hasDepth = true,
-		.useMsaa = true,
+		.useMsaa = this->usesMsaa,
 		.doClear = true,
 	};
 	defaultRenderPass = createRenderPass(desc);
 }
 
 
+#define ARRAY_SIZE(arr) (sizeof(arr)/sizeof(arr[0]))
 
 void Device::createFrameBuffers() {
 	swapChainFramebuffers.resize(swapChainImageViews.size());
 
 	for (size_t i = 0; i < swapChainImageViews.size(); i++) {
-		VkImageView attachments[] = {
+		VkImageView attachmentsMsaa[] = {
 			colorTarget.view,
 			depthBuffer.view,
 			swapChainImageViews[i],
 		};
 
+		VkImageView attachments[] = {
+			swapChainImageViews[i],
+			depthBuffer.view,
+		};
+
+
 		VkFramebufferCreateInfo framebufferInfo{};
 		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		framebufferInfo.renderPass = defaultRenderPass;
-		framebufferInfo.attachmentCount = sizeof(attachments)/sizeof(attachments[0]);
-		framebufferInfo.pAttachments = attachments;
+		framebufferInfo.attachmentCount = this->usesMsaa ? ARRAY_SIZE(attachmentsMsaa) : ARRAY_SIZE(attachments);
+		framebufferInfo.pAttachments = this->usesMsaa? attachmentsMsaa: attachments;
 		framebufferInfo.width = swapChainExtent.width;
 		framebufferInfo.height = swapChainExtent.height;
 		framebufferInfo.layers = 1;
@@ -1009,6 +1017,9 @@ void Device::recreateSwapChain() {
 
 	vkDeviceWaitIdle(device);
 
+	vkDestroyRenderPass(device, defaultRenderPass, nullptr);
+	createDefaultRenderPass();
+
 	cleanupSwapChain();
 
 	createSwapChain();
@@ -1086,7 +1097,7 @@ void Device::initImGui(){
 	init_info.Subpass = 0;
 	init_info.MinImageCount = 2;
 	init_info.ImageCount = 2;
-	init_info.MSAASamples = msaaSamples;
+	init_info.MSAASamples = getMsaaSamples();
 	init_info.Allocator = nullptr;
 	init_info.CheckVkResultFn = check_vk_result;
 
@@ -1205,6 +1216,10 @@ void Device::endDraw()
 		throw std::runtime_error("failed to present swap chain image!");
 	}
 
+	if (nextRenderPass.has_value()) {
+		currentRenderPass = nextRenderPass.value();
+		nextRenderPass.reset();
+	}
 	current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
@@ -1647,7 +1662,7 @@ void Device::createColorResources() {
 	.width = swapChainExtent.width,
 	.height = swapChainExtent.height,
 	.mipLevels = 1,
-	.numSamples = msaaSamples,
+	.numSamples = getMsaaSamples(),
 	.format = swapChainImageFormat,
 	.tiling = VK_IMAGE_TILING_OPTIMAL,
 	.usage_flags = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -1666,7 +1681,7 @@ void Device::createDepthBufferResources() {
 		.width = swapChainExtent.width,
 		.height = swapChainExtent.height,
 		.mipLevels = 1,
-		.numSamples = msaaSamples,
+		.numSamples = getMsaaSamples(),
 		.format = findDepthFormat(),
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
 		.usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,

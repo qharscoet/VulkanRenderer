@@ -74,6 +74,10 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
 
 }
 
+DeviceOptions device_options = {
+	.usesMsaa = true,
+};
+
 
 class HelloTriangleApplication {
 
@@ -87,6 +91,7 @@ private:
 	MeshPacket packet;
 
 	RenderPass renderPass;
+	RenderPass renderPassMsaa;
 
 
 	std::vector<Buffer> particleStorageBuffers;
@@ -198,7 +203,7 @@ private:
 
 		m_device.setVertexBuffer(packet.vertexBuffer);
 		m_device.setIndexBuffer(packet.indexBuffer);
-		m_device.updateDescriptorSets(packet.texture.view, packet.sampler);
+		//m_device.updateDescriptorSets(packet.texture.view, packet.sampler);
 	}
 
 
@@ -234,7 +239,7 @@ private:
 
 		packet.sampler = m_device.createTextureSampler(packet.texture.mipLevels);
 
-		m_device.updateDescriptorSets(packet.texture.view, packet.sampler);
+		//m_device.updateDescriptorSets(packet.texture.view, packet.sampler);
 	}
 
 	void cleanupTextures() {
@@ -279,14 +284,17 @@ private:
 		RenderPassDesc renderPassDesc = {
 			.colorAttachement_count = 1,
 			.hasDepth = true,
-			.useMsaa = true,
+			.useMsaa = false,
 			.doClear = true,
 			.drawFunction = [&]() { drawRenderPass(); }
 		};
 
 		renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
+
+		renderPassDesc.useMsaa = true;
+		renderPassMsaa = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 		
-		m_device.setRenderPass(renderPass);
+		m_device.setRenderPass(device_options.usesMsaa?renderPassMsaa:renderPass);
 	}
 
 	void initComputePipeline() 
@@ -320,6 +328,7 @@ private:
 	}
 	void destroyPipeline() {
 		m_device.destroyRenderPass(renderPass);
+		m_device.destroyRenderPass(renderPassMsaa);
 		m_device.destroyPipeline(computePipeline);
 	}
 
@@ -377,6 +386,13 @@ private:
 			ImGui::Checkbox("Auto Rotate", &auto_rot);
 
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+			ImGui::Separator();
+
+			if (ImGui::Checkbox("MSAA", &device_options.usesMsaa)) {
+				m_device.setUsesMsaa(device_options.usesMsaa);
+				m_device.setNextRenderPass(device_options.usesMsaa ? renderPassMsaa : renderPass);
+			}
+
 			ImGui::End();
 		}
 	}
@@ -399,8 +415,9 @@ private:
 
 public:
 	void run() {
+
 		initWindow();
-		m_device.init(window);
+		m_device.init(window, device_options);
 		initPipeline();
 		initComputePipeline();
 		//loadViking();

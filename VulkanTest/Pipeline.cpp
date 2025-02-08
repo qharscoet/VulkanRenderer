@@ -472,8 +472,11 @@ RenderPass Device::createRenderPassAndPipeline(RenderPassDesc renderPassDesc, Pi
 void Device::setRenderPass(RenderPass renderPass)
 {
 	currentRenderPass = renderPass;
+}
 
-	setDescriptorPool(renderPass.pipeline.descriptorPool);
+void Device::setNextRenderPass(RenderPass renderPass)
+{
+	nextRenderPass = renderPass;
 }
 
 void Device::drawPacket(MeshPacket packet)
@@ -495,11 +498,6 @@ void Device::drawPacket(MeshPacket packet)
 		vkCmdDrawIndexed(commandBuffer, packet.indexBuffer.count, 1, 0, 0, 0);
 	else
 		vkCmdDraw(commandBuffer, PARTICLE_COUNT, 1, 0, 0);
-}
-
-void Device::setDescriptorPool(VkDescriptorPool pool)
-{
-	descriptorPool = pool;
 }
 
 void Device::destroyPipeline(Pipeline pipeline)
