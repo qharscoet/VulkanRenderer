@@ -1094,6 +1094,7 @@ void Device::initImGui(){
 	init_info.Queue = graphicsQueue;
 	init_info.PipelineCache = VK_NULL_HANDLE;
 	init_info.DescriptorPool = imgui_descriptorPool;
+	init_info.RenderPass = defaultRenderPass;
 	init_info.Subpass = 0;
 	init_info.MinImageCount = 2;
 	init_info.ImageCount = 2;
@@ -1104,29 +1105,7 @@ void Device::initImGui(){
 
 
 	ImGui_ImplGlfw_InitForVulkan(window, true);
-	ImGui_ImplVulkan_Init(&init_info, defaultRenderPass);
-
-	// Upload Fonts
-	{
-		VkResult err;
-		// Use any command queue
-		VkCommandBuffer command_buffer = beginSingleTimeCommands();
-
-		ImGui_ImplVulkan_CreateFontsTexture(command_buffer);
-
-		VkSubmitInfo end_info = {};
-		end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		end_info.commandBufferCount = 1;
-		end_info.pCommandBuffers = &command_buffer;
-		err = vkEndCommandBuffer(command_buffer);
-		check_vk_result(err);
-		err = vkQueueSubmit(graphicsQueue, 1, &end_info, VK_NULL_HANDLE);
-		check_vk_result(err);
-
-		err = vkDeviceWaitIdle(device);
-		check_vk_result(err);
-		ImGui_ImplVulkan_DestroyFontUploadObjects();
-	}
+	ImGui_ImplVulkan_Init(&init_info);
 }
 
 void Device::cleanupImGui()
