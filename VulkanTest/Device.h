@@ -223,6 +223,7 @@ private:
 
 	void initImGui();
 	void cleanupImGui();
+	void refreshImGui();
 
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);

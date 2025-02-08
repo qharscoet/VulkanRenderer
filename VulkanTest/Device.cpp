@@ -1085,6 +1085,8 @@ void Device::initImGui(){
 		check_vk_result(err);
 	}
 
+	ImGui_ImplGlfw_InitForVulkan(window, true);
+
 	QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 	ImGui_ImplVulkan_InitInfo init_info = { };
 	init_info.Instance = instance;
@@ -1102,9 +1104,6 @@ void Device::initImGui(){
 	init_info.Allocator = nullptr;
 	init_info.CheckVkResultFn = check_vk_result;
 
-
-
-	ImGui_ImplGlfw_InitForVulkan(window, true);
 	ImGui_ImplVulkan_Init(&init_info);
 }
 
@@ -1115,6 +1114,30 @@ void Device::cleanupImGui()
 	ImGui::DestroyContext();
 
 	vkDestroyDescriptorPool(device, imgui_descriptorPool, nullptr);
+}
+
+void Device::refreshImGui()
+{
+	ImGui_ImplVulkan_Shutdown();
+
+	QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+	ImGui_ImplVulkan_InitInfo init_info = { };
+	init_info.Instance = instance;
+	init_info.PhysicalDevice = physicalDevice;
+	init_info.Device = device;
+	init_info.QueueFamily = indices.graphicsFamily.value();
+	init_info.Queue = graphicsQueue;
+	init_info.PipelineCache = VK_NULL_HANDLE;
+	init_info.DescriptorPool = imgui_descriptorPool;
+	init_info.RenderPass = defaultRenderPass;
+	init_info.Subpass = 0;
+	init_info.MinImageCount = 2;
+	init_info.ImageCount = 2;
+	init_info.MSAASamples = getMsaaSamples();
+	init_info.Allocator = nullptr;
+	init_info.CheckVkResultFn = check_vk_result;
+
+	ImGui_ImplVulkan_Init(&init_info);
 }
 
 //TODO : get rid of glm and try our hands at a math library
@@ -1198,6 +1221,7 @@ void Device::endDraw()
 	if (nextRenderPass.has_value()) {
 		currentRenderPass = nextRenderPass.value();
 		nextRenderPass.reset();
+		refreshImGui();
 	}
 	current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
