@@ -388,6 +388,7 @@ public:
 
 	void recordRenderPass(VkCommandBuffer commandBuffer);
 	void recordRenderPass(VkCommandBuffer commandBuffer, RenderPass renderPass);
+	void recordImGui(VkCommandBuffer commandBuffer);
 
 	VkDescriptorPool createDescriptorPool(BindingDesc* bindingDescs, size_t count);
 	void createComputeDescriptorSets(const Pipeline& computePipeline);

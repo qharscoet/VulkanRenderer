@@ -569,7 +569,7 @@ void Device::createDefaultRenderPass() {
 		.colorAttachement_count = 1,
 		.hasDepth = true,
 		.useMsaa = this->usesMsaa,
-		.doClear = true,
+		.doClear = false,
 	};
 	defaultRenderPass = createRenderPass(desc);
 }
@@ -951,6 +951,7 @@ void Device::recordCommandBuffer(VkCommandBuffer commandBuffer) {
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
 	recordRenderPass(commandBuffer, currentRenderPass);
+	recordImGui(commandBuffer);
 
 	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
 		throw std::runtime_error("failed to record command buffer!");
@@ -1229,7 +1230,6 @@ void Device::endDraw()
 void Device::drawFrame() {
 
 	recordCommandBuffer(commandBuffers[current_frame]);
-	//updateUniformBuffer(current_frame);
 }
 
 void Device::drawParticleFrame(const Pipeline& computePipeline) {
