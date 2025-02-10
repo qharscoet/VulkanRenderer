@@ -4,6 +4,8 @@
 #include <chrono>
 #include <random>
 
+#include <filesystem>
+
 #include "FileUtils.h"
 
 /* Optional TODOs :
@@ -75,7 +77,7 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
 }
 
 DeviceOptions device_options = {
-	.usesMsaa = true,
+	.usesMsaa = false,
 };
 
 
@@ -89,6 +91,7 @@ private:
 	GLFWwindow* window = nullptr;
 
 	MeshPacket packet;
+	std::vector<MeshPacket> packets;
 
 	RenderPass renderPass;
 	RenderPass renderPassMsaa;
@@ -189,39 +192,65 @@ private:
 		}
 	}
 
+	MeshPacket createPacket(std::filesystem::path path, std::string texture_path = "")
+	{
+		Mesh  out_mesh;
+		MeshPacket out_packet;
+
+		Texture tex;
+		if (path.extension() == ".obj") {
+			loadObj(path.string().c_str(), &out_mesh);
+			tex = loadTexture(texture_path.c_str());
+		}
+		else if (path.extension() == ".gltf")
+		{
+			loadGltf(path.string().c_str(), &out_mesh);
+			tex = out_mesh.textures.size() > 0 ? out_mesh.textures[0] : loadTexture("assets/viking_room.png");
+		}
+
+		out_packet.vertexBuffer = m_device.createVertexBuffer(out_mesh.vertices.size() * sizeof(out_mesh.vertices[0]), (void*)out_mesh.vertices.data());
+		out_packet.indexBuffer = m_device.createIndexBuffer(out_mesh.indices.size() * sizeof(out_mesh.indices[0]), (void*)out_mesh.indices.data());
+
+
+		out_packet.texture = m_device.createTexture(tex);
+		out_packet.sampler = m_device.createTextureSampler(out_packet.texture.mipLevels);
+
+		return out_packet;
+
+	}
+
 	void loadViking() {
-		Mesh  viking_mesh;
-		loadObj("assets/viking_room.obj", &viking_mesh);
-
-		packet.vertexBuffer = m_device.createVertexBuffer(viking_mesh.vertices.size() * sizeof(viking_mesh.vertices[0]), (void*)viking_mesh.vertices.data());
-		packet.indexBuffer = m_device.createIndexBuffer(viking_mesh.indices.size() * sizeof(viking_mesh.indices[0]), (void*)viking_mesh.indices.data());
-
-		Texture tex = loadTexture("assets/viking_room.png");
-
-		packet.texture = m_device.createTexture(tex);
-		packet.sampler = m_device.createTextureSampler(packet.texture.mipLevels);
-
-		m_device.setVertexBuffer(packet.vertexBuffer);
-		m_device.setIndexBuffer(packet.indexBuffer);
-		//m_device.updateDescriptorSets(packet.texture.view, packet.sampler);
+		packets.push_back(createPacket("assets/viking_room.obj", "assets/viking_room.png"));
 	}
 
 
 	void loadCube()
 	{
-		Mesh  cube_mesh, cube_test;
-		loadGltf("assets/Cube/Cube.gltf", &cube_mesh);
-		//loadGltf("assets/cube.gltf", &cube_mesh);
+		packet = createPacket("assets/Cube/Cube.gltf");
+		packets.push_back(packet);
+	}
 
-		packet.vertexBuffer = m_device.createVertexBuffer(cube_mesh.vertices.size() * sizeof(cube_mesh.vertices[0]), (void*)cube_mesh.vertices.data());
-		packet.indexBuffer = m_device.createIndexBuffer(cube_mesh.indices.size() * sizeof(cube_mesh.indices[0]), (void*)cube_mesh.indices.data());
+	void loadPackets()
+	{
+		packets.push_back(createPacket("assets/viking_room.obj", "assets/viking_room.png"));
+		packets.push_back(createPacket("assets/Cube/Cube.gltf"));
+	}
 
-		Texture tex = cube_mesh.textures.size() > 0 ? cube_mesh.textures[0] : loadTexture("assets/viking_room.png");
+	void destroyPacket(MeshPacket packet)
+	{
+		m_device.destroyBuffer(packet.vertexBuffer);
+		m_device.destroyBuffer(packet.indexBuffer);
 
-		packet.texture = m_device.createTexture(tex);
-		packet.sampler = m_device.createTextureSampler(packet.texture.mipLevels);
+		m_device.destroyImage(packet.texture);
+		m_device.destroySampler(packet.sampler);
+	}
 
-		//m_device.setPacket(packet);
+	void destroyPackets()
+	{
+		for (auto& packet : packets)
+		{
+			destroyPacket(packet);
+		}
 	}
 
 	void cleanupBuffers() {
@@ -251,7 +280,12 @@ private:
 
 
 	void drawRenderPass() {
-		m_device.drawPacket(packet);
+		//for (const auto& packet : packets)
+		//{
+		//	m_device.drawPacket(packet);
+		//}
+		m_device.drawPacket(packets[0]);
+		//m_device.drawPacket(packets[1]);
 	}
 
 
@@ -421,16 +455,18 @@ public:
 		initPipeline();
 		initComputePipeline();
 		//loadViking();
-		loadCube();
+		//loadCube();
+		loadPackets();
 		//initBuffers();
 		//initTextures();
 		//initParticlesBuffers();
 
 		mainLoop();
 
+		destroyPackets();
 		//cleanupParticles();
-		cleanupTextures();
-		cleanupBuffers();
+		//cleanupTextures();
+		//cleanupBuffers();
 		destroyPipeline();
 		m_device.cleanup();
 		cleanupWindow();
