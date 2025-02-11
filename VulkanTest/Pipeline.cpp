@@ -71,15 +71,15 @@ VkDescriptorPool Device::createDescriptorPool(BindingDesc* bindingDescs, size_t 
 		default:break;
 		}
 
-		//TODO do something about the size, at 2 because the base compute shader have 2 storage
-		poolSizes[i].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 2;
+		//TODO do something about the size, at 100 because no reason, to be safe
+		poolSizes[i].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 100;
 	}
 
 	VkDescriptorPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
-	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 100;
 
 	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &out_pool) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create escriptor pool");
@@ -479,22 +479,43 @@ void Device::setNextRenderPass(RenderPass renderPass)
 	nextRenderPass = renderPass;
 }
 
+MeshPacket Device::createPacket(Mesh& mesh, Texture& tex)
+{
+	MeshPacket out_packet;
+	out_packet.vertexBuffer = this->createVertexBuffer(mesh.vertices.size() * sizeof(mesh.vertices[0]), (void*)mesh.vertices.data());
+	out_packet.indexBuffer = this->createIndexBuffer(mesh.indices.size() * sizeof(mesh.indices[0]), (void*)mesh.indices.data());
+
+
+	out_packet.texture = this->createTexture(tex);
+	out_packet.sampler = this->createTextureSampler(out_packet.texture.mipLevels);
+
+	createDescriptorSets(currentRenderPass.pipeline.descriptorSetLayout, currentRenderPass.pipeline.descriptorPool, &out_packet.internalData.descriptorSet);
+
+	updateDescriptorSet(out_packet.texture.view, out_packet.sampler, out_packet.internalData.descriptorSet);
+
+	return out_packet;
+}
+
 void Device::drawPacket(MeshPacket packet)
 {
-	updateDescriptorSet(packet.texture.view, packet.sampler, current_frame);
-
+	//updateDescriptorSet(packet.texture.view, packet.sampler, currentRenderPass.pipeline.descriptorSets[current_frame]);
 
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
+
+
+	//UBO
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass.pipeline.pipelineLayout, 0, 1, &packet.internalData.descriptorSet, 0, nullptr);
+
 
 	VkBuffer vertexBuffers[] = { packet.vertexBuffer.buffer };
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-	if (indexBuffer.buffer != 0)
+	if (packet.indexBuffer.buffer != 0)
 		vkCmdBindIndexBuffer(commandBuffer, packet.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 	//Actual draw !
-	if (indexBuffer.buffer != 0)
+	if (packet.indexBuffer.buffer != 0)
 		vkCmdDrawIndexed(commandBuffer, packet.indexBuffer.count, 1, 0, 0, 0);
 	else
 		vkCmdDraw(commandBuffer, PARTICLE_COUNT, 1, 0, 0);
@@ -581,12 +602,8 @@ void Device::recordRenderPass(VkCommandBuffer commandBuffer, RenderPass renderPa
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderPass.pipeline.graphicsPipeline);
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderPass.pipeline.graphicsPipeline);
 
-		//UBO
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderPass.pipeline.pipelineLayout, 0, 1, &renderPass.pipeline.descriptorSets[current_frame], 0, nullptr);
-
-	
 
 	renderPass.draw();
 

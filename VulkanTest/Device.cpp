@@ -817,9 +817,9 @@ void Device::createComputeDescriptorSets(const Pipeline& computePipeline) {
 	createDescriptorSets(computePipeline.descriptorSetLayout, computePipeline.descriptorPool, computeDescriptorSets.data());
 }
 
-void Device::updateDescriptorSet(VkImageView imageView, VkSampler sampler, uint32_t set_index) {
+void Device::updateDescriptorSet(VkImageView imageView, VkSampler sampler, VkDescriptorSet set) {
 		VkDescriptorBufferInfo bufferInfo{};
-		bufferInfo.buffer = uniformBuffers[set_index];
+		bufferInfo.buffer = uniformBuffers[current_frame];
 		bufferInfo.offset = 0;
 		bufferInfo.range = sizeof(UniformBufferObject);
 
@@ -830,7 +830,7 @@ void Device::updateDescriptorSet(VkImageView imageView, VkSampler sampler, uint3
 
 		std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
 		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[0].dstSet = currentRenderPass.pipeline.descriptorSets[set_index];
+		descriptorWrites[0].dstSet = set;
 		descriptorWrites[0].dstBinding = 0;
 		descriptorWrites[0].dstArrayElement = 0;
 		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -840,7 +840,7 @@ void Device::updateDescriptorSet(VkImageView imageView, VkSampler sampler, uint3
 		descriptorWrites[0].pTexelBufferView = nullptr; // Optional
 
 		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[1].dstSet = currentRenderPass.pipeline.descriptorSets[set_index];
+		descriptorWrites[1].dstSet = set;
 		descriptorWrites[1].dstBinding = 1;
 		descriptorWrites[1].dstArrayElement = 0;
 		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -854,7 +854,7 @@ void Device::updateDescriptorSet(VkImageView imageView, VkSampler sampler, uint3
 
 void Device::updateDescriptorSets(VkImageView imageView, VkSampler sampler) {
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		updateDescriptorSet(imageView, sampler, i);
+		updateDescriptorSet(imageView, sampler, currentRenderPass.pipeline.descriptorSets[i]);
 	}
 
 }

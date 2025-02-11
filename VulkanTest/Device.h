@@ -64,6 +64,11 @@ struct GpuImage {
 	uint32_t mipLevels;
 };
 
+struct Mesh_InternalData {
+	//TODO : abstract to remove direct Vulkan dependency
+	VkDescriptorSet descriptorSet;
+};
+
 
 struct MeshPacket {
 	Buffer vertexBuffer;
@@ -71,6 +76,8 @@ struct MeshPacket {
 
 	GpuImage texture;
 	VkSampler sampler;
+
+	Mesh_InternalData internalData;
 };
 
 struct BarrierDesc {
@@ -365,7 +372,7 @@ public:
 	Dimensions getExtent() { return swapChainExtent;};
 
 	void updateDescriptorSets(VkImageView imageView, VkSampler sampler);
-	void updateDescriptorSet(VkImageView imageView, VkSampler sampler, uint32_t set_index);
+	void updateDescriptorSet(VkImageView imageView, VkSampler sampler, VkDescriptorSet set);
 	void updateComputeDescriptorSets(const std::vector<Buffer>& buffers);
 
 	//Defined in Pipeline.cpp for now,, will probably make them independant at some point
@@ -382,6 +389,7 @@ public:
 	RenderPass createRenderPassAndPipeline(RenderPassDesc renderPassDesc, PipelineDesc pipelineDesc);
 	void setRenderPass(RenderPass renderPass);
 	void setNextRenderPass(RenderPass renderPass);
+	MeshPacket createPacket(Mesh& mesh, Texture& tex);
 	void drawPacket(MeshPacket packet);
 	void destroyPipeline(Pipeline pipeline);
 	void destroyRenderPass(RenderPass renderPass);

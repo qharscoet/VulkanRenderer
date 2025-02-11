@@ -208,12 +208,7 @@ private:
 			tex = out_mesh.textures.size() > 0 ? out_mesh.textures[0] : loadTexture("assets/viking_room.png");
 		}
 
-		out_packet.vertexBuffer = m_device.createVertexBuffer(out_mesh.vertices.size() * sizeof(out_mesh.vertices[0]), (void*)out_mesh.vertices.data());
-		out_packet.indexBuffer = m_device.createIndexBuffer(out_mesh.indices.size() * sizeof(out_mesh.indices[0]), (void*)out_mesh.indices.data());
-
-
-		out_packet.texture = m_device.createTexture(tex);
-		out_packet.sampler = m_device.createTextureSampler(out_packet.texture.mipLevels);
+		out_packet = m_device.createPacket(out_mesh, tex);
 
 		return out_packet;
 
@@ -280,12 +275,11 @@ private:
 
 
 	void drawRenderPass() {
-		//for (const auto& packet : packets)
-		//{
-		//	m_device.drawPacket(packet);
-		//}
-		m_device.drawPacket(packets[0]);
-		//m_device.drawPacket(packets[1]);
+		for (const auto& packet : packets)
+		{
+			m_device.drawPacket(packet);
+		}
+
 	}
 
 
