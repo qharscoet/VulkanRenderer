@@ -306,6 +306,13 @@ private:
 					.type = BindingType::ImageSampler,
 					.stageFlags = e_Pixel,
 				}
+			},
+			.pushConstantsRanges = {
+				{
+					.offset = 0,
+					.size = sizeof(MeshPacket::PushConstantsData),
+					.stageFlags = e_Vertex
+				}
 			}
 		};
 
@@ -378,6 +385,11 @@ private:
 		ubo.view = glm::lookAt(glm::vec3(zoom, zoom, zoom), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 		ubo.proj = glm::perspective(glm::radians(45.0f), dim.width / (float)dim.height, 0.1f, 20.0f);
 		ubo.proj[1][1] *= -1;
+
+		//TODO next time : proper handling of transforms but is a nice start
+		if (packets.size() > 0)
+			packets[0].data.model = ubo.model;
+
 
 		m_device.updateUniformBuffer(&ubo, sizeof(UniformBufferObject));
 		//memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));

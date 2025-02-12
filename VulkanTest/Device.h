@@ -77,6 +77,10 @@ struct MeshPacket {
 	GpuImage texture;
 	VkSampler sampler;
 
+	struct PushConstantsData {
+		glm::mat4 model;
+	} data;
+
 	Mesh_InternalData internalData;
 };
 
@@ -148,7 +152,7 @@ struct Particle {
 };
 
 struct UniformBufferObject {
-	glm::mat4 model;
+	glm::mat4 model; //TODO : remove
 	glm::mat4 view;
 	glm::mat4 proj;
 };

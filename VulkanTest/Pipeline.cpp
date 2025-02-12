@@ -348,12 +348,30 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	colorBlending.blendConstants[3] = 0.0f; // Optional
 
 	VkDescriptorSetLayout setLayout = createDescriptorSetLayout(desc.bindings.data(), desc.bindings.size());
+
+	std::vector<VkPushConstantRange> pushConstantsRanges;
+
+	for (auto& range : desc.pushConstantsRanges)
+	{
+		VkPushConstantRange pushConstantRange{};
+		uint32_t stageFlags = 0;
+		if (range.stageFlags & e_Pixel)		stageFlags |= VK_SHADER_STAGE_FRAGMENT_BIT;
+		if (range.stageFlags & e_Vertex)	stageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
+		if (range.stageFlags & e_Compute)	stageFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
+
+		pushConstantsRanges.push_back(VkPushConstantRange{
+			.stageFlags = stageFlags,
+			.offset = range.offset,
+			.size = range.size
+			});
+	}
+
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1; // Optional
 	pipelineLayoutInfo.pSetLayouts = &setLayout;
-	pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
-	pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+	pipelineLayoutInfo.pushConstantRangeCount = pushConstantsRanges.size(); // Optional
+	pipelineLayoutInfo.pPushConstantRanges = pushConstantsRanges.data(); // Optional
 
 	VkPipelineLayout out_pipelineLayout;
 	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &out_pipelineLayout) != VK_SUCCESS) {
@@ -490,8 +508,9 @@ MeshPacket Device::createPacket(Mesh& mesh, Texture& tex)
 	out_packet.sampler = this->createTextureSampler(out_packet.texture.mipLevels);
 
 	createDescriptorSets(currentRenderPass.pipeline.descriptorSetLayout, currentRenderPass.pipeline.descriptorPool, &out_packet.internalData.descriptorSet);
-
 	updateDescriptorSet(out_packet.texture.view, out_packet.sampler, out_packet.internalData.descriptorSet);
+
+	out_packet.data.model = glm::mat4(1.0f);
 
 	return out_packet;
 }
@@ -506,6 +525,7 @@ void Device::drawPacket(MeshPacket packet)
 	//UBO
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass.pipeline.pipelineLayout, 0, 1, &packet.internalData.descriptorSet, 0, nullptr);
 
+	vkCmdPushConstants(commandBuffer, currentRenderPass.pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPacket::PushConstantsData), &packet.data);
 
 	VkBuffer vertexBuffers[] = { packet.vertexBuffer.buffer };
 	VkDeviceSize offsets[] = { 0 };

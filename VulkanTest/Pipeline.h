@@ -25,7 +25,12 @@ struct BindingDesc {
 	uint32_t slot;
 	BindingType type;
 	uint32_t stageFlags;
+};
 
+struct PushConstantsRange {
+	uint32_t offset;
+	uint32_t size;
+	StageFlags stageFlags;
 };
 
 enum class PipelineType {
@@ -46,6 +51,8 @@ struct PipelineDesc {
 	//Descriptors params
 	BlendMode blendMode;
 	std::vector<BindingDesc> bindings;
+
+	std::vector<PushConstantsRange> pushConstantsRanges;
 
 	bool isWireframe;
 
