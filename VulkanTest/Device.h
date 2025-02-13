@@ -88,6 +88,8 @@ struct MeshPacket {
 		glm::mat4 model;
 	};
 
+	std::string name;
+
 	Mesh_InternalData internalData;
 };
 

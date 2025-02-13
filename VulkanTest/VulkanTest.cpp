@@ -216,6 +216,7 @@ private:
 			.scale = {1.0f, 1.0f, 1.0f}
 		};
 
+		out_packet.name = path.filename().replace_extension("").string();
 		return out_packet;
 
 	}
@@ -440,7 +441,7 @@ private:
 
 					char label[32];
 					sprintf(label, "Object %d", i);
-					if (ImGui::TreeNode(label))
+					if (ImGui::TreeNode(p.name.c_str()))
 					{
 						ImGui::SliderFloat3("Translate", p.transform.translation, 0.0f, 1.0f);
 						ImGui::SliderFloat3("Rot", p.transform.rotation, 0.0f, 1.0f);
@@ -449,7 +450,6 @@ private:
 						ImGui::TreePop();
 					}
 				}
-
 			}
 
 			ImGui::End();
