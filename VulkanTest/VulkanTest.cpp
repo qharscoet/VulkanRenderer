@@ -210,6 +210,12 @@ private:
 
 		out_packet = m_device.createPacket(out_mesh, tex);
 
+		out_packet.transform = {
+			.translation = {0.0f, 0.0f, 0.0f},
+			.rotation = {0.0f, 0.0f, 0.0f},
+			.scale = {1.0f, 1.0f, 1.0f}
+		};
+
 		return out_packet;
 
 	}
@@ -378,17 +384,9 @@ private:
 		Dimensions dim = m_device.getExtent();
 
 		UniformBufferObject ubo{};
-		ubo.model = glm::translate(glm::mat4(1.0f), glm::vec3(translate[0], translate[1], translate[2]));
-		ubo.model = glm::rotate(ubo.model, time * rotation[0] * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.model = glm::rotate(ubo.model, time * rotation[1] * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-		ubo.model = glm::rotate(ubo.model, time * rotation[2] * glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 		ubo.view = glm::lookAt(glm::vec3(zoom, zoom, zoom), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 		ubo.proj = glm::perspective(glm::radians(45.0f), dim.width / (float)dim.height, 0.1f, 20.0f);
 		ubo.proj[1][1] *= -1;
-
-		//TODO next time : proper handling of transforms but is a nice start
-		if (packets.size() > 0)
-			packets[0].data.model = ubo.model;
 
 
 		m_device.updateUniformBuffer(&ubo, sizeof(UniformBufferObject));
@@ -431,6 +429,27 @@ private:
 			if (ImGui::Checkbox("MSAA", &device_options.usesMsaa)) {
 				m_device.setUsesMsaa(device_options.usesMsaa);
 				m_device.setNextRenderPass(device_options.usesMsaa ? renderPassMsaa : renderPass);
+			}
+
+
+			if (ImGui::CollapsingHeader("Object List"))
+			{	
+				for (int i = 0; i < packets.size(); i++)
+				{
+					MeshPacket& p = packets[i];
+
+					char label[32];
+					sprintf(label, "Object %d", i);
+					if (ImGui::TreeNode(label))
+					{
+						ImGui::SliderFloat3("Translate", p.transform.translation, 0.0f, 1.0f);
+						ImGui::SliderFloat3("Rot", p.transform.rotation, 0.0f, 1.0f);
+						ImGui::SliderFloat3("Scale", p.transform.scale, 0.0f, 4.0f);
+
+						ImGui::TreePop();
+					}
+				}
+
 			}
 
 			ImGui::End();

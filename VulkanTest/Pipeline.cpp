@@ -510,8 +510,6 @@ MeshPacket Device::createPacket(Mesh& mesh, Texture& tex)
 	createDescriptorSets(currentRenderPass.pipeline.descriptorSetLayout, currentRenderPass.pipeline.descriptorPool, &out_packet.internalData.descriptorSet);
 	updateDescriptorSet(out_packet.texture.view, out_packet.sampler, out_packet.internalData.descriptorSet);
 
-	out_packet.data.model = glm::mat4(1.0f);
-
 	return out_packet;
 }
 
@@ -525,14 +523,30 @@ void Device::drawPacket(MeshPacket packet)
 	//UBO
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass.pipeline.pipelineLayout, 0, 1, &packet.internalData.descriptorSet, 0, nullptr);
 
-	vkCmdPushConstants(commandBuffer, currentRenderPass.pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPacket::PushConstantsData), &packet.data);
 
-	VkBuffer vertexBuffers[] = { packet.vertexBuffer.buffer };
-	VkDeviceSize offsets[] = { 0 };
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+	{
+		const float* translate = packet.transform.translation;
+		const float* rotation = packet.transform.rotation;
+		const float* scale = packet.transform.scale;
 
-	if (packet.indexBuffer.buffer != 0)
-		vkCmdBindIndexBuffer(commandBuffer, packet.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+		glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(translate[0], translate[1], translate[2]));
+		model = glm::rotate(model, rotation[0] * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		model = glm::rotate(model, rotation[1] * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		model = glm::rotate(model, rotation[2] * glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+		model = glm::scale(model, glm::vec3(scale[0], scale[1], scale[2]));
+
+		vkCmdPushConstants(commandBuffer, currentRenderPass.pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPacket::PushConstantsData), &model);
+	}
+
+	{
+		VkBuffer vertexBuffers[] = { packet.vertexBuffer.buffer };
+		VkDeviceSize offsets[] = { 0 };
+		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
+		if (packet.indexBuffer.buffer != 0)
+			vkCmdBindIndexBuffer(commandBuffer, packet.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+	}
 
 	//Actual draw !
 	if (packet.indexBuffer.buffer != 0)
