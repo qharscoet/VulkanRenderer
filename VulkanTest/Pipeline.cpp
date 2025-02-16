@@ -499,15 +499,6 @@ void Device::setRenderPass(RenderPass renderPass)
 	currentRenderPass = renderPass;
 }
 
-void Device::setNextRenderPass(RenderPass renderPass)
-{
-	nextRenderPass = renderPass;
-}
-
-void Device::addRenderPass(RenderPass& renderPass)
-{
-	renderPasses.push_back(renderPass);
-}
 
 MeshPacket Device::createPacket(Mesh& mesh, Texture& tex)
 {
@@ -597,7 +588,7 @@ void Device::destroyRenderPass(RenderPass renderPass)
 	destroyPipeline(renderPass.pipeline);
 }
 
-void Device::recordRenderPass(VkCommandBuffer commandBuffer, RenderPass renderPass)
+void Device::recordRenderPass(VkCommandBuffer commandBuffer, const RenderPass& renderPass)
 {
 
 	VkRenderPassBeginInfo renderPassInfo{};
@@ -626,8 +617,16 @@ void Device::recordRenderPass(VkCommandBuffer commandBuffer, RenderPass renderPa
 
 }
 
-void Device::recordImGui(VkCommandBuffer commandBuffer)
+void Device::recordRenderPass(const RenderPass& renderPass)
 {
+	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
+	recordRenderPass(commandBuffer, renderPass);
+}
+
+void Device::recordImGui()
+{
+
+	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 
 	VkRenderPassBeginInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;

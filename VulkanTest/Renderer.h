@@ -45,6 +45,9 @@ private:
 	RenderPass renderPassMsaa;
 	RenderPass drawParticlesPass;
 
+	const RenderPass* currentDrawPassPtr;
+	std::optional<const RenderPass*> nextRenderPassPtr;
+
 
 	Pipeline computePipeline;
 	VkDescriptorPool computeDescriptorPool;

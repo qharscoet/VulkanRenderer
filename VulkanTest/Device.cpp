@@ -809,13 +809,6 @@ void Device::updateDescriptorSet(VkImageView imageView, VkSampler sampler, VkDes
 		vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
 }
 
-void Device::updateDescriptorSets(VkImageView imageView, VkSampler sampler) {
-	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		updateDescriptorSet(imageView, sampler, currentRenderPass.pipeline.descriptorSets[i]);
-	}
-
-}
-
 void Device::updateComputeDescriptorSets(const std::vector<Buffer>& buffers) {
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		VkDescriptorBufferInfo uniformBufferInfo{};
@@ -884,41 +877,16 @@ void Device::createCommandBuffer() {
 }
 
 void Device::recordCommandBuffer(VkCommandBuffer commandBuffer) {
-	VkCommandBufferBeginInfo beginInfo{};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = 0; // Optional
-	beginInfo.pInheritanceInfo = nullptr; // Optional
-
-	if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-		throw std::runtime_error("failed to begin recording command buffer!");
-	}
-	//These are define dynamic in the pipeline so we have to set them
-	VkViewport viewport{};
-	viewport.x = 0.0f;
-	viewport.y = 0.0f;
-	viewport.width = static_cast<float>(swapChainExtent.width);
-	viewport.height = static_cast<float>(swapChainExtent.height);
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-
-	VkRect2D scissor{};
-	scissor.offset = { 0, 0 };
-	scissor.extent = swapChainExtent;
-	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
 	recordRenderPass(commandBuffer, currentRenderPass);
+	//for (const auto& renderPass : renderPasses)
+	//{
+	//	recordRenderPass(commandBuffer, renderPass);
+	//}
 
-	for (const auto& renderPass : renderPasses)
-	{
-		recordRenderPass(commandBuffer, renderPass);
-	}
 
-	recordImGui(commandBuffer);
+	recordImGui();
 
-	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-		throw std::runtime_error("failed to record command buffer!");
-	}
 }
 
 void Device::recordComputeCommandBuffer(VkCommandBuffer commandBuffer, const Pipeline& computePipeline) {
@@ -991,6 +959,8 @@ void Device::recreateSwapChain() {
 	createColorResources();
 	createDepthBufferResources();
 	createFrameBuffers();
+
+	refreshImGui();
 }
 
 void Device::initVulkan() {
@@ -1135,10 +1105,41 @@ void Device::beginDraw()
 	//We reset the fence only if we actually will submit work
 	vkResetFences(device, 1, &inFlightFences[current_frame]);
 	vkResetCommandBuffer(commandBuffers[current_frame], 0);
+
+
+	//TODO put that elsewhere ?
+	VkCommandBufferBeginInfo beginInfo{};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = 0; // Optional
+	beginInfo.pInheritanceInfo = nullptr; // Optional
+
+	if (vkBeginCommandBuffer(commandBuffers[current_frame], &beginInfo) != VK_SUCCESS) {
+		throw std::runtime_error("failed to begin recording command buffer!");
+	}
+	//These are define dynamic in the pipeline so we have to set them
+	VkViewport viewport{};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = static_cast<float>(swapChainExtent.width);
+	viewport.height = static_cast<float>(swapChainExtent.height);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+	vkCmdSetViewport(commandBuffers[current_frame], 0, 1, &viewport);
+
+	VkRect2D scissor{};
+	scissor.offset = { 0, 0 };
+	scissor.extent = swapChainExtent;
+	vkCmdSetScissor(commandBuffers[current_frame], 0, 1, &scissor);
 }
 
 void Device::endDraw()
 {
+
+	if (vkEndCommandBuffer(commandBuffers[current_frame]) != VK_SUCCESS) {
+		throw std::runtime_error("failed to record command buffer!");
+	}
+
+
 
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1182,11 +1183,6 @@ void Device::endDraw()
 		throw std::runtime_error("failed to present swap chain image!");
 	}
 
-	if (nextRenderPass.has_value()) {
-		currentRenderPass = nextRenderPass.value();
-		nextRenderPass.reset();
-		refreshImGui();
-	}
 	current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 

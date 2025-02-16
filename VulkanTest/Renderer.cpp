@@ -16,6 +16,7 @@ void Renderer::init(GLFWwindow* window, DeviceOptions options)
 
 	initParticlesBuffers();
 
+	currentDrawPassPtr = device_options.usesMsaa ? &renderPassMsaa : &renderPass;
 	lastTime = glfwGetTime();
 }
 
@@ -49,18 +50,33 @@ void Renderer::newImGuiFrame()
 
 void Renderer::draw()
 {
-
 	m_device.dispatchCompute(computePipeline);
 	m_device.beginDraw();
-	m_device.drawFrame();
+
+	m_device.recordRenderPass(*currentDrawPassPtr);
+	m_device.recordRenderPass(drawParticlesPass);
+	//for (const auto& renderPass : renderPasses)
+	//{
+	//	recordRenderPass(commandBuffer, renderPass);
+	//}
+
+
+	m_device.recordImGui();
+
 	m_device.endDraw();
+
+	if (nextRenderPassPtr.has_value()) {
+		currentDrawPassPtr = nextRenderPassPtr.value();
+		nextRenderPassPtr.reset();
+	}
+
 }
 
 void Renderer::drawImgui()
 {
 	if (ImGui::Checkbox("MSAA", &device_options.usesMsaa)) {
 		m_device.setUsesMsaa(device_options.usesMsaa);
-		m_device.setNextRenderPass(device_options.usesMsaa ? renderPassMsaa : renderPass);
+		nextRenderPassPtr = device_options.usesMsaa ? &renderPassMsaa : &renderPass;
 	}
 
 
@@ -129,7 +145,7 @@ void Renderer::initPipeline()
 	RenderPassDesc renderPassDesc = {
 		.colorAttachement_count = 1,
 		.hasDepth = true,
-		.useMsaa = device_options.usesMsaa,
+		.useMsaa = false,
 		.doClear = true,
 		.drawFunction = [&]() { drawRenderPass(); }
 	};
@@ -206,7 +222,6 @@ void Renderer::initComputePipeline()
 		};
 
 		drawParticlesPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
-		m_device.addRenderPass(drawParticlesPass);
 	}
 }
 
