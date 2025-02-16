@@ -14,6 +14,8 @@ public:
 	void cleanup();
 	void waitIdle();
 
+	Device& getDevice() { return m_device; };
+
 
 
 	//Pipeline createPipeline(PipelineDesc desc);

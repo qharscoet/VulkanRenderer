@@ -34,8 +34,8 @@ struct GLFW_state {
 } glfw_state;
 
 void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
-	auto app = reinterpret_cast<Device*>(glfwGetWindowUserPointer(window));
-	app->framebufferResized = true;
+	auto app = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
+	app->getDevice().framebufferResized = true;
 
 	glfw_state.width = width;
 	glfw_state.height = height;
@@ -79,7 +79,7 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
 }
 
 DeviceOptions device_options = {
-	.usesMsaa = false,
+	.usesMsaa = true,
 };
 
 

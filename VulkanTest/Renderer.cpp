@@ -129,7 +129,7 @@ void Renderer::initPipeline()
 	RenderPassDesc renderPassDesc = {
 		.colorAttachement_count = 1,
 		.hasDepth = true,
-		.useMsaa = false,
+		.useMsaa = device_options.usesMsaa,
 		.doClear = true,
 		.drawFunction = [&]() { drawRenderPass(); }
 	};
@@ -200,7 +200,7 @@ void Renderer::initComputePipeline()
 		RenderPassDesc renderPassDesc = {
 			.colorAttachement_count = 1,
 			.hasDepth = true,
-			.useMsaa = false,
+			.useMsaa = device_options.usesMsaa,
 			.doClear = false,
 			.drawFunction = [&]() { drawParticles(); }
 		};
