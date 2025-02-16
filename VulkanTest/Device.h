@@ -404,7 +404,7 @@ public:
 	void setNextRenderPass(RenderPass renderPass);
 	void addRenderPass(RenderPass& renderPass);
 	MeshPacket createPacket(Mesh& mesh, Texture& tex);
-	void drawPacket(MeshPacket packet);
+	void drawPacket(const MeshPacket& packet);
 	void destroyPipeline(Pipeline pipeline);
 	void destroyRenderPass(RenderPass renderPass);
 

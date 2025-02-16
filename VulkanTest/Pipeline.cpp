@@ -541,7 +541,7 @@ void Device::drawCommand(uint32_t vertex_count)
 	vkCmdDraw(commandBuffer, vertex_count, 1, 0, 0);
 }
 
-void Device::drawPacket(MeshPacket packet)
+void Device::drawPacket(const MeshPacket& packet)
 {
 
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];

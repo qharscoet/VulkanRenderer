@@ -16,6 +16,8 @@
 
 #include "Device.h"
 
+#include "Renderer.h"
+
 #include "imgui.h"
 
 float zoom = 2.0f;
@@ -87,23 +89,11 @@ private:
 	const uint32_t WIDTH = 800;
 	const uint32_t HEIGHT = 600;
 
-	Device m_device;
+	//Device m_device;
 	GLFWwindow* window = nullptr;
 
-	MeshPacket packet;
-	std::vector<MeshPacket> packets;
+	Renderer m_renderer;
 
-	RenderPass renderPass;
-	RenderPass renderPassMsaa;
-	RenderPass drawParticlesPass;
-
-
-	std::vector<Buffer> particleStorageBuffers;
-	double lastTime;
-	double lastFrameTime;
-
-	Pipeline computePipeline;
-	VkDescriptorPool computeDescriptorPool;
 
 	const std::vector<MeshVertex> vertices = {
 		{.pos = {-0.5f, -0.5f, 0.0f},	.color = {1.0f, 0.0f, 0.0f},	.texCoord = {0.0f, 0.0f} },
@@ -129,7 +119,7 @@ private:
 		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 		window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 
-		glfwSetWindowUserPointer(window, &m_device);
+		glfwSetWindowUserPointer(window, &m_renderer);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 
 		glfwSetMouseButtonCallback(window, mouse_button_callback);
@@ -138,8 +128,6 @@ private:
 
 		glfw_state.width = WIDTH;
 		glfw_state.height = HEIGHT;
-
-		lastTime = glfwGetTime();
 	}
 
 	void cleanupWindow() {
@@ -148,276 +136,12 @@ private:
 	}
 
 
-	void initParticlesBuffers() {
-		particleStorageBuffers.resize(2);
-		// Initialize particles
-		std::default_random_engine rndEngine((unsigned)time(nullptr));
-		std::uniform_real_distribution<float> rndDist(0.0f, 1.0f);
-
-		// Initial particle positions on a circle
-		std::vector<Particle> particles(PARTICLE_COUNT);
-		for (auto& particle : particles) {
-			float r = 0.25f * sqrt(rndDist(rndEngine));
-			float theta = rndDist(rndEngine) * 2 * 3.14159265358979323846;
-			float x = r * cos(theta) * HEIGHT / WIDTH;
-			float y = r * sin(theta);
-			particle.position = glm::vec2(x, y);
-			particle.velocity = glm::normalize(glm::vec2(x, y)) * 0.25f;
-			particle.color = glm::vec4(rndDist(rndEngine), rndDist(rndEngine), rndDist(rndEngine), 1.0f);
-		}
-
-		VkDeviceSize bufferSize = sizeof(Particle) * PARTICLE_COUNT;
-
-		//TODO change this to not allocate the staging buffer 3 times
-		for (size_t i = 0; i < 2; i++) {
-			particleStorageBuffers[i] = m_device.createLocalBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, particles.data());
-			particleStorageBuffers[i].size = bufferSize;
-			particleStorageBuffers[i].stride = sizeof(Particle);
-			particleStorageBuffers[i].count = bufferSize / sizeof(Particle);
-		}
-
-		//TODO FIX
-		m_device.updateComputeDescriptorSets(particleStorageBuffers);
-		//m_device.setVertexBuffer(particleStorageBuffers[0]);
-
-	}
-
-	void cleanupParticles()
-	{
-		for (int i = 0; i < 2; i++)
-		{
-			m_device.destroyBuffer(particleStorageBuffers[i]);
-		}
-	}
-
-	MeshPacket createPacket(std::filesystem::path path, std::string texture_path = "")
-	{
-		Mesh  out_mesh;
-		MeshPacket out_packet;
-
-		Texture tex;
-		if (path.extension() == ".obj") {
-			loadObj(path.string().c_str(), &out_mesh);
-			tex = loadTexture(texture_path.c_str());
-		}
-		else if (path.extension() == ".gltf")
-		{
-			loadGltf(path.string().c_str(), &out_mesh);
-			tex = out_mesh.textures.size() > 0 ? out_mesh.textures[0] : loadTexture("assets/viking_room.png");
-		}
-
-		out_packet = m_device.createPacket(out_mesh, tex);
-
-		out_packet.transform = {
-			.translation = {0.0f, 0.0f, 0.0f},
-			.rotation = {0.0f, 0.0f, 0.0f},
-			.scale = {1.0f, 1.0f, 1.0f}
-		};
-
-		out_packet.name = path.filename().replace_extension("").string();
-		return out_packet;
-
-	}
-
-	void loadViking() {
-		packets.push_back(createPacket("assets/viking_room.obj", "assets/viking_room.png"));
-	}
-
-
-	void loadCube()
-	{
-		packet = createPacket("assets/Cube/Cube.gltf");
-		packets.push_back(packet);
-	}
-
 	void loadPackets()
 	{
-		packets.push_back(createPacket("assets/viking_room.obj", "assets/viking_room.png"));
-		packets.push_back(createPacket("assets/Cube/Cube.gltf"));
+		m_renderer.addPacket(m_renderer.createPacket("assets/viking_room.obj", "assets/viking_room.png"));
+		m_renderer.addPacket(m_renderer.createPacket("assets/Cube/Cube.gltf"));
 	}
 
-	void destroyPacket(MeshPacket packet)
-	{
-		m_device.destroyBuffer(packet.vertexBuffer);
-		m_device.destroyBuffer(packet.indexBuffer);
-
-		m_device.destroyImage(packet.texture);
-		m_device.destroySampler(packet.sampler);
-	}
-
-	void destroyPackets()
-	{
-		for (auto& packet : packets)
-		{
-			destroyPacket(packet);
-		}
-	}
-
-	void cleanupBuffers() {
-		m_device.destroyBuffer(packet.vertexBuffer);
-		m_device.destroyBuffer(packet.indexBuffer);
-	}
-
-
-	void drawRenderPass() {
-		for (const auto& packet : packets)
-		{
-			m_device.drawPacket(packet);
-		}
-	}
-
-	void drawParticles()
-	{
-		m_device.bindVertexBuffer(particleStorageBuffers[m_device.getCurrentFrame()]);
-		m_device.drawCommand(PARTICLE_COUNT);
-	}
-
-
-	void initPipeline() {
-		auto attributeDescriptions = Vertex::getAttributeDescriptions();
-
-		PipelineDesc desc = {
-			.type = PipelineType::Graphics,
-			.vertexShader = "./shaders/basic.vert.spv",
-			.pixelShader = "./shaders/basic.frag.spv",
-
-			.attributeDescriptions = attributeDescriptions.data(),
-			.attributeDescriptionsCount = attributeDescriptions.size(),
-
-			.blendMode = BlendMode::Opaque,
-			.topology = PrimitiveToplogy::TriangleList,
-			.bindings = {
-				{
-					.slot = 0,
-					.type = BindingType::UBO,
-					.stageFlags = e_Vertex,
-				},
-				{
-					.slot = 1,
-					.type = BindingType::ImageSampler,
-					.stageFlags = e_Pixel,
-				}
-			},
-			.pushConstantsRanges = {
-				{
-					.offset = 0,
-					.size = sizeof(MeshPacket::PushConstantsData),
-					.stageFlags = e_Vertex
-				}
-			}
-		};
-
-		RenderPassDesc renderPassDesc = {
-			.colorAttachement_count = 1,
-			.hasDepth = true,
-			.useMsaa = false,
-			.doClear = true,
-			.drawFunction = [&]() { drawRenderPass(); }
-		};
-
-		renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
-
-		renderPassDesc.useMsaa = true;
-		renderPassMsaa = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
-		
-		m_device.setRenderPass(device_options.usesMsaa?renderPassMsaa:renderPass);
-	}
-
-	void initComputePipeline()
-	{
-		{
-			PipelineDesc desc = {
-				.type = PipelineType::Compute,
-				.computeShader = "./shaders/particles.comp.spv",
-
-				.bindings = {
-					{
-						.slot = 0,
-						.type = BindingType::UBO,
-						.stageFlags = e_Compute,
-					},
-					{
-						.slot = 1,
-						.type = BindingType::StorageBuffer,
-						.stageFlags = e_Compute,
-					},
-					{
-						.slot = 2,
-						.type = BindingType::StorageBuffer,
-						.stageFlags = e_Compute,
-					}
-				},
-			};
-
-			computePipeline = m_device.createComputePipeline(desc);
-			computePipeline.descriptorPool = m_device.createDescriptorPool(desc.bindings.data(), desc.bindings.size());
-			m_device.createComputeDescriptorSets(computePipeline);
-		}
-
-		{
-			auto attributeDescriptions = Particle::getAttributeDescriptions();
-			PipelineDesc desc = {
-				.type = PipelineType::Graphics,
-				.vertexShader = "./shaders/particles.vert.spv",
-				.pixelShader = "./shaders/particles.frag.spv",
-
-				.attributeDescriptions = attributeDescriptions.data(),
-				.attributeDescriptionsCount = attributeDescriptions.size(),
-
-				.blendMode = BlendMode::Opaque,
-				.topology = PrimitiveToplogy::PointList,
-				.bindings = {},
-				.pushConstantsRanges = {}
-			};
-
-			RenderPassDesc renderPassDesc = {
-				.colorAttachement_count = 1,
-				.hasDepth = true,
-				.useMsaa = false,
-				.doClear = false,
-				.drawFunction = [&]() { drawParticles(); }
-			};
-
-			drawParticlesPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
-			m_device.addRenderPass(drawParticlesPass);
-		}
-	}
-	void destroyPipeline() {
-		m_device.destroyRenderPass(renderPass);
-		m_device.destroyRenderPass(renderPassMsaa);
-		m_device.destroyPipeline(computePipeline);
-		m_device.destroyRenderPass(drawParticlesPass);
-	}
-
-
-	void updateUniformBuffer() {
-		static auto startTime = std::chrono::high_resolution_clock::now();
-
-		auto currentTime = std::chrono::high_resolution_clock::now();
-
-		float time =  1.0f + (auto_rot *  std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count());
-		
-		Dimensions dim = m_device.getExtent();
-
-		UniformBufferObject ubo{};
-		ubo.view = glm::lookAt(glm::vec3(zoom, zoom, zoom), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.proj = glm::perspective(glm::radians(45.0f), dim.width / (float)dim.height, 0.1f, 20.0f);
-		ubo.proj[1][1] *= -1;
-
-
-		m_device.updateUniformBuffer(&ubo, sizeof(UniformBufferObject));
-	}
-
-	void updateComputeUniformBuffer()
-	{
-		double currentTime = glfwGetTime();
-		lastFrameTime = (currentTime - lastTime);// *1000.0;
-		lastTime = currentTime;
-
-		ParticleUBO ubo{};
-		ubo.deltaTime = lastFrameTime * 2.0f;
-		m_device.updateComputeUniformBuffer(&ubo, sizeof(ParticleUBO));
-	}
 
 	void drawImGui()
 	{
@@ -441,30 +165,7 @@ private:
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 			ImGui::Separator();
 
-			if (ImGui::Checkbox("MSAA", &device_options.usesMsaa)) {
-				m_device.setUsesMsaa(device_options.usesMsaa);
-				m_device.setNextRenderPass(device_options.usesMsaa ? renderPassMsaa : renderPass);
-			}
-
-
-			if (ImGui::CollapsingHeader("Object List"))
-			{	
-				for (int i = 0; i < packets.size(); i++)
-				{
-					MeshPacket& p = packets[i];
-
-					char label[32];
-					sprintf(label, "Object %d", i);
-					if (ImGui::TreeNode(p.name.c_str()))
-					{
-						ImGui::SliderFloat3("Translate", p.transform.translation, 0.0f, 1.0f);
-						ImGui::SliderFloat3("Rot", p.transform.rotation, 0.0f, 1.0f);
-						ImGui::SliderFloat3("Scale", p.transform.scale, 0.0f, 4.0f);
-
-						ImGui::TreePop();
-					}
-				}
-			}
+			m_renderer.drawImgui();
 
 			ImGui::End();
 		}
@@ -473,40 +174,30 @@ private:
 	void mainLoop() {
 		while (!glfwWindowShouldClose(window)) {
 			glfwPollEvents();
-			m_device.newImGuiFrame();
+
+			m_renderer.newImGuiFrame();
 			drawImGui();
 
-			updateUniformBuffer();
-			updateComputeUniformBuffer();
+			m_renderer.updateUniformBuffer(zoom);
+			m_renderer.updateComputeUniformBuffer();
 
-			m_device.dispatchCompute(computePipeline);
-			m_device.beginDraw();
-			m_device.drawFrame();
-			m_device.endDraw();
+			m_renderer.draw();
 		}
 
-		m_device.waitIdle();
+		m_renderer.waitIdle();
 	}
 
 public:
 	void run() {
 
 		initWindow();
-		m_device.init(window, device_options);
-		initPipeline();
-		initComputePipeline();
-
+		m_renderer.init(window, device_options);
 
 		loadPackets();
-		initParticlesBuffers();
 
 		mainLoop();
 
-		destroyPackets();
-		cleanupParticles();
-
-		destroyPipeline();
-		m_device.cleanup();
+		m_renderer.cleanup();
 		cleanupWindow();
 	}
 };
