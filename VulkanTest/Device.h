@@ -205,10 +205,6 @@ private:
 	std::vector<RenderPass> renderPasses;
 
 
-	Buffer vertexBuffer;
-	Buffer indexBuffer = { VK_NULL_HANDLE, VK_NULL_HANDLE, 0 };
-	size_t index_count;
-
 	std::vector<VkBuffer> uniformBuffers;
 	std::vector<VkDeviceMemory> uniformBuffersMemory;
 	std::vector<void*> uniformBuffersMapped;
@@ -300,7 +296,6 @@ public:
 	void beginDraw();
 	void endDraw();
 	void dispatchCompute(const Pipeline& computePipeline);
-	void drawParticleFrame(const Pipeline& computePipeline);
 	void waitIdle();
 
 	uint32_t getCurrentFrame() { return current_frame; }
@@ -374,8 +369,6 @@ public:
 	Buffer createVertexBuffer(size_t size, void* src_data = nullptr);
 	Buffer createIndexBuffer(size_t size, void* src_data = nullptr);
 	void destroyBuffer(Buffer buffer);
-	void setVertexBuffer(Buffer vertexBuffer);
-	void setIndexBuffer(Buffer indexBuffer);
 
 	GpuImage createTexture(Texture tex);
 	void destroyImage(GpuImage image);
@@ -418,7 +411,6 @@ public:
 	void bindVertexBuffer(Buffer& buffer);
 	void drawCommand(uint32_t vertex_count);
 
-	void recordRenderPass(VkCommandBuffer commandBuffer);
 	void recordRenderPass(VkCommandBuffer commandBuffer, RenderPass renderPass);
 	void recordImGui(VkCommandBuffer commandBuffer);
 

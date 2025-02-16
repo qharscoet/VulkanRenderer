@@ -147,13 +147,6 @@ private:
 		glfwTerminate();
 	}
 
-	void initBuffers() {
-		//TODO: remove
-		//packet.vertexBuffer = m_device.createVertexBuffer(vertices.size() * sizeof(vertices[0]), (void*)vertices.data());
-		//packet.indexBuffer = m_device.createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
-		//m_device.setVertexBuffer(packet.vertexBuffer);
-		//m_device.setIndexBuffer(packet.indexBuffer);
-	}
 
 	void initParticlesBuffers() {
 		particleStorageBuffers.resize(2);
@@ -263,26 +256,6 @@ private:
 	void cleanupBuffers() {
 		m_device.destroyBuffer(packet.vertexBuffer);
 		m_device.destroyBuffer(packet.indexBuffer);
-	}
-
-
-	//TODO update the API to make param as out rather than return ?
-	void initTextures() {
-		Texture tex = loadTexture("assets/texture.jpg");
-
-		packet.texture = m_device.createTexture(tex);
-		freeTexturePixels(&tex);
-
-		packet.sampler = m_device.createTextureSampler(packet.texture.mipLevels);
-
-		//m_device.updateDescriptorSets(packet.texture.view, packet.sampler);
-	}
-
-	void cleanupTextures() {
-		m_device.destroyImage(packet.texture);
-		//m_device.destoryImageView(textureImageView);
-		m_device.destroySampler(packet.sampler);
-
 	}
 
 
@@ -433,7 +406,6 @@ private:
 
 
 		m_device.updateUniformBuffer(&ubo, sizeof(UniformBufferObject));
-		//memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
 	}
 
 	void updateComputeUniformBuffer()
@@ -507,7 +479,6 @@ private:
 			updateUniformBuffer();
 			updateComputeUniformBuffer();
 
-			//m_device.drawParticleFrame(computePipeline);
 			m_device.dispatchCompute(computePipeline);
 			m_device.beginDraw();
 			m_device.drawFrame();
@@ -524,19 +495,16 @@ public:
 		m_device.init(window, device_options);
 		initPipeline();
 		initComputePipeline();
-		//loadViking();
-		//loadCube();
+
+
 		loadPackets();
-		//initBuffers();
-		//initTextures();
 		initParticlesBuffers();
 
 		mainLoop();
 
 		destroyPackets();
 		cleanupParticles();
-		//cleanupTextures();
-		//cleanupBuffers();
+
 		destroyPipeline();
 		m_device.cleanup();
 		cleanupWindow();
