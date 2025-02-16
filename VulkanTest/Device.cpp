@@ -1143,9 +1143,9 @@ void Device::endDraw()
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-	VkSemaphore waitSemaphores[] = { computeFinishedSemaphores[current_frame], imageAvailableSemaphores[current_frame] };
-	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-	submitInfo.waitSemaphoreCount = 2;
+	VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[current_frame], computeFinishedSemaphores[current_frame] };
+	VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT };
+	submitInfo.waitSemaphoreCount = hasRecorededCompute? 2 : 1;
 	submitInfo.pWaitSemaphores = waitSemaphores;
 	submitInfo.pWaitDstStageMask = waitStages;
 
@@ -1159,6 +1159,8 @@ void Device::endDraw()
 	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[current_frame]) != VK_SUCCESS) {
 		throw std::runtime_error("failed to submit draw command buffer!");
 	}
+
+	hasRecorededCompute = false;
 
 	VkPresentInfoKHR presentInfo{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -1213,6 +1215,8 @@ void Device::dispatchCompute(const Pipeline& computePipeline)
 	if (vkQueueSubmit(computeQueue, 1, &submitInfo, computeInFlightFences[current_frame]) != VK_SUCCESS) {
 		throw std::runtime_error("failed to submit compute command buffer!");
 	};
+
+	hasRecorededCompute = true;
 
 }
 

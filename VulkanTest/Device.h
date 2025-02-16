@@ -283,6 +283,10 @@ private:
 
 	VkSampleCountFlagBits getMsaaSamples() { return this->usesMsaa ? msaaSamples : VK_SAMPLE_COUNT_1_BIT; };
 
+
+private:
+	bool hasRecorededCompute = false;
+
 public:
 	bool framebufferResized = false; //public for now but may change
 
