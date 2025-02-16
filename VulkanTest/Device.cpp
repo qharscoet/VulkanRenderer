@@ -258,6 +258,7 @@ QueueFamilyIndices Device::findQueueFamilies(VkPhysicalDevice device) {
 
 	int i = 0;
 	for (const auto& queueFamily : queueFamilies) {
+		//TODO try to use a dedicated compute queue
 		if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)) {
 			indices.graphicsFamily = i;
 		}
@@ -803,12 +804,21 @@ void Device::createUniformBuffers() {
 	uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 	uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
 	uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+	
+	VkDeviceSize computeBufferSize = sizeof(ParticleUBO);
+	computeUniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i]);
-
 		vkMapMemory(device, uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
+
+		createBuffer(computeBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, computeUniformBuffers[i].buffer, computeUniformBuffers[i].memory);
+		vkMapMemory(device, computeUniformBuffers[i].memory, 0, computeBufferSize, 0, &computeUniformBuffers[i].mapped_memory);
 	}
+
+
+
+
 }
 
 
@@ -862,7 +872,7 @@ void Device::updateDescriptorSets(VkImageView imageView, VkSampler sampler) {
 void Device::updateComputeDescriptorSets(const std::vector<Buffer>& buffers) {
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		VkDescriptorBufferInfo uniformBufferInfo{};
-		uniformBufferInfo.buffer = uniformBuffers[i];
+		uniformBufferInfo.buffer = computeUniformBuffers[i].buffer;
 		uniformBufferInfo.offset = 0;
 		uniformBufferInfo.range = sizeof(ParticleUBO);
 
@@ -951,6 +961,13 @@ void Device::recordCommandBuffer(VkCommandBuffer commandBuffer) {
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
 	recordRenderPass(commandBuffer, currentRenderPass);
+
+	for (const auto& renderPass : renderPasses)
+	{
+		recordRenderPass(commandBuffer, renderPass);
+	}
+
+	ImGui::Render();
 	recordImGui(commandBuffer);
 
 	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -1146,6 +1163,10 @@ void Device::updateUniformBuffer(void* data, size_t size) {
 	memcpy(uniformBuffersMapped[current_frame], data, size);
 }
 
+void Device::updateComputeUniformBuffer(void* data, size_t size) {
+	memcpy(computeUniformBuffers[current_frame].mapped_memory, data, size);
+}
+
 void Device::newImGuiFrame(){
 	
 	ImGui_ImplVulkan_NewFrame();
@@ -1158,7 +1179,6 @@ void Device::beginDraw()
 {
 	vkWaitForFences(device, 1, &inFlightFences[current_frame], VK_TRUE, UINT64_MAX);
 
-	uint32_t imageIndex;
 	VkResult res = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[current_frame], VK_NULL_HANDLE, &current_framebuffer_idx);
 
 	switch (res) {
@@ -1171,6 +1191,7 @@ void Device::beginDraw()
 		throw std::runtime_error("failed to acquire swap chain image!");
 	}
 
+
 	//We reset the fence only if we actually will submit work
 	vkResetFences(device, 1, &inFlightFences[current_frame]);
 	vkResetCommandBuffer(commandBuffers[current_frame], 0);
@@ -1182,9 +1203,9 @@ void Device::endDraw()
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-	VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[current_frame] };
-	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-	submitInfo.waitSemaphoreCount = 1;
+	VkSemaphore waitSemaphores[] = { computeFinishedSemaphores[current_frame], imageAvailableSemaphores[current_frame] };
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	submitInfo.waitSemaphoreCount = 2;
 	submitInfo.pWaitSemaphores = waitSemaphores;
 	submitInfo.pWaitDstStageMask = waitStages;
 
@@ -1230,6 +1251,29 @@ void Device::endDraw()
 void Device::drawFrame() {
 
 	recordCommandBuffer(commandBuffers[current_frame]);
+}
+
+void Device::dispatchCompute(const Pipeline& computePipeline)
+{
+
+	vkWaitForFences(device, 1, &computeInFlightFences[current_frame], VK_TRUE, UINT64_MAX);
+	vkResetFences(device, 1, &computeInFlightFences[current_frame]);
+
+	vkResetCommandBuffer(computeCommandBuffers[current_frame], /*VkCommandBufferResetFlagBits*/ 0);
+	recordComputeCommandBuffer(computeCommandBuffers[current_frame], computePipeline);
+
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &computeCommandBuffers[current_frame];
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = &computeFinishedSemaphores[current_frame];
+
+
+	if (vkQueueSubmit(computeQueue, 1, &submitInfo, computeInFlightFences[current_frame]) != VK_SUCCESS) {
+		throw std::runtime_error("failed to submit compute command buffer!");
+	};
+
 }
 
 void Device::drawParticleFrame(const Pipeline& computePipeline) {
@@ -1366,6 +1410,9 @@ void Device::cleanupVulkan() {
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroyBuffer(device, uniformBuffers[i], nullptr);
 		vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
+
+		vkDestroyBuffer(device, computeUniformBuffers[i].buffer, nullptr);
+		vkFreeMemory(device, computeUniformBuffers[i].memory, nullptr);
 	}
 	//vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 
@@ -1417,7 +1464,13 @@ Buffer Device::createLocalBuffer(size_t size, VkBufferUsageFlags usage, void* sr
 
 
 Buffer Device::createVertexBuffer(size_t size,void* src_data) {
-	return createLocalBuffer(size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, src_data );
+
+	Buffer buff = createLocalBuffer(size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, src_data );
+	buff.size = size;
+	buff.stride = sizeof(MeshVertex);
+	buff.count = size / buff.stride;
+	
+	return buff;
 }
 
 Buffer Device::createIndexBuffer(size_t size,void* src_data) {
@@ -1452,6 +1505,8 @@ void Device::setIndexBuffer(Buffer indexBuffer)
 	this->indexBuffer.memory = indexBuffer.memory;
 	this->index_count = indexBuffer.count;
 }
+
+
 
 void Device::generateMipmaps(VkImage image, VkFormat format, int32_t texWidth, int32_t texHeight, uint32_t mipLevels)
 {

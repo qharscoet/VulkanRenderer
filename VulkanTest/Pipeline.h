@@ -9,6 +9,11 @@ enum class BlendMode {
 	AlphaBlend
 };
 
+enum class PrimitiveToplogy {
+	PointList,
+	TriangleList,
+};
+
 enum class BindingType {
 	UBO,
 	ImageSampler,
@@ -50,6 +55,7 @@ struct PipelineDesc {
 
 	//Descriptors params
 	BlendMode blendMode;
+	PrimitiveToplogy topology;
 	std::vector<BindingDesc> bindings;
 
 	std::vector<PushConstantsRange> pushConstantsRanges;

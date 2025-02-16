@@ -202,6 +202,8 @@ private:
 
 	RenderPass currentRenderPass;
 	std::optional<RenderPass> nextRenderPass;
+	std::vector<RenderPass> renderPasses;
+
 
 	Buffer vertexBuffer;
 	Buffer indexBuffer = { VK_NULL_HANDLE, VK_NULL_HANDLE, 0 };
@@ -211,6 +213,7 @@ private:
 	std::vector<VkDeviceMemory> uniformBuffersMemory;
 	std::vector<void*> uniformBuffersMapped;
 
+	std::vector<Buffer> computeUniformBuffers;
 	std::vector<VkDescriptorSet> computeDescriptorSets;
 
 	GpuImage image;
@@ -296,8 +299,11 @@ public:
 	void drawFrame();
 	void beginDraw();
 	void endDraw();
+	void dispatchCompute(const Pipeline& computePipeline);
 	void drawParticleFrame(const Pipeline& computePipeline);
 	void waitIdle();
+
+	uint32_t getCurrentFrame() { return current_frame; }
 
 	void newImGuiFrame();
 	void setUsesMsaa(bool usesMsaa) {
@@ -381,11 +387,13 @@ public:
 	VkSampler createTextureSampler(uint32_t mipLevels);
 
 	void updateUniformBuffer(void* data, size_t size);
+	void updateComputeUniformBuffer(void* data, size_t size);
 	Dimensions getExtent() { return swapChainExtent;};
 
 	void updateDescriptorSets(VkImageView imageView, VkSampler sampler);
 	void updateDescriptorSet(VkImageView imageView, VkSampler sampler, VkDescriptorSet set);
 	void updateComputeDescriptorSets(const std::vector<Buffer>& buffers);
+
 
 	//Defined in Pipeline.cpp for now,, will probably make them independant at some point
 private:
@@ -401,10 +409,14 @@ public:
 	RenderPass createRenderPassAndPipeline(RenderPassDesc renderPassDesc, PipelineDesc pipelineDesc);
 	void setRenderPass(RenderPass renderPass);
 	void setNextRenderPass(RenderPass renderPass);
+	void addRenderPass(RenderPass& renderPass);
 	MeshPacket createPacket(Mesh& mesh, Texture& tex);
 	void drawPacket(MeshPacket packet);
 	void destroyPipeline(Pipeline pipeline);
 	void destroyRenderPass(RenderPass renderPass);
+
+	void bindVertexBuffer(Buffer& buffer);
+	void drawCommand(uint32_t vertex_count);
 
 	void recordRenderPass(VkCommandBuffer commandBuffer);
 	void recordRenderPass(VkCommandBuffer commandBuffer, RenderPass renderPass);

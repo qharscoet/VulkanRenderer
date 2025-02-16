@@ -245,9 +245,16 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 
 
 	//Triangles only
+	VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	switch (desc.topology)
+	{
+	case PrimitiveToplogy::PointList: topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST; break;
+	case PrimitiveToplogy::TriangleList: topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; break;
+	}
+
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
 	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssembly.topology = topology;
 	inputAssembly.primitiveRestartEnable = VK_FALSE;
 
 
@@ -497,6 +504,11 @@ void Device::setNextRenderPass(RenderPass renderPass)
 	nextRenderPass = renderPass;
 }
 
+void Device::addRenderPass(RenderPass& renderPass)
+{
+	renderPasses.push_back(renderPass);
+}
+
 MeshPacket Device::createPacket(Mesh& mesh, Texture& tex)
 {
 	MeshPacket out_packet;
@@ -511,6 +523,22 @@ MeshPacket Device::createPacket(Mesh& mesh, Texture& tex)
 	updateDescriptorSet(out_packet.texture.view, out_packet.sampler, out_packet.internalData.descriptorSet);
 
 	return out_packet;
+}
+
+void Device::bindVertexBuffer(Buffer& buffer)
+{
+	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
+
+	VkBuffer vertexBuffers[] = { buffer.buffer };
+	VkDeviceSize offsets[] = { 0 };
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+}
+
+void Device::drawCommand(uint32_t vertex_count)
+{
+	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
+
+	vkCmdDraw(commandBuffer, vertex_count, 1, 0, 0);
 }
 
 void Device::drawPacket(MeshPacket packet)
@@ -552,7 +580,7 @@ void Device::drawPacket(MeshPacket packet)
 	if (packet.indexBuffer.buffer != 0)
 		vkCmdDrawIndexed(commandBuffer, packet.indexBuffer.count, 1, 0, 0, 0);
 	else
-		vkCmdDraw(commandBuffer, PARTICLE_COUNT, 1, 0, 0);
+		vkCmdDraw(commandBuffer, packet.vertexBuffer.count, 1, 0, 0);
 }
 
 void Device::destroyPipeline(Pipeline pipeline)
@@ -609,8 +637,9 @@ void Device::recordRenderPass(VkCommandBuffer commandBuffer)
 	else
 		vkCmdDraw(commandBuffer, PARTICLE_COUNT, 1, 0, 0);
 
-	ImGui::Render();
-	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+	//TODO remove
+	//ImGui::Render();
+	//ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -641,9 +670,6 @@ void Device::recordRenderPass(VkCommandBuffer commandBuffer, RenderPass renderPa
 
 	renderPass.draw();
 
-	ImGui::Render();
-	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
-
 	vkCmdEndRenderPass(commandBuffer);
 
 }
@@ -668,7 +694,7 @@ void Device::recordImGui(VkCommandBuffer commandBuffer)
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 
-	ImGui::Render();
+	/*ImGui::Render();*/
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
 
 	vkCmdEndRenderPass(commandBuffer);

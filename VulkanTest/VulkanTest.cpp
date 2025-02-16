@@ -95,6 +95,7 @@ private:
 
 	RenderPass renderPass;
 	RenderPass renderPassMsaa;
+	RenderPass drawParticlesPass;
 
 
 	std::vector<Buffer> particleStorageBuffers;
@@ -137,6 +138,8 @@ private:
 
 		glfw_state.width = WIDTH;
 		glfw_state.height = HEIGHT;
+
+		lastTime = glfwGetTime();
 	}
 
 	void cleanupWindow() {
@@ -145,10 +148,11 @@ private:
 	}
 
 	void initBuffers() {
-		packet.vertexBuffer = m_device.createVertexBuffer(vertices.size() * sizeof(vertices[0]), (void*)vertices.data());
-		packet.indexBuffer = m_device.createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
-		m_device.setVertexBuffer(packet.vertexBuffer);
-		m_device.setIndexBuffer(packet.indexBuffer);
+		//TODO: remove
+		//packet.vertexBuffer = m_device.createVertexBuffer(vertices.size() * sizeof(vertices[0]), (void*)vertices.data());
+		//packet.indexBuffer = m_device.createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
+		//m_device.setVertexBuffer(packet.vertexBuffer);
+		//m_device.setIndexBuffer(packet.indexBuffer);
 	}
 
 	void initParticlesBuffers() {
@@ -165,7 +169,7 @@ private:
 			float x = r * cos(theta) * HEIGHT / WIDTH;
 			float y = r * sin(theta);
 			particle.position = glm::vec2(x, y);
-			particle.velocity = glm::normalize(glm::vec2(x, y)) * 0.0025f;
+			particle.velocity = glm::normalize(glm::vec2(x, y)) * 0.25f;
 			particle.color = glm::vec4(rndDist(rndEngine), rndDist(rndEngine), rndDist(rndEngine), 1.0f);
 		}
 
@@ -179,8 +183,9 @@ private:
 			particleStorageBuffers[i].count = bufferSize / sizeof(Particle);
 		}
 
+		//TODO FIX
 		m_device.updateComputeDescriptorSets(particleStorageBuffers);
-		m_device.setVertexBuffer(particleStorageBuffers[0]);
+		//m_device.setVertexBuffer(particleStorageBuffers[0]);
 
 	}
 
@@ -286,7 +291,12 @@ private:
 		{
 			m_device.drawPacket(packet);
 		}
+	}
 
+	void drawParticles()
+	{
+		m_device.bindVertexBuffer(particleStorageBuffers[m_device.getCurrentFrame()]);
+		m_device.drawCommand(PARTICLE_COUNT);
 	}
 
 
@@ -302,6 +312,7 @@ private:
 			.attributeDescriptionsCount = attributeDescriptions.size(),
 
 			.blendMode = BlendMode::Opaque,
+			.topology = PrimitiveToplogy::TriangleList,
 			.bindings = {
 				{
 					.slot = 0,
@@ -339,39 +350,70 @@ private:
 		m_device.setRenderPass(device_options.usesMsaa?renderPassMsaa:renderPass);
 	}
 
-	void initComputePipeline() 
+	void initComputePipeline()
 	{
-		PipelineDesc desc = {
-			.type = PipelineType::Compute,
-			.computeShader = "./shaders/particles.comp.spv",
+		{
+			PipelineDesc desc = {
+				.type = PipelineType::Compute,
+				.computeShader = "./shaders/particles.comp.spv",
 
-			.bindings = {
-				{
-					.slot = 0,
-					.type = BindingType::UBO,
-					.stageFlags = e_Compute,
+				.bindings = {
+					{
+						.slot = 0,
+						.type = BindingType::UBO,
+						.stageFlags = e_Compute,
+					},
+					{
+						.slot = 1,
+						.type = BindingType::StorageBuffer,
+						.stageFlags = e_Compute,
+					},
+					{
+						.slot = 2,
+						.type = BindingType::StorageBuffer,
+						.stageFlags = e_Compute,
+					}
 				},
-				{
-					.slot = 1,
-					.type = BindingType::StorageBuffer,
-					.stageFlags = e_Compute,
-				},
-				{
-					.slot = 2,
-					.type = BindingType::StorageBuffer,
-					.stageFlags = e_Compute,
-				}
-			},
-		};
+			};
 
-		computePipeline = m_device.createComputePipeline(desc);
-		computePipeline.descriptorPool = m_device.createDescriptorPool(desc.bindings.data(), desc.bindings.size());
-		m_device.createComputeDescriptorSets(computePipeline);
+			computePipeline = m_device.createComputePipeline(desc);
+			computePipeline.descriptorPool = m_device.createDescriptorPool(desc.bindings.data(), desc.bindings.size());
+			m_device.createComputeDescriptorSets(computePipeline);
+		}
+
+		{
+			auto attributeDescriptions = Particle::getAttributeDescriptions();
+			PipelineDesc desc = {
+				.type = PipelineType::Graphics,
+				.vertexShader = "./shaders/particles.vert.spv",
+				.pixelShader = "./shaders/particles.frag.spv",
+
+				.attributeDescriptions = attributeDescriptions.data(),
+				.attributeDescriptionsCount = attributeDescriptions.size(),
+
+				.blendMode = BlendMode::Opaque,
+				.topology = PrimitiveToplogy::PointList,
+				.bindings = {},
+				.pushConstantsRanges = {}
+			};
+
+			RenderPassDesc renderPassDesc = {
+				.colorAttachement_count = 1,
+				.hasDepth = true,
+				.useMsaa = false,
+				.doClear = false,
+				.drawFunction = [&]() { drawParticles(); }
+			};
+
+			drawParticlesPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
+			m_device.addRenderPass(drawParticlesPass);
+		}
 	}
 	void destroyPipeline() {
 		m_device.destroyRenderPass(renderPass);
 		m_device.destroyRenderPass(renderPassMsaa);
 		m_device.destroyPipeline(computePipeline);
+		m_device.destroyRenderPass(drawParticlesPass);
 	}
 
 
@@ -394,15 +436,15 @@ private:
 		//memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
 	}
 
-	void updateParticleUniformBuffer()
+	void updateComputeUniformBuffer()
 	{
 		double currentTime = glfwGetTime();
-		 lastFrameTime = (currentTime - lastTime) * 1000.0;
-		 lastTime = currentTime;
+		lastFrameTime = (currentTime - lastTime);// *1000.0;
+		lastTime = currentTime;
 
 		ParticleUBO ubo{};
 		ubo.deltaTime = lastFrameTime * 2.0f;
-		m_device.updateUniformBuffer(&ubo, sizeof(ParticleUBO));
+		m_device.updateComputeUniformBuffer(&ubo, sizeof(ParticleUBO));
 	}
 
 	void drawImGui()
@@ -461,12 +503,15 @@ private:
 			glfwPollEvents();
 			m_device.newImGuiFrame();
 			drawImGui();
+
 			updateUniformBuffer();
+			updateComputeUniformBuffer();
+
+			//m_device.drawParticleFrame(computePipeline);
+			m_device.dispatchCompute(computePipeline);
 			m_device.beginDraw();
-			//renderPass.draw();
 			m_device.drawFrame();
 			m_device.endDraw();
-			//m_device.drawParticleFrame(computePipeline);
 		}
 
 		m_device.waitIdle();
@@ -484,12 +529,12 @@ public:
 		loadPackets();
 		//initBuffers();
 		//initTextures();
-		//initParticlesBuffers();
+		initParticlesBuffers();
 
 		mainLoop();
 
 		destroyPackets();
-		//cleanupParticles();
+		cleanupParticles();
 		//cleanupTextures();
 		//cleanupBuffers();
 		destroyPipeline();
