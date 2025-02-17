@@ -16,6 +16,16 @@ public:
 
 	Device& getDevice() { return m_device; };
 
+	struct CameraInfo {
+		float position[3] = { 0.0f, 0.0f, 0.0f };
+
+		float yaw;
+		float pitch;
+
+		float forward[3];
+		float up[3];
+	};
+
 
 
 	//Pipeline createPipeline(PipelineDesc desc);
@@ -57,6 +67,8 @@ private:
 
 	std::vector<MeshPacket> packets;
 
+	CameraInfo cameraInfo;
+
 	//Draw callbacks
 	void drawRenderPass();
 	void drawParticles();
@@ -64,20 +76,23 @@ private:
 	double lastTime;
 	double lastFrameTime;
 
-
-public:
-	void updateUniformBuffer(float zoom);
-	void updateComputeUniformBuffer();
-
-	void newImGuiFrame();
-	void draw();
-	void drawImgui();
-
 	void initPipeline();
 	void initComputePipeline();
 
 	void initParticlesBuffers();
 	void cleanupParticles();
+
+	void updateUniformBuffer();
+	void updateComputeUniformBuffer();
+
+public:
+
+	void newImGuiFrame();
+	void draw();
+	void drawImgui();
+
+	void updateCamera(const CameraInfo& cameraInfo);
+
 
 	MeshPacket createPacket(std::filesystem::path path, std::string texture_path = "");
 	void addPacket(const MeshPacket& packet);

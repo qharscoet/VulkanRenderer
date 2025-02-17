@@ -50,6 +50,9 @@ void Renderer::newImGuiFrame()
 
 void Renderer::draw()
 {
+	updateUniformBuffer();
+	updateComputeUniformBuffer();
+
 	m_device.dispatchCompute(computePipeline);
 	m_device.beginDraw();
 
@@ -318,13 +321,18 @@ void Renderer::cleanupParticles()
 }
 
 
-void Renderer::updateUniformBuffer(float zoom) {
+//TODO : get rid of glm and try our hands at a math library
+void Renderer::updateUniformBuffer() {
 	static auto startTime = std::chrono::high_resolution_clock::now();
 
 	Dimensions dim = m_device.getExtent();
 
+	glm::vec3 pos = glm::vec3(cameraInfo.position[0], cameraInfo.position[1], cameraInfo.position[2]);
+	glm::vec3 up = glm::vec3(cameraInfo.up[0], cameraInfo.up[1], cameraInfo.up[2]);
+	glm::vec3 forward = glm::vec3(cameraInfo.forward[0], cameraInfo.forward[1], cameraInfo.forward[2]);
+
 	UniformBufferObject ubo{};
-	ubo.view = glm::lookAt(glm::vec3(zoom, zoom, zoom), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.view = glm::lookAt(pos, pos + forward, up);
 	ubo.proj = glm::perspective(glm::radians(45.0f), dim.width / (float)dim.height, 0.1f, 20.0f);
 	ubo.proj[1][1] *= -1;
 
@@ -341,4 +349,9 @@ void Renderer::updateComputeUniformBuffer()
 	ParticleUBO ubo{};
 	ubo.deltaTime = lastFrameTime * 2.0f;
 	m_device.updateComputeUniformBuffer(&ubo, sizeof(ParticleUBO));
+}
+
+void Renderer::updateCamera(const CameraInfo& cameraInfo)
+{
+	this->cameraInfo = cameraInfo;
 }

@@ -878,14 +878,15 @@ void Device::createCommandBuffer() {
 
 void Device::recordCommandBuffer(VkCommandBuffer commandBuffer) {
 
-	recordRenderPass(commandBuffer, currentRenderPass);
-	//for (const auto& renderPass : renderPasses)
-	//{
-	//	recordRenderPass(commandBuffer, renderPass);
-	//}
+	//TODO: remove
+	//recordRenderPass(commandBuffer, currentRenderPass);
+	////for (const auto& renderPass : renderPasses)
+	////{
+	////	recordRenderPass(commandBuffer, renderPass);
+	////}
 
 
-	recordImGui();
+	//recordImGui();
 
 }
 
@@ -1068,7 +1069,6 @@ void Device::refreshImGui()
 	ImGui_ImplVulkan_Init(&init_info);
 }
 
-//TODO : get rid of glm and try our hands at a math library
 void Device::updateUniformBuffer(void* data, size_t size) {
 	memcpy(uniformBuffersMapped[current_frame], data, size);
 }

@@ -6,6 +6,8 @@
 
 #include <filesystem>
 
+#include <glm/gtc/type_ptr.hpp>.
+
 #include "FileUtils.h"
 
 /* Optional TODOs :
@@ -14,16 +16,27 @@
 
 
 
+#include <numbers>
+
+//Wow so modern
+#define RADIANS(degrees) (degrees * (std::numbers::pi/180.f))
+
 #include "Device.h"
 
 #include "Renderer.h"
 
 #include "imgui.h"
 
-float zoom = 2.0f;
-float rotation[3] = { 1.0f, 0.0f, 0.0f };
-float translate[3] = { 0.0f, 0.0f, 0.0f };
-bool auto_rot = false;
+
+Renderer::CameraInfo camera{
+	.position = { 2.0f, 2.0f, 2.0f },
+
+	.yaw = -145.f,
+	.pitch = -45,
+
+	.forward = {-1.0f, -1.0f, -1.0},
+	.up = {0.0f, 1.0f, 0.0f},
+};
 
 struct GLFW_state {
 	bool pressed;
@@ -61,15 +74,30 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
-	zoom -= yoffset * 0.1f;
+	//camera.zoom -= yoffset * 0.1f;
 }
+
+
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+
+}
+
 
 static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
 {
 	if (glfw_state.pressed)
 	{
-		rotation[0] += (xpos - glfw_state.mousepress_x)/glfw_state.width;
-		rotation[1] += (ypos - glfw_state.mousepress_y)/glfw_state.height;
+		float xoffset = (xpos - glfw_state.mousepress_x);
+		float yoffset = (ypos - glfw_state.mousepress_y);
+
+		camera.yaw += xoffset * 0.1f;
+		camera.pitch += -yoffset * 0.1f;
+
+		camera.pitch = std::clamp(camera.pitch, -89.f, 89.f);
+
+		camera.forward[0] = cos(RADIANS(camera.yaw)) * cos(RADIANS(camera.pitch));
+		camera.forward[1] = sin(RADIANS(camera.pitch));
+		camera.forward[2] = sin(RADIANS(camera.yaw)) * cos(RADIANS(camera.pitch));
 
 
 		glfw_state.mousepress_x = xpos;
@@ -125,6 +153,7 @@ private:
 		glfwSetMouseButtonCallback(window, mouse_button_callback);
 		glfwSetScrollCallback(window, scroll_callback);
 		glfwSetCursorPosCallback(window, cursor_position_callback);
+		glfwSetKeyCallback(window, key_callback);
 
 		glfw_state.width = WIDTH;
 		glfw_state.height = HEIGHT;
@@ -157,10 +186,10 @@ private:
 
 			ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
 
-			ImGui::SliderFloat("Zoom", &zoom, 0.0f, 10.0f);            // Edit 1 float using a slider from 0.0f to
-			ImGui::SliderFloat3("Rot", rotation, 0.0f, 4.0f);            // Edit 1 float using a slider from 0.0f to
-			ImGui::SliderFloat3("Translate", translate, 0.0f, 1.0f);          // Edit 1 float using a slider from 0.0f to
-			ImGui::Checkbox("Auto Rotate", &auto_rot);
+			//ImGui::SliderFloat("Zoom", &camera.zoom, 0.0f, 10.0f);            // Edit 1 float using a slider from 0.0f to
+			//ImGui::SliderFloat3("Rot", rotation, 0.0f, 4.0f);            // Edit 1 float using a slider from 0.0f to
+			//ImGui::SliderFloat3("Translate", translate, 0.0f, 1.0f);          // Edit 1 float using a slider from 0.0f to
+			//ImGui::Checkbox("Auto Rotate", &auto_rot);
 
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 			ImGui::Separator();
@@ -171,15 +200,52 @@ private:
 		}
 	}
 
+	void processEvents()
+	{
+		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS ||
+			glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS ||
+			glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS ||
+			glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS )
+		{
+			//TODO : get rid of glm and try our hands at a math library
+			glm::vec3 forward = glm::make_vec3(camera.forward);
+			glm::vec3 up = glm::make_vec3(camera.up);
+			glm::vec3 right = glm::cross(forward, up);
+			glm::vec3 pos = glm::make_vec3(camera.position);
+
+			
+			float speed = 0.05f;
+
+			if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+				pos += forward * speed;
+
+			if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+				pos -= forward * speed;
+
+			if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+				pos -= right * speed;
+
+			if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+				pos += right * speed;
+
+			camera.position[0] = pos.x;
+			camera.position[1] = pos.y;
+			camera.position[2] = pos.z;
+
+		}
+
+	}
+
+
 	void mainLoop() {
 		while (!glfwWindowShouldClose(window)) {
 			glfwPollEvents();
+			processEvents();
 
 			m_renderer.newImGuiFrame();
 			drawImGui();
 
-			m_renderer.updateUniformBuffer(zoom);
-			m_renderer.updateComputeUniformBuffer();
+			m_renderer.updateCamera(camera);
 
 			m_renderer.draw();
 		}
