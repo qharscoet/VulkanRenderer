@@ -55,6 +55,8 @@ private:
 	RenderPass renderPassMsaa;
 	RenderPass drawParticlesPass;
 
+	std::vector<RenderPass> renderPasses;
+
 	const RenderPass* currentDrawPassPtr;
 	std::optional<const RenderPass*> nextRenderPassPtr;
 
@@ -78,6 +80,7 @@ private:
 
 	void initPipeline();
 	void initComputePipeline();
+	void initTestPipeline();
 
 	void initParticlesBuffers();
 	void cleanupParticles();

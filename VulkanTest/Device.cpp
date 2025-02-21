@@ -1481,6 +1481,43 @@ GpuImage Device::createTexture(Texture tex)
 	return ret_image;
 }
 
+
+void Device::createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa)
+{
+	ImageDesc desc = {
+		.width = width,
+		.height = height,
+		.mipLevels = 1,
+		.numSamples = msaa ? msaaSamples : VK_SAMPLE_COUNT_1_BIT,
+		.format = swapChainImageFormat,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage_flags = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+		.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+	};
+
+	createImage(desc, out_image);
+	out_image.view = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+
+}
+
+void Device::createDepthTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa)
+{
+	ImageDesc desc = {
+		.width = width,
+		.height = height,
+		.mipLevels = 1,
+		.numSamples = msaa ? msaaSamples : VK_SAMPLE_COUNT_1_BIT,
+		.format = findDepthFormat(),
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+	};
+	createImage(desc, out_image);
+	out_image.view = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+}
+
 VkSampler Device::createTextureSampler(uint32_t mipLevels) {
 	VkSamplerCreateInfo samplerInfo{};
 	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -1546,39 +1583,45 @@ bool Device::hasStencilComponent(VkFormat format) {
 }
 
 void Device::createColorResources() {
-	ImageDesc desc = {
-	.width = swapChainExtent.width,
-	.height = swapChainExtent.height,
-	.mipLevels = 1,
-	.numSamples = getMsaaSamples(),
-	.format = swapChainImageFormat,
-	.tiling = VK_IMAGE_TILING_OPTIMAL,
-	.usage_flags = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-	.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-	.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-	};
+	createRenderTarget(swapChainExtent.width, swapChainExtent.height, colorTarget, this->usesMsaa);
 
-	createImage(desc, colorTarget);
-	colorTarget.view = createImageView(colorTarget.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+	//TODO : remove
+	//ImageDesc desc = {
+	//.width = swapChainExtent.width,
+	//.height = swapChainExtent.height,
+	//.mipLevels = 1,
+	//.numSamples = getMsaaSamples(),
+	//.format = swapChainImageFormat,
+	//.tiling = VK_IMAGE_TILING_OPTIMAL,
+	//.usage_flags = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+	//.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+	//.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+	//};
+
+	//createImage(desc, colorTarget);
+	//colorTarget.view = createImageView(colorTarget.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 
 }
 
 void Device::createDepthBufferResources() {
 
-	ImageDesc desc = {
-		.width = swapChainExtent.width,
-		.height = swapChainExtent.height,
-		.mipLevels = 1,
-		.numSamples = getMsaaSamples(),
-		.format = findDepthFormat(),
-		.tiling = VK_IMAGE_TILING_OPTIMAL,
-		.usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-		.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-	};
+	createDepthTarget(swapChainExtent.width, swapChainExtent.height, depthBuffer, this->usesMsaa);
 
-	createImage(desc, depthBuffer);
-	depthBuffer.view = createImageView(depthBuffer.image, desc.format, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+	//TODO : remove
+	//ImageDesc desc = {
+	//	.width = swapChainExtent.width,
+	//	.height = swapChainExtent.height,
+	//	.mipLevels = 1,
+	//	.numSamples = getMsaaSamples(),
+	//	.format = findDepthFormat(),
+	//	.tiling = VK_IMAGE_TILING_OPTIMAL,
+	//	.usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+	//	.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+	//	.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+	//};
+
+	//createImage(desc, depthBuffer);
+	//depthBuffer.view = createImageView(depthBuffer.image, desc.format, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 
 }
 

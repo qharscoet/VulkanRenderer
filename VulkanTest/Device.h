@@ -143,6 +143,15 @@ struct Particle {
 	glm::vec2 velocity;
 	glm::vec4 color;
 
+	static VkVertexInputBindingDescription getBindingDescription() {
+		VkVertexInputBindingDescription bindingDescription{};
+		bindingDescription.binding = 0;
+		bindingDescription.stride = sizeof(Particle);
+		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+		return bindingDescription;
+	}
+
 	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
 		std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
 
@@ -373,6 +382,8 @@ public:
 	void destroyBuffer(Buffer buffer);
 
 	GpuImage createTexture(Texture tex);
+	void  createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa);
+	void createDepthTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa);
 	void destroyImage(GpuImage image);
 
 	void destroySampler(VkSampler sampler) {
@@ -410,6 +421,7 @@ public:
 
 	void bindVertexBuffer(Buffer& buffer);
 	void drawCommand(uint32_t vertex_count);
+	void pushConstants(void* data, uint32_t size, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE);
 
 	void recordRenderPass(const RenderPass& renderPass);
 	void recordImGui();

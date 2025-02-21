@@ -13,6 +13,7 @@ void Renderer::init(GLFWwindow* window, DeviceOptions options)
 
 	initPipeline();
 	initComputePipeline();
+	initTestPipeline();
 
 	initParticlesBuffers();
 
@@ -58,10 +59,10 @@ void Renderer::draw()
 
 	m_device.recordRenderPass(*currentDrawPassPtr);
 	m_device.recordRenderPass(drawParticlesPass);
-	//for (const auto& renderPass : renderPasses)
-	//{
-	//	recordRenderPass(commandBuffer, renderPass);
-	//}
+	for (const auto& renderPass : renderPasses)
+	{
+		m_device.recordRenderPass(renderPass);
+	}
 
 
 	m_device.recordImGui();
@@ -93,7 +94,7 @@ void Renderer::drawImgui()
 			sprintf(label, "Object %d", i);
 			if (ImGui::TreeNode(p.name.c_str()))
 			{
-				ImGui::SliderFloat3("Translate", p.transform.translation, 0.0f, 1.0f);
+				ImGui::SliderFloat3("Translate", p.transform.translation, -5.0f, 5.0f);
 				ImGui::SliderFloat3("Rot", p.transform.rotation, 0.0f, 1.0f);
 				ImGui::SliderFloat3("Scale", p.transform.scale, 0.0f, 4.0f);
 
@@ -113,12 +114,14 @@ void Renderer::drawRenderPass() {
 void Renderer::initPipeline() 
 {
 	auto attributeDescriptions = Vertex::getAttributeDescriptions();
+	auto bindingDescription = Vertex::getBindingDescription();
 
 	PipelineDesc desc = {
 		.type = PipelineType::Graphics,
 		.vertexShader = "./shaders/basic.vert.spv",
 		.pixelShader = "./shaders/basic.frag.spv",
 
+		.bindingDescription = &bindingDescription,
 		.attributeDescriptions = attributeDescriptions.data(),
 		.attributeDescriptionsCount = attributeDescriptions.size(),
 
@@ -202,11 +205,14 @@ void Renderer::initComputePipeline()
 
 	{
 		auto attributeDescriptions = Particle::getAttributeDescriptions();
+		auto bindingDescription = Particle::getBindingDescription();
+
 		PipelineDesc desc = {
 			.type = PipelineType::Graphics,
 			.vertexShader = "./shaders/particles.vert.spv",
 			.pixelShader = "./shaders/particles.frag.spv",
 
+			.bindingDescription = &bindingDescription,
 			.attributeDescriptions = attributeDescriptions.data(),
 			.attributeDescriptionsCount = attributeDescriptions.size(),
 
@@ -227,6 +233,71 @@ void Renderer::initComputePipeline()
 		drawParticlesPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 	}
 }
+
+
+
+
+static GpuImage test_images[2];
+static GpuImage test_depth;
+
+void drawTest(Device& device)
+{
+	auto c = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+	device.pushConstants(&c, sizeof(glm::vec4));
+	device.drawCommand(3);
+}
+
+void Renderer::initTestPipeline()
+{
+	auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
+	PipelineDesc desc = {
+		.type = PipelineType::Graphics,
+		.vertexShader = "./shaders/fill.vert.spv",
+		.pixelShader = "./shaders/fill.frag.spv",
+
+		.blendMode = BlendMode::Opaque,
+		.topology = PrimitiveToplogy::TriangleList,
+		.bindings = {
+		},
+		.pushConstantsRanges = {
+			{
+				.offset = 0,
+				.size = sizeof(float[4]), //size of vec4 color
+				.stageFlags = e_Vertex
+			}
+		}
+	};
+
+
+
+	
+	m_device.createRenderTarget(800,600, test_images[0], false);
+	m_device.createRenderTarget(800,600, test_images[1], false);
+	m_device.createDepthTarget(800, 600, test_depth, false);
+
+	RenderPassDesc renderPassDesc = {
+		.framebufferDesc = {
+			.images = {test_images[0], test_images[1]},
+			.depth = &test_depth,
+			.width = 800,
+			.height = 600,
+		},
+		.colorAttachement_count = 1,
+		.hasDepth = false,
+		.useMsaa = false,
+		.doClear = true,
+		.drawFunction = [&]() { drawTest(m_device); }
+	};
+
+	renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
+
+	renderPasses.push_back(renderPass);
+
+}
+
+
+
 
 void Renderer::initParticlesBuffers()
 {

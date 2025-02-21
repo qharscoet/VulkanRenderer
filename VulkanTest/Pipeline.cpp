@@ -9,6 +9,9 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 
+#include <ranges>
+#include <algorithm>
+#include <numeric>
 
 VkDescriptorSetLayout Device::createDescriptorSetLayout(BindingDesc* bindingDescs, size_t count) {
 	VkDescriptorSetLayout out_layout;
@@ -112,23 +115,25 @@ VkRenderPass Device::createRenderPass(RenderPassDesc desc)
 
 	VkRenderPass out_renderPass;
 
+	size_t colorAttachment_count = std::max(desc.framebufferDesc.images.size(), (size_t)1);
+
 	std::vector<VkAttachmentDescription> colorAttachments;
 	std::vector<VkAttachmentReference> colorAttachmentRefs;
-	colorAttachments.resize(desc.colorAttachement_count);
-	colorAttachmentRefs.resize(desc.colorAttachement_count);
+	colorAttachments.resize(colorAttachment_count);
+	colorAttachmentRefs.resize(colorAttachment_count);
 
 	VkAttachmentLoadOp loadOp = desc.doClear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
 
 	for (size_t i = 0; i < colorAttachments.size(); i++)
 	{
 		colorAttachments[i].format = swapChainImageFormat;
-		colorAttachments[i].samples = desc.useMsaa ?msaaSamples: VK_SAMPLE_COUNT_1_BIT;
+		colorAttachments[i].samples = desc.useMsaa ? msaaSamples : VK_SAMPLE_COUNT_1_BIT;
 		colorAttachments[i].loadOp = loadOp;
 		colorAttachments[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		colorAttachments[i].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		colorAttachments[i].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		colorAttachments[i].finalLayout = desc.useMsaa ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL: VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-		colorAttachments[i].initialLayout = desc.doClear? VK_IMAGE_LAYOUT_UNDEFINED: colorAttachments[i].finalLayout;
+		colorAttachments[i].finalLayout = desc.useMsaa ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		colorAttachments[i].initialLayout = desc.doClear ? VK_IMAGE_LAYOUT_UNDEFINED : colorAttachments[i].finalLayout;
 
 		colorAttachmentRefs[i].attachment = i;
 		colorAttachmentRefs[i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -138,14 +143,14 @@ VkRenderPass Device::createRenderPass(RenderPassDesc desc)
 	depthAttachment.format = findDepthFormat();
 	depthAttachment.samples = desc.useMsaa ? msaaSamples : VK_SAMPLE_COUNT_1_BIT;
 	depthAttachment.loadOp = loadOp;
-	depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	depthAttachment.initialLayout = desc.doClear ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;;
 	depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 	VkAttachmentReference depthAttachmentRef{};
-	depthAttachmentRef.attachment = desc.colorAttachement_count;
+	depthAttachmentRef.attachment = colorAttachment_count;
 	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 	VkAttachmentDescription colorAttachmentResolve{};
@@ -159,20 +164,27 @@ VkRenderPass Device::createRenderPass(RenderPassDesc desc)
 	colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
 	VkAttachmentReference colorAttachmentResolveRef{};
-	colorAttachmentResolveRef.attachment = desc.colorAttachement_count + 1;
+	colorAttachmentResolveRef.attachment = colorAttachment_count + 1;
 	colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 	VkSubpassDescription subpass{};
 	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass.colorAttachmentCount = desc.colorAttachement_count;
+	subpass.colorAttachmentCount = colorAttachment_count;
 	subpass.pColorAttachments = colorAttachmentRefs.data();
 	subpass.pDepthStencilAttachment = desc.hasDepth? &depthAttachmentRef: nullptr;
 	subpass.pResolveAttachments = desc.useMsaa ? &colorAttachmentResolveRef : nullptr;
 
-	std::array<VkAttachmentDescription, 3> attachments = { colorAttachments[0], depthAttachment, colorAttachmentResolve };
+	std::vector<VkAttachmentDescription> attachments;// = { colorAttachments[0], depthAttachment, colorAttachmentResolve };
+	attachments.reserve(colorAttachment_count + desc.hasDepth + desc.useMsaa);
+	attachments.insert(attachments.end(), colorAttachments.begin(), colorAttachments.end());
+	if (desc.hasDepth)
+		attachments.push_back(depthAttachment);
+	if (desc.useMsaa)
+		attachments.push_back(colorAttachmentResolve);
+
 	VkRenderPassCreateInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	renderPassInfo.attachmentCount = 1 + desc.hasDepth + desc.useMsaa;// attachments.size();
+	renderPassInfo.attachmentCount = attachments.size();
 	renderPassInfo.pAttachments = attachments.data();
 	renderPassInfo.subpassCount = 1;
 	renderPassInfo.pSubpasses = &subpass;
@@ -236,11 +248,9 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
 	//TODO : get that trhough shader reflection
-	auto bindingDescription = Vertex::getBindingDescription();
-
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.vertexBindingDescriptionCount = desc.bindingDescription == nullptr ? 0 : 1;
+	vertexInputInfo.pVertexBindingDescriptions = desc.bindingDescription;
 	vertexInputInfo.vertexAttributeDescriptionCount = desc.attributeDescriptionsCount;
-	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
 	vertexInputInfo.pVertexAttributeDescriptions = desc.attributeDescriptions;
 
 
@@ -316,39 +326,45 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	depthStencil.back = {}; // Optional
 
 	// Opaque
-	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-	switch (desc.blendMode)
-	{
-	case BlendMode::Opaque:
-		colorBlendAttachment.blendEnable = VK_FALSE;
-		colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-		colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-		colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
-		colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-		colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-		colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
-		break;
-	case BlendMode::AlphaBlend:
-		colorBlendAttachment.blendEnable = VK_TRUE;
-		colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-		colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-		colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-		colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-		colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-		colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
-		break;
+	std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments{};
+	colorBlendAttachments.resize(desc.attachmentCount);
 
-	default:
-		break;
+	for (int i = 0; i < desc.attachmentCount; i++)
+	{
+		VkPipelineColorBlendAttachmentState& colorBlendAttachment = colorBlendAttachments[i];
+		colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+		switch (desc.blendMode)
+		{
+		case BlendMode::Opaque:
+			colorBlendAttachment.blendEnable = VK_FALSE;
+			colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+			colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+			colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
+			colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+			colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+			colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+			break;
+		case BlendMode::AlphaBlend:
+			colorBlendAttachment.blendEnable = VK_TRUE;
+			colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+			colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+			colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+			colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+			break;
+
+		default:
+			break;
+		}
 	}
 
 	VkPipelineColorBlendStateCreateInfo colorBlending{};
 	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	colorBlending.logicOpEnable = VK_FALSE;
 	colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
-	colorBlending.attachmentCount = 1;
-	colorBlending.pAttachments = &colorBlendAttachment;
+	colorBlending.attachmentCount = colorBlendAttachments.size();
+	colorBlending.pAttachments = colorBlendAttachments.data();
 	colorBlending.blendConstants[0] = 0.0f; // Optional
 	colorBlending.blendConstants[1] = 0.0f; // Optional
 	colorBlending.blendConstants[2] = 0.0f; // Optional
@@ -399,7 +415,7 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	pipelineInfo.pViewportState = &viewportState;
 	pipelineInfo.pRasterizationState = &rasterizer;
 	pipelineInfo.pMultisampleState = &multisampling;
-	pipelineInfo.pDepthStencilState = &depthStencil; // Optional
+	pipelineInfo.pDepthStencilState = desc.hasDepth? &depthStencil:nullptr; // Optional
 	pipelineInfo.pColorBlendState = &colorBlending;
 	pipelineInfo.pDynamicState = &dynamicState;
 
@@ -489,9 +505,47 @@ RenderPass Device::createRenderPassAndPipeline(RenderPassDesc renderPassDesc, Pi
 
 	pipelineDesc.renderPass = renderpass;
 	pipelineDesc.useMsaa = renderPassDesc.useMsaa;
+	pipelineDesc.hasDepth = renderPassDesc.hasDepth;
+	pipelineDesc.attachmentCount = std::max(renderPassDesc.framebufferDesc.images.size(), (size_t)1);
 	Pipeline pipeline = createPipeline(pipelineDesc);
 
-	return { renderpass, pipeline, renderPassDesc.drawFunction };
+	VkFramebuffer framebuffer = VK_NULL_HANDLE;
+	if (renderPassDesc.framebufferDesc.images.size() > 0)
+	{
+
+		auto& images = renderPassDesc.framebufferDesc.images;
+		std::vector<VkImageView> imageViews;
+		imageViews.reserve(renderPassDesc.framebufferDesc.images.size());
+		std::transform(images.begin(), images.end(), std::back_inserter(imageViews), [](GpuImage& I) {return I.view; });
+
+		if (renderPassDesc.hasDepth && renderPassDesc.framebufferDesc.depth != nullptr)
+		{
+			imageViews.push_back(renderPassDesc.framebufferDesc.depth->view);
+		}
+
+		VkFramebufferCreateInfo framebufferInfo{};
+		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		framebufferInfo.renderPass = renderpass;
+		framebufferInfo.attachmentCount = imageViews.size();
+		framebufferInfo.pAttachments = imageViews.data();
+		framebufferInfo.width = renderPassDesc.framebufferDesc.width;
+		framebufferInfo.height = renderPassDesc.framebufferDesc.height;
+		framebufferInfo.layers = 1;
+
+		if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &framebuffer) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create framebuffer!");
+		}
+	}
+
+	return {
+		.renderPass = renderpass,
+		.colorAttachement_count = pipelineDesc.attachmentCount,
+		.hasDepth = renderPassDesc.hasDepth,
+		.pipeline = pipeline,
+		.framebuffer = framebuffer,
+		.extent = { renderPassDesc.framebufferDesc.width, renderPassDesc.framebufferDesc.height },
+		.draw = renderPassDesc.drawFunction 
+	};
 }
 
 void Device::setRenderPass(RenderPass renderPass)
@@ -530,6 +584,16 @@ void Device::drawCommand(uint32_t vertex_count)
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 
 	vkCmdDraw(commandBuffer, vertex_count, 1, 0, 0);
+}
+
+void Device::pushConstants(void* data, uint32_t size, VkPipelineLayout pipelineLayout)
+{
+
+	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
+
+	VkPipelineLayout layout = (pipelineLayout == VK_NULL_HANDLE) ? currentRenderPass.pipeline.pipelineLayout : pipelineLayout;
+
+	vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, size, data);
 }
 
 void Device::drawPacket(const MeshPacket& packet)
@@ -591,16 +655,23 @@ void Device::destroyRenderPass(RenderPass renderPass)
 void Device::recordRenderPass(VkCommandBuffer commandBuffer, const RenderPass& renderPass)
 {
 
+	currentRenderPass = renderPass;
 	VkRenderPassBeginInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderPassInfo.renderPass = renderPass.renderPass;
-	renderPassInfo.framebuffer = swapChainFramebuffers[current_framebuffer_idx];
+	renderPassInfo.framebuffer = renderPass.framebuffer != VK_NULL_HANDLE ? renderPass.framebuffer : swapChainFramebuffers[current_framebuffer_idx];
 	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = swapChainExtent;
+	renderPassInfo.renderArea.extent = renderPass.framebuffer != VK_NULL_HANDLE ?  renderPass.extent : swapChainExtent;
 
-	std::array<VkClearValue, 2> clearValues{};
-	clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
-	clearValues[1].depthStencil = { 1.0f, 0 };
+	std::vector<VkClearValue> clearValues{};
+	clearValues.resize(renderPass.colorAttachement_count + (renderPass.hasDepth ? 1 : 0));
+	for (int i = 0; i < renderPass.colorAttachement_count; i++)
+	{
+		clearValues[i].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+	}
+
+	if (renderPass.hasDepth)
+		clearValues.back().depthStencil = {1.0f, 0};
 
 	renderPassInfo.clearValueCount = clearValues.size();
 	renderPassInfo.pClearValues = clearValues.data();

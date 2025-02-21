@@ -3,7 +3,6 @@
 #include <vector>
 #include <functional>
 
-
 enum class BlendMode {
 	Opaque,
 	AlphaBlend
@@ -50,6 +49,7 @@ struct PipelineDesc {
 	const char* pixelShader;
 	const char* computeShader;
 
+	VkVertexInputBindingDescription* bindingDescription;
 	VkVertexInputAttributeDescription* attributeDescriptions;
 	uint32_t attributeDescriptionsCount;
 
@@ -63,7 +63,17 @@ struct PipelineDesc {
 	bool isWireframe;
 
 	VkRenderPass renderPass;
+	bool hasDepth;
 	bool useMsaa;
+	uint32_t attachmentCount;
+};
+
+struct GpuImage;
+struct FramebufferDesc {
+	std::vector<GpuImage> images;
+	GpuImage* depth;
+	uint32_t width;
+	uint32_t height;
 };
 
 //function pointer to a void(void) function
@@ -71,6 +81,7 @@ typedef void(*DrawFunctionPtr)();
 
 struct RenderPassDesc
 {
+	FramebufferDesc framebufferDesc;
 	uint8_t colorAttachement_count;
 	bool hasDepth;
 	bool useMsaa;
@@ -90,8 +101,14 @@ struct Pipeline {
 
 struct RenderPass {
 	VkRenderPass renderPass;
+	uint32_t colorAttachement_count;
+	bool hasDepth;
 	
 	Pipeline pipeline;
+
+	//TODO : put that somewhere else
+	VkFramebuffer framebuffer;
+	VkExtent2D extent;
 
 	std::function<void()> draw;
 };
