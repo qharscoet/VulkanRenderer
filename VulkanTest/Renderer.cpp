@@ -14,6 +14,7 @@ void Renderer::init(GLFWwindow* window, DeviceOptions options)
 	initPipeline();
 	initComputePipeline();
 	initTestPipeline();
+	initTestPipeline2();
 
 	initParticlesBuffers();
 
@@ -59,7 +60,7 @@ void Renderer::draw()
 
 	m_device.recordRenderPass(*currentDrawPassPtr);
 	m_device.recordRenderPass(drawParticlesPass);
-	for (const auto& renderPass : renderPasses)
+	for (auto& renderPass : renderPasses)
 	{
 		m_device.recordRenderPass(renderPass);
 	}
@@ -153,6 +154,7 @@ void Renderer::initPipeline()
 		.hasDepth = true,
 		.useMsaa = false,
 		.doClear = true,
+		.writeSwapChain = true,
 		.drawFunction = [&]() { drawRenderPass(); }
 	};
 
@@ -239,6 +241,7 @@ void Renderer::initComputePipeline()
 
 static GpuImage test_images[2];
 static GpuImage test_depth;
+static VkSampler defaultSampler;
 
 void drawTest(Device& device)
 {
@@ -268,26 +271,74 @@ void Renderer::initTestPipeline()
 			}
 		}
 	};
-
-
-
 	
-	m_device.createRenderTarget(800,600, test_images[0], false);
-	m_device.createRenderTarget(800,600, test_images[1], false);
+	m_device.createRenderTarget(800,600, test_images[0], false, true);
+	m_device.createRenderTarget(800,600, test_images[1], false, true);
 	m_device.createDepthTarget(800, 600, test_depth, false);
+	defaultSampler = m_device.createTextureSampler(1);
 
 	RenderPassDesc renderPassDesc = {
 		.framebufferDesc = {
-			.images = {test_images[0], test_images[1]},
+			.images = {&test_images[0], &test_images[1]},
 			.depth = &test_depth,
 			.width = 800,
 			.height = 600,
 		},
 		.colorAttachement_count = 1,
-		.hasDepth = false,
+		.hasDepth = true,
 		.useMsaa = false,
 		.doClear = true,
-		.drawFunction = [&]() { drawTest(m_device); }
+		.drawFunction = [&]() { drawTest(m_device); },
+		.postDrawBarriers = {
+			 {
+				.image = &test_images[0],
+				.oldLayout = ImageLayout::RenderTarget,
+				.newLayout = ImageLayout::ShaderRead,
+				.mipLevels = 1
+			}
+		}
+	};
+
+	renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
+
+	renderPasses.push_back(renderPass);
+
+}
+
+
+void drawTest2(Device& device)
+{
+	device.bindTexture(test_images[0], defaultSampler);
+	device.drawCommand(4);
+}
+
+
+void Renderer::initTestPipeline2()
+{
+	auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
+	PipelineDesc desc = {
+		.type = PipelineType::Graphics,
+		.vertexShader = "./shaders/blit.vert.spv",
+		.pixelShader = "./shaders/blit.frag.spv",
+
+		.blendMode = BlendMode::Opaque,
+		.topology = PrimitiveToplogy::TriangleStrip,
+		.bindings = {
+			{
+				.slot = 0,
+				.type = BindingType::ImageSampler,
+				.stageFlags = e_Pixel,
+			}
+		},
+	};
+
+	RenderPassDesc renderPassDesc = {
+		.colorAttachement_count = 1,
+		.hasDepth = true,
+		.useMsaa = device_options.usesMsaa,
+		.doClear = false,
+		.drawFunction = [&]() { drawTest2(m_device); }
 	};
 
 	renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);

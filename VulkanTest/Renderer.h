@@ -57,8 +57,8 @@ private:
 
 	std::vector<RenderPass> renderPasses;
 
-	const RenderPass* currentDrawPassPtr;
-	std::optional<const RenderPass*> nextRenderPassPtr;
+	RenderPass* currentDrawPassPtr;
+	std::optional<RenderPass*> nextRenderPassPtr;
 
 
 	Pipeline computePipeline;
@@ -81,6 +81,7 @@ private:
 	void initPipeline();
 	void initComputePipeline();
 	void initTestPipeline();
+	void initTestPipeline2();
 
 	void initParticlesBuffers();
 	void cleanupParticles();

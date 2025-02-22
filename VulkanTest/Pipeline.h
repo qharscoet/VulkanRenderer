@@ -11,6 +11,7 @@ enum class BlendMode {
 enum class PrimitiveToplogy {
 	PointList,
 	TriangleList,
+	TriangleStrip,
 };
 
 enum class BindingType {
@@ -70,10 +71,28 @@ struct PipelineDesc {
 
 struct GpuImage;
 struct FramebufferDesc {
-	std::vector<GpuImage> images;
+	std::vector<const GpuImage*> images;
 	GpuImage* depth;
 	uint32_t width;
 	uint32_t height;
+};
+
+enum ImageLayout {
+	Undefined,
+	TransferSrc,
+	TransferDst,
+	RenderTarget,
+	ShaderRead,
+	SwapChain,
+
+	Nb
+};
+
+struct BarrierDesc {
+	const GpuImage* image;
+	ImageLayout oldLayout;
+	ImageLayout newLayout;
+	uint32_t mipLevels;
 };
 
 //function pointer to a void(void) function
@@ -86,14 +105,17 @@ struct RenderPassDesc
 	bool hasDepth;
 	bool useMsaa;
 	bool doClear;
+	bool writeSwapChain;
 
 	std::function<void()> drawFunction;
+	std::vector<BarrierDesc> postDrawBarriers;
 };
 
 struct Pipeline {
 	VkRenderPass renderPass;
 	VkDescriptorSetLayout descriptorSetLayout;
 	std::vector<VkDescriptorSet> descriptorSets;
+	std::unordered_map<const GpuImage*, VkDescriptorSet> descriptorSetsMap;
 	VkDescriptorPool descriptorPool;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
@@ -109,6 +131,8 @@ struct RenderPass {
 	//TODO : put that somewhere else
 	VkFramebuffer framebuffer;
 	VkExtent2D extent;
+
+	std::vector<BarrierDesc> postDrawBarriers;
 
 	std::function<void()> draw;
 };

@@ -771,7 +771,7 @@ void Device::createUniformBuffers() {
 
 void Device::createComputeDescriptorSets(const Pipeline& computePipeline) {
 	computeDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-	createDescriptorSets(computePipeline.descriptorSetLayout, computePipeline.descriptorPool, computeDescriptorSets.data());
+	createDescriptorSets(computePipeline.descriptorSetLayout, computePipeline.descriptorPool, computeDescriptorSets.data(), MAX_FRAMES_IN_FLIGHT);
 }
 
 void Device::updateDescriptorSet(VkImageView imageView, VkSampler sampler, VkDescriptorSet set) {
@@ -1482,7 +1482,7 @@ GpuImage Device::createTexture(Texture tex)
 }
 
 
-void Device::createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa)
+void Device::createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa, bool sampled)
 {
 	ImageDesc desc = {
 		.width = width,
@@ -1491,7 +1491,8 @@ void Device::createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_i
 		.numSamples = msaa ? msaaSamples : VK_SAMPLE_COUNT_1_BIT,
 		.format = swapChainImageFormat,
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
-		.usage_flags = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+		// TODO : check if we need to add VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT
+		.usage_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | (sampled ? VK_IMAGE_USAGE_SAMPLED_BIT : 0u),
 		.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
@@ -1676,8 +1677,8 @@ inline Device::MyCommandBuffer Device::getCommandBuffer()
 	return tmpCommandBuffer ? MyCommandBuffer(tmpCommandBuffer) : std::move(ScopedCommandBuffer(this));
 }
 
-void Device::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels) {
-	MyCommandBuffer commandBuffer = getCommandBuffer();
+void Device::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels, VkCommandBuffer cb) {
+	MyCommandBuffer commandBuffer = cb != VK_NULL_HANDLE?MyCommandBuffer(cb):getCommandBuffer();
 	
 	VkImageMemoryBarrier barrier{};
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1711,6 +1712,14 @@ void Device::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout
 		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
 		sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	}
+	else if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+	{
+		barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 	}
 	else {

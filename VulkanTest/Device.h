@@ -93,12 +93,6 @@ struct MeshPacket {
 	Mesh_InternalData internalData;
 };
 
-struct BarrierDesc {
-	VkImageLayout oldLayout;
-	VkImageLayout newLayout;
-	uint32_t mipLevels;
-};
-
 struct Vertex {
 	glm::vec3 pos;
 	glm::vec3 color;
@@ -209,7 +203,7 @@ private:
 	bool usesMsaa;
 
 
-	RenderPass currentRenderPass;
+	RenderPass* currentRenderPass;
 
 
 	std::vector<VkBuffer> uniformBuffers;
@@ -370,7 +364,7 @@ private:
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& out_buffer, VkDeviceMemory& out_bufferMemory);
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 	
-	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
+	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels, VkCommandBuffer cb = VK_NULL_HANDLE );
 	void generateMipmaps(VkImage image, VkFormat format, int32_t texWidth, int32_t texheight, uint32_t mipLevels);
 	void createImage(ImageDesc desc, GpuImage& out_image);
 	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
@@ -382,7 +376,7 @@ public:
 	void destroyBuffer(Buffer buffer);
 
 	GpuImage createTexture(Texture tex);
-	void  createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa);
+	void  createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa, bool sampled = false);
 	void createDepthTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa);
 	void destroyImage(GpuImage image);
 
@@ -405,25 +399,27 @@ private:
 
 	VkRenderPass createRenderPass(RenderPassDesc desc);
 	VkDescriptorSetLayout createDescriptorSetLayout(BindingDesc* bindings, size_t count);
-	void createDescriptorSets(VkDescriptorSetLayout layout, VkDescriptorPool pool, VkDescriptorSet* out_sets);
-	void recordRenderPass(VkCommandBuffer commandBuffer, const RenderPass& renderPass);
+	void createDescriptorSets(VkDescriptorSetLayout layout, VkDescriptorPool pool, VkDescriptorSet* out_sets, uint32_t count);
+	void recordRenderPass(VkCommandBuffer commandBuffer, RenderPass& renderPass);
 
 public:
 
 	Pipeline createPipeline(PipelineDesc desc);
 	Pipeline createComputePipeline(PipelineDesc desc);
 	RenderPass createRenderPassAndPipeline(RenderPassDesc renderPassDesc, PipelineDesc pipelineDesc);
-	void setRenderPass(RenderPass renderPass);
+	void setRenderPass(RenderPass& renderPass);
 	MeshPacket createPacket(Mesh& mesh, Texture& tex);
 	void drawPacket(const MeshPacket& packet);
 	void destroyPipeline(Pipeline pipeline);
 	void destroyRenderPass(RenderPass renderPass);
 
 	void bindVertexBuffer(Buffer& buffer);
+	void bindTexture(const GpuImage& image, VkSampler sampler);
+	void transitionImage(BarrierDesc desc);
 	void drawCommand(uint32_t vertex_count);
 	void pushConstants(void* data, uint32_t size, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE);
 
-	void recordRenderPass(const RenderPass& renderPass);
+	void recordRenderPass(RenderPass& renderPass);
 	void recordImGui();
 
 	VkDescriptorPool createDescriptorPool(BindingDesc* bindingDescs, size_t count);

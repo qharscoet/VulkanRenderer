@@ -13,6 +13,17 @@
 #include <algorithm>
 #include <numeric>
 
+//#include <glm/gtx/hash.hpp>
+
+inline void hash_combine(size_t& seed, size_t hash)
+{
+	//TODO : remove the call and steal the algo ?
+	//glm::detail::hash_combine(seed, hash);
+
+	hash += 0x9e3779b9 + (seed << 6) + (seed >> 2);
+	seed ^= hash;
+}
+
 VkDescriptorSetLayout Device::createDescriptorSetLayout(BindingDesc* bindingDescs, size_t count) {
 	VkDescriptorSetLayout out_layout;
 
@@ -91,14 +102,14 @@ VkDescriptorPool Device::createDescriptorPool(BindingDesc* bindingDescs, size_t 
 	return out_pool;
 }
 
-void Device::createDescriptorSets(VkDescriptorSetLayout layout, VkDescriptorPool pool, VkDescriptorSet* out_sets)
+void Device::createDescriptorSets(VkDescriptorSetLayout layout, VkDescriptorPool pool, VkDescriptorSet* out_sets, uint32_t count)
 {
-	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, layout);
+	std::vector<VkDescriptorSetLayout> layouts(count, layout);
 
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = pool;
-	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	allocInfo.descriptorSetCount = count; //TODO: Fix count
 	allocInfo.pSetLayouts = layouts.data();
 
 	if (vkAllocateDescriptorSets(device, &allocInfo, out_sets) != VK_SUCCESS) {
@@ -132,7 +143,7 @@ VkRenderPass Device::createRenderPass(RenderPassDesc desc)
 		colorAttachments[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		colorAttachments[i].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		colorAttachments[i].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		colorAttachments[i].finalLayout = desc.useMsaa ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		colorAttachments[i].finalLayout = (desc.useMsaa || !desc.writeSwapChain)? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 		colorAttachments[i].initialLayout = desc.doClear ? VK_IMAGE_LAYOUT_UNDEFINED : colorAttachments[i].finalLayout;
 
 		colorAttachmentRefs[i].attachment = i;
@@ -260,6 +271,7 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	{
 	case PrimitiveToplogy::PointList: topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST; break;
 	case PrimitiveToplogy::TriangleList: topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; break;
+	case PrimitiveToplogy::TriangleStrip: topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP; break;
 	}
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -440,7 +452,7 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	out_pipeline.descriptorPool = createDescriptorPool(desc.bindings.data(), desc.bindings.size());;
 
 	out_pipeline.descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-	createDescriptorSets(setLayout, out_pipeline.descriptorPool, out_pipeline.descriptorSets.data());
+	//createDescriptorSets(setLayout, out_pipeline.descriptorPool, out_pipeline.descriptorSets.data());
 
 	return out_pipeline;
 }
@@ -516,7 +528,7 @@ RenderPass Device::createRenderPassAndPipeline(RenderPassDesc renderPassDesc, Pi
 		auto& images = renderPassDesc.framebufferDesc.images;
 		std::vector<VkImageView> imageViews;
 		imageViews.reserve(renderPassDesc.framebufferDesc.images.size());
-		std::transform(images.begin(), images.end(), std::back_inserter(imageViews), [](GpuImage& I) {return I.view; });
+		std::transform(images.begin(), images.end(), std::back_inserter(imageViews), [](const GpuImage* I) {return I->view; });
 
 		if (renderPassDesc.hasDepth && renderPassDesc.framebufferDesc.depth != nullptr)
 		{
@@ -544,13 +556,14 @@ RenderPass Device::createRenderPassAndPipeline(RenderPassDesc renderPassDesc, Pi
 		.pipeline = pipeline,
 		.framebuffer = framebuffer,
 		.extent = { renderPassDesc.framebufferDesc.width, renderPassDesc.framebufferDesc.height },
+		.postDrawBarriers = renderPassDesc.postDrawBarriers,
 		.draw = renderPassDesc.drawFunction 
 	};
 }
 
-void Device::setRenderPass(RenderPass renderPass)
+void Device::setRenderPass(RenderPass& renderPass)
 {
-	currentRenderPass = renderPass;
+	currentRenderPass = &renderPass;
 }
 
 
@@ -564,7 +577,7 @@ MeshPacket Device::createPacket(Mesh& mesh, Texture& tex)
 	out_packet.texture = this->createTexture(tex);
 	out_packet.sampler = this->createTextureSampler(out_packet.texture.mipLevels);
 
-	createDescriptorSets(currentRenderPass.pipeline.descriptorSetLayout, currentRenderPass.pipeline.descriptorPool, &out_packet.internalData.descriptorSet);
+	createDescriptorSets(currentRenderPass->pipeline.descriptorSetLayout, currentRenderPass->pipeline.descriptorPool, &out_packet.internalData.descriptorSet, 1);
 	updateDescriptorSet(out_packet.texture.view, out_packet.sampler, out_packet.internalData.descriptorSet);
 
 	return out_packet;
@@ -579,6 +592,69 @@ void Device::bindVertexBuffer(Buffer& buffer)
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 }
 
+void Device::bindTexture(const GpuImage& image, VkSampler sampler)
+{
+	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
+
+	VkDescriptorPool descriptorPool = currentRenderPass->pipeline.descriptorPool;
+	VkDescriptorSetLayout descriptorSetLayout = currentRenderPass->pipeline.descriptorSetLayout;
+
+	if (currentRenderPass->pipeline.descriptorSetsMap.contains(&image))
+	{
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &currentRenderPass->pipeline.descriptorSetsMap[&image], 0, nullptr);
+		return;
+	}
+	else {
+		VkDescriptorSet descriptorSet;
+		createDescriptorSets(descriptorSetLayout, descriptorPool, &descriptorSet, 1);
+		
+			//updateDescriptorSet(image.view, sampler, descriptorSet);
+
+			VkDescriptorImageInfo imageInfo{ };
+			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo.imageView = image.view;
+			imageInfo.sampler = sampler;
+
+			VkWriteDescriptorSet descriptorWrite{};
+
+			descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrite.dstSet = descriptorSet;
+			descriptorWrite.dstBinding = 0;
+			descriptorWrite.dstArrayElement = 0;
+			descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptorWrite.descriptorCount = 1;
+			descriptorWrite.pBufferInfo = nullptr;
+			descriptorWrite.pImageInfo = &imageInfo; // Optional
+			descriptorWrite.pTexelBufferView = nullptr; // Optional
+
+			vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+		
+		currentRenderPass->pipeline.descriptorSetsMap[&image] = descriptorSet;
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+	}
+
+	//std::hash<T> hasher;
+	//glm::detail::hash_combine(seed, hasher(v));
+
+
+	//vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &image.descriptorSet, 0, nullptr);
+}
+
+void Device::transitionImage(BarrierDesc desc)
+{
+	const VkImageLayout layoutMap[ImageLayout::Nb] = {
+		VK_IMAGE_LAYOUT_UNDEFINED,
+		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+	};
+
+	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
+	transitionImageLayout(desc.image->image, VK_FORMAT_R8G8B8A8_SRGB, layoutMap[desc.oldLayout], layoutMap[desc.newLayout], desc.mipLevels, commandBuffer);
+}
+
 void Device::drawCommand(uint32_t vertex_count)
 {
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
@@ -591,7 +667,7 @@ void Device::pushConstants(void* data, uint32_t size, VkPipelineLayout pipelineL
 
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 
-	VkPipelineLayout layout = (pipelineLayout == VK_NULL_HANDLE) ? currentRenderPass.pipeline.pipelineLayout : pipelineLayout;
+	VkPipelineLayout layout = (pipelineLayout == VK_NULL_HANDLE) ? currentRenderPass->pipeline.pipelineLayout : pipelineLayout;
 
 	vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, size, data);
 }
@@ -602,7 +678,7 @@ void Device::drawPacket(const MeshPacket& packet)
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 
 	//UBO
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass.pipeline.pipelineLayout, 0, 1, &packet.internalData.descriptorSet, 0, nullptr);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &packet.internalData.descriptorSet, 0, nullptr);
 
 
 	{
@@ -616,7 +692,7 @@ void Device::drawPacket(const MeshPacket& packet)
 		model = glm::rotate(model, rotation[2] * glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 		model = glm::scale(model, glm::vec3(scale[0], scale[1], scale[2]));
 
-		vkCmdPushConstants(commandBuffer, currentRenderPass.pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPacket::PushConstantsData), &model);
+		vkCmdPushConstants(commandBuffer, currentRenderPass->pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPacket::PushConstantsData), &model);
 	}
 
 	{
@@ -652,10 +728,10 @@ void Device::destroyRenderPass(RenderPass renderPass)
 	destroyPipeline(renderPass.pipeline);
 }
 
-void Device::recordRenderPass(VkCommandBuffer commandBuffer, const RenderPass& renderPass)
+void Device::recordRenderPass(VkCommandBuffer commandBuffer, RenderPass& renderPass)
 {
 
-	currentRenderPass = renderPass;
+	currentRenderPass = &renderPass;
 	VkRenderPassBeginInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderPassInfo.renderPass = renderPass.renderPass;
@@ -686,9 +762,14 @@ void Device::recordRenderPass(VkCommandBuffer commandBuffer, const RenderPass& r
 
 	vkCmdEndRenderPass(commandBuffer);
 
+	for(const auto& barrier : renderPass.postDrawBarriers)
+	{
+		transitionImage(barrier);
+	}
+
 }
 
-void Device::recordRenderPass(const RenderPass& renderPass)
+void Device::recordRenderPass(RenderPass& renderPass)
 {
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 	recordRenderPass(commandBuffer, renderPass);
