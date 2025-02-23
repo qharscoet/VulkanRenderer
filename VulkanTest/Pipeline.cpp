@@ -24,6 +24,21 @@ inline void hash_combine(size_t& seed, size_t hash)
 	seed ^= hash;
 }
 
+static const float debug_colors[][4] = {
+	{ 1.0f, 1.0f, 1.0f, 1.0f }, //White
+	{ 0.0f, 0.0f, 0.0f, 0.0f }, //Black
+	{ 1.0f, 0.0f, 0.0f, 1.0f }, //Red
+	{ 0.0f, 1.0f, 0.0f, 1.0f }, //Green
+	{ 0.0f, 0.0f, 1.0f, 1.0f }, //Blue
+	{ 1.0f, 1.0f, 0.0f, 1.0f }, //Yellow
+	{ 1.0f, 0.0f, 1.0f, 1.0f }, //Magenta
+	{ 0.0f, 1.0f, 1.0f, 1.0f }, //Cyan
+	{ 0.5f, 0.5f, 0.5f, 1.0f }, //Grey
+};
+
+
+static_assert(sizeof(debug_colors) / sizeof(debug_colors[0]) == (int)DebugColor::Nb, "Debug colors array size mismatch");
+
 VkDescriptorSetLayout Device::createDescriptorSetLayout(BindingDesc* bindingDescs, size_t count) {
 	VkDescriptorSetLayout out_layout;
 
@@ -228,6 +243,9 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 
 	VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
 	VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+
+	SetShaderModuleName(vertShaderModule, desc.vertexShader);
+	SetShaderModuleName(fragShaderModule, desc.pixelShader);
 
 	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -549,6 +567,14 @@ RenderPass Device::createRenderPassAndPipeline(RenderPassDesc renderPassDesc, Pi
 		}
 	}
 
+	VkDebugUtilsLabelEXT markerInfo = {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+			.pLabelName = renderPassDesc.debugInfo.name,
+	};
+	memcpy(markerInfo.color, debug_colors[(int)renderPassDesc.debugInfo.color], sizeof(markerInfo.color));
+
+	SetRenderPassName(renderpass, renderPassDesc.debugInfo.name);
+
 	return {
 		.renderPass = renderpass,
 		.colorAttachement_count = pipelineDesc.attachmentCount,
@@ -557,7 +583,8 @@ RenderPass Device::createRenderPassAndPipeline(RenderPassDesc renderPassDesc, Pi
 		.framebuffer = framebuffer,
 		.extent = { renderPassDesc.framebufferDesc.width, renderPassDesc.framebufferDesc.height },
 		.postDrawBarriers = renderPassDesc.postDrawBarriers,
-		.draw = renderPassDesc.drawFunction 
+		.draw = renderPassDesc.drawFunction,
+		.markerInfo = markerInfo,
 	};
 }
 
@@ -757,7 +784,7 @@ void Device::destroyRenderPass(RenderPass renderPass)
 
 void Device::recordRenderPass(VkCommandBuffer commandBuffer, RenderPass& renderPass)
 {
-
+	PushCmdLabel(commandBuffer, &renderPass.markerInfo);
 	currentRenderPass = &renderPass;
 	VkRenderPassBeginInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -788,6 +815,7 @@ void Device::recordRenderPass(VkCommandBuffer commandBuffer, RenderPass& renderP
 	renderPass.draw();
 
 	vkCmdEndRenderPass(commandBuffer);
+	EndCmdLabel(commandBuffer);
 
 	for(const auto& barrier : renderPass.postDrawBarriers)
 	{

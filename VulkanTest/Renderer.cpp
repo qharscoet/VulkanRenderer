@@ -159,7 +159,11 @@ void Renderer::initPipeline()
 		.useMsaa = false,
 		.doClear = true,
 		.writeSwapChain = true,
-		.drawFunction = [&]() { drawRenderPass(); }
+		.drawFunction = [&]() { drawRenderPass(); },
+		.debugInfo = {
+				.name = "Main Render Pass",
+				.color = DebugColor::Blue,
+		},
 	};
 
 	renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
@@ -233,7 +237,11 @@ void Renderer::initComputePipeline()
 			.hasDepth = true,
 			.useMsaa = device_options.usesMsaa,
 			.doClear = false,
-			.drawFunction = [&]() { drawParticles(); }
+			.drawFunction = [&]() { drawParticles(); },
+			.debugInfo = {
+				.name = "Draw Particles Render Pass",
+				.color = DebugColor::Green
+			} 
 		};
 
 		drawParticlesPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
@@ -300,6 +308,10 @@ void Renderer::initTestPipeline()
 				.newLayout = ImageLayout::ShaderRead,
 				.mipLevels = 1
 			}
+		},
+		.debugInfo = {
+			.name = "Test Render Pass",
+			.color = DebugColor::Red
 		}
 	};
 
@@ -342,7 +354,11 @@ void Renderer::initTestPipeline2()
 		.hasDepth = true,
 		.useMsaa = device_options.usesMsaa,
 		.doClear = false,
-		.drawFunction = [&]() { drawTest2(m_device); }
+		.drawFunction = [&]() { drawTest2(m_device); },
+		.debugInfo = {
+			.name = "Test Render Pass 2",
+			.color = DebugColor::Yellow
+		}
 	};
 
 	renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
@@ -414,6 +430,11 @@ MeshPacket Renderer::createPacket(std::filesystem::path path, std::string textur
 	};
 
 	out_packet.name = path.filename().replace_extension("").string();
+
+	m_device.SetImageName(out_packet.texture.image, (out_packet.name + "/BaseColor").c_str());
+	m_device.SetBufferName(out_packet.vertexBuffer.buffer, (out_packet.name + "/VertexBuffer").c_str());
+	m_device.SetBufferName(out_packet.indexBuffer.buffer, (out_packet.name + "/IndexBuffer").c_str());
+
 	return out_packet;
 }
 

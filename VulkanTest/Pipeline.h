@@ -95,8 +95,29 @@ struct BarrierDesc {
 	uint32_t mipLevels;
 };
 
+
+enum class DebugColor {
+	White,
+	Black,
+	Red,
+	Green,
+	Blue,
+	Yellow,
+	Magenta,
+	Cyan,
+	Grey,
+
+	Nb,
+};
+
+struct DebugMarkerInfo {
+	const char* name;
+	enum DebugColor color;
+};
+
 //function pointer to a void(void) function
 typedef void(*DrawFunctionPtr)();
+
 
 struct RenderPassDesc
 {
@@ -109,6 +130,7 @@ struct RenderPassDesc
 
 	std::function<void()> drawFunction;
 	std::vector<BarrierDesc> postDrawBarriers;
+	DebugMarkerInfo debugInfo;
 };
 
 struct Pipeline {
@@ -126,7 +148,7 @@ struct RenderPass {
 	VkRenderPass renderPass;
 	uint32_t colorAttachement_count;
 	bool hasDepth;
-	
+
 	Pipeline pipeline;
 
 	//TODO : put that somewhere else
@@ -136,4 +158,6 @@ struct RenderPass {
 	std::vector<BarrierDesc> postDrawBarriers;
 
 	std::function<void()> draw;
+
+	VkDebugUtilsLabelEXT markerInfo;
 };

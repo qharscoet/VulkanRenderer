@@ -236,6 +236,20 @@ private:
 	void cleanupImGui();
 	void refreshImGui();
 
+	PFN_vkCmdBeginDebugUtilsLabelEXT CmdBeginDebugUtilsLabel;
+	PFN_vkCmdEndDebugUtilsLabelEXT CmdEndDebugUtilsLabel;
+	PFN_vkSetDebugUtilsObjectNameEXT SetDebugUtilsObjectName;
+
+	void PushCmdLabel(VkCommandBuffer commandBuffer, VkDebugUtilsLabelEXT* markerInfo) {
+		if(CmdBeginDebugUtilsLabel)
+			CmdBeginDebugUtilsLabel(commandBuffer, markerInfo);
+	}
+
+	void EndCmdLabel(VkCommandBuffer commandBuffer) {
+		if (CmdEndDebugUtilsLabel)
+			CmdEndDebugUtilsLabel(commandBuffer);
+	}
+
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
@@ -292,6 +306,12 @@ public:
 	void endDraw();
 	void dispatchCompute(const Pipeline& computePipeline);
 	void waitIdle();
+
+
+	void SetRenderPassName(VkRenderPass renderpass, const char* name);
+	void SetShaderModuleName(VkShaderModule module, const char* name);
+	void SetImageName(VkImage image, const char* name);
+	void SetBufferName(VkBuffer buffer, const char* name);
 
 	uint32_t getCurrentFrame() { return current_frame; }
 

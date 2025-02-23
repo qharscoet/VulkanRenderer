@@ -71,6 +71,57 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 	return VK_FALSE;
 }
 
+void Device::SetRenderPassName(VkRenderPass renderpass, const char* name) {
+	if (SetDebugUtilsObjectName) {
+		VkDebugUtilsObjectNameInfoEXT nameInfo = {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType = VK_OBJECT_TYPE_RENDER_PASS,
+			.objectHandle = (uint64_t)renderpass,
+			.pObjectName = name,
+		};
+		SetDebugUtilsObjectName(device, &nameInfo);
+	}
+}
+
+void Device::SetShaderModuleName(VkShaderModule module, const char* name)
+{
+	if (SetDebugUtilsObjectName) {
+		VkDebugUtilsObjectNameInfoEXT nameInfo = {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType = VK_OBJECT_TYPE_SHADER_MODULE,
+			.objectHandle = (uint64_t)module,
+			.pObjectName = name,
+		};
+		SetDebugUtilsObjectName(device, &nameInfo);
+	}
+}
+
+void Device::SetImageName(VkImage image, const char* name)
+{
+	if (SetDebugUtilsObjectName) {
+		VkDebugUtilsObjectNameInfoEXT nameInfo = {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType = VK_OBJECT_TYPE_IMAGE,
+			.objectHandle = (uint64_t)image,
+			.pObjectName = name,
+		};
+		SetDebugUtilsObjectName(device, &nameInfo);
+	}
+}
+
+void Device::SetBufferName(VkBuffer buffer, const char* name)
+{
+	if (SetDebugUtilsObjectName) {
+		VkDebugUtilsObjectNameInfoEXT nameInfo = {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType = VK_OBJECT_TYPE_BUFFER,
+			.objectHandle = (uint64_t)buffer,
+			.pObjectName = name,
+		};
+		SetDebugUtilsObjectName(device, &nameInfo);
+	}
+}
+
 bool checkValidationLayerSupport() {
 	uint32_t layerCount;
 	vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
@@ -236,7 +287,15 @@ void Device::setupDebugMessenger() {
 	if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
 		throw std::runtime_error("failed to set up debug messenger!");
 	}
+
+	if(!(CmdBeginDebugUtilsLabel = (PFN_vkCmdBeginDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkCmdBeginDebugUtilsLabelEXT"))
+		|| !(CmdEndDebugUtilsLabel = (PFN_vkCmdEndDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT"))
+		|| !(SetDebugUtilsObjectName = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT")))
+	{
+		throw std::runtime_error("failed to get debug utils functions");
+	}
 }
+
 
 
 void Device::createSurface() {
