@@ -145,9 +145,12 @@ struct AttributeInfo {
 	const size_t count;
 	const size_t stride;
 };
-const AttributeInfo get_accessor_start_addr(const tinygltf::Model& model, size_t mesh_idx, std::string attr)
+const std::optional<AttributeInfo> get_accessor_start_addr(const tinygltf::Model& model, size_t mesh_idx, std::string attr)
 {
 	const tinygltf::Mesh& m = model.meshes[mesh_idx];
+
+	if (!m.primitives[0].attributes.contains(attr))
+		return {};
 
 	int accessor_idx = m.primitives[0].attributes.at(attr);
 	const tinygltf::Accessor& accessor = model.accessors[accessor_idx];
@@ -158,7 +161,7 @@ const AttributeInfo get_accessor_start_addr(const tinygltf::Model& model, size_t
 	size_t stride = bufferView.byteStride > 0 ? bufferView.byteStride : elem_size;
 
 
-	return { data, elem_size, accessor.count, stride };
+	return AttributeInfo{ data, elem_size, accessor.count, stride };
 }
 
 int loadGltf(const char* path, Mesh* out_mesh)
@@ -199,18 +202,33 @@ int loadGltf(const char* path, Mesh* out_mesh)
 			size_t stride = vertices_bufferView.byteStride > 0 ? vertices_bufferView.byteStride : elem_size;
 			*/
 
-			const AttributeInfo pos_info = get_accessor_start_addr(model, 0, "POSITION");
-			const AttributeInfo texCoords_info = get_accessor_start_addr(model, 0, "TEXCOORD_0");
+			const std::optional<AttributeInfo> pos_info = get_accessor_start_addr(model, 0, "POSITION");
+			const std::optional<AttributeInfo> texCoords_info = get_accessor_start_addr(model, 0, "TEXCOORD_0");
+			const std::optional<AttributeInfo> color_info = get_accessor_start_addr(model, 0, "COLOR_0");
 			
-			for (int i = 0; i < pos_info.count; i++)
+			if (!pos_info.has_value())
+				return -1;
+
+			AttributeInfo positions = *pos_info;
+
+			for (int i = 0; i < positions.count; i++)
 			{
 				MeshVertex v = {};
 
-				memcpy(v.pos, pos_info.start_addr + i * pos_info.stride, pos_info.elem_size);
-				memcpy(v.texCoord, texCoords_info.start_addr + i * texCoords_info.stride, texCoords_info.elem_size);
-				v.color[0] = 1.0f;
-				v.color[1] = 1.0f;
-				v.color[2] = 1.0f;
+				memcpy(v.pos, positions.start_addr + i * positions.stride, positions.elem_size);
+
+				if (texCoords_info.has_value())
+					memcpy(v.texCoord, texCoords_info->start_addr + i * texCoords_info->stride, texCoords_info->elem_size);
+				
+				if (color_info.has_value())
+					memcpy(v.color, color_info->start_addr + i * color_info->stride, color_info->elem_size);
+				else
+				{
+					v.color[0] = 1.0f;
+					v.color[1] = 1.0f;
+					v.color[2] = 1.0f;
+				}
+
 				out_mesh->vertices.push_back(v);
 			}
 		}
