@@ -115,7 +115,8 @@ struct Pipeline {
 	VkRenderPass renderPass;
 	VkDescriptorSetLayout descriptorSetLayout;
 	std::vector<VkDescriptorSet> descriptorSets;
-	std::unordered_map<const GpuImage*, VkDescriptorSet> descriptorSetsMap;
+	std::unordered_map<size_t, VkDescriptorSet> descriptorSetsMap;
+	std::vector<BindingDesc> bindings;
 	VkDescriptorPool descriptorPool;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;

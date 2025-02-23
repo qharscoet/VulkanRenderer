@@ -749,18 +749,18 @@ void Device::createUniformBuffers() {
 	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 
 	uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-	uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
-	uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
 	
 	VkDeviceSize computeBufferSize = sizeof(ParticleUBO);
 	computeUniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i]);
-		vkMapMemory(device, uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
+		createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i].buffer, uniformBuffers[i].memory);
+		vkMapMemory(device, uniformBuffers[i].memory, 0, bufferSize, 0, &uniformBuffers[i].mapped_memory);
+		uniformBuffers[i].size = bufferSize;
 
 		createBuffer(computeBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, computeUniformBuffers[i].buffer, computeUniformBuffers[i].memory);
 		vkMapMemory(device, computeUniformBuffers[i].memory, 0, computeBufferSize, 0, &computeUniformBuffers[i].mapped_memory);
+		computeUniformBuffers[i].size = computeBufferSize;
 	}
 
 
@@ -776,7 +776,7 @@ void Device::createComputeDescriptorSets(const Pipeline& computePipeline) {
 
 void Device::updateDescriptorSet(VkImageView imageView, VkSampler sampler, VkDescriptorSet set) {
 		VkDescriptorBufferInfo bufferInfo{};
-		bufferInfo.buffer = uniformBuffers[current_frame];
+		bufferInfo.buffer = uniformBuffers[current_frame].buffer;
 		bufferInfo.offset = 0;
 		bufferInfo.range = sizeof(UniformBufferObject);
 
@@ -807,6 +807,65 @@ void Device::updateDescriptorSet(VkImageView imageView, VkSampler sampler, VkDes
 		descriptorWrites[1].pTexelBufferView = nullptr; // Optional
 
 		vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
+}
+
+VkDescriptorBufferInfo& Device::getDescriptorBufferInfo(const Buffer& buffer) {
+	VkDescriptorBufferInfo info { 
+		.buffer = buffer.buffer,
+		.offset = 0,
+		.range = buffer.size
+	};
+
+	return info;
+}
+
+VkDescriptorImageInfo& Device::getDescriptorImageInfo(const GpuImage& image, VkSampler sampler) {
+
+	VkDescriptorImageInfo info{
+		.sampler = sampler,
+		.imageView = image.view,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	};
+
+	return info;
+}
+
+void Device::updateDescriptorSet(const std::vector<BindingDesc>& bindings, std::vector<VkDescriptorImageInfo>& images, std::vector<VkDescriptorBufferInfo>& buffers, VkDescriptorSet set)
+{
+	std::vector<VkWriteDescriptorSet> descriptorWrites{};
+	descriptorWrites.resize(bindings.size());
+
+	auto imageIt = images.begin();
+	auto bufferIt = buffers.begin();
+
+	for (size_t i = 0; i < bindings.size(); i++) {
+		const BindingDesc& binding = bindings[i];
+		VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+		const bool isBuffer = binding.type == BindingType::UBO || binding.type == BindingType::StorageBuffer;
+		const bool isImage = binding.type == BindingType::ImageSampler;
+
+		if (isBuffer) {
+			descriptorType = binding.type == BindingType::UBO ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		} else if (isImage)
+		{
+			descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		}
+
+		descriptorWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[i].dstSet = set;
+		descriptorWrites[i].dstBinding = i;
+		descriptorWrites[i].dstArrayElement = 0;
+		descriptorWrites[i].descriptorType = descriptorType;
+		descriptorWrites[i].descriptorCount = 1;
+		descriptorWrites[i].pBufferInfo = isBuffer ? &(*bufferIt++) : nullptr;
+		descriptorWrites[i].pImageInfo = isImage ? &(*imageIt++) : nullptr; 
+		descriptorWrites[i].pTexelBufferView = nullptr; // Optional
+
+	}
+
+
+	vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
 }
 
 void Device::updateComputeDescriptorSets(const std::vector<Buffer>& buffers) {
@@ -1070,7 +1129,7 @@ void Device::refreshImGui()
 }
 
 void Device::updateUniformBuffer(void* data, size_t size) {
-	memcpy(uniformBuffersMapped[current_frame], data, size);
+	memcpy(uniformBuffers[current_frame].mapped_memory, data, size);
 }
 
 void Device::updateComputeUniformBuffer(void* data, size_t size) {
@@ -1254,8 +1313,8 @@ void Device::cleanupVulkan() {
 
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		vkDestroyBuffer(device, uniformBuffers[i], nullptr);
-		vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
+		vkDestroyBuffer(device, uniformBuffers[i].buffer, nullptr);
+		vkFreeMemory(device, uniformBuffers[i].memory, nullptr);
 
 		vkDestroyBuffer(device, computeUniformBuffers[i].buffer, nullptr);
 		vkFreeMemory(device, computeUniformBuffers[i].memory, nullptr);

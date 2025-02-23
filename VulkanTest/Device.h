@@ -206,9 +206,7 @@ private:
 	RenderPass* currentRenderPass;
 
 
-	std::vector<VkBuffer> uniformBuffers;
-	std::vector<VkDeviceMemory> uniformBuffersMemory;
-	std::vector<void*> uniformBuffersMapped;
+	std::vector<Buffer> uniformBuffers;
 
 	std::vector<Buffer> computeUniformBuffers;
 	std::vector<VkDescriptorSet> computeDescriptorSets;
@@ -390,7 +388,11 @@ public:
 	void updateComputeUniformBuffer(void* data, size_t size);
 	Dimensions getExtent() { return swapChainExtent;};
 
+	VkDescriptorBufferInfo& getDescriptorBufferInfo(const Buffer& buffer);
+	VkDescriptorImageInfo& getDescriptorImageInfo(const GpuImage& image, VkSampler sampler);
+
 	void updateDescriptorSet(VkImageView imageView, VkSampler sampler, VkDescriptorSet set);
+	void updateDescriptorSet(const std::vector<BindingDesc>& bindings, std::vector<VkDescriptorImageInfo>& images, std::vector<VkDescriptorBufferInfo>& buffers, VkDescriptorSet set);
 	void updateComputeDescriptorSets(const std::vector<Buffer>& buffers);
 
 

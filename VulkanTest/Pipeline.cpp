@@ -452,7 +452,7 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	out_pipeline.descriptorPool = createDescriptorPool(desc.bindings.data(), desc.bindings.size());;
 
 	out_pipeline.descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-	//createDescriptorSets(setLayout, out_pipeline.descriptorPool, out_pipeline.descriptorSets.data());
+	out_pipeline.bindings = std::move(desc.bindings);
 
 	return out_pipeline;
 }
@@ -599,9 +599,13 @@ void Device::bindTexture(const GpuImage& image, VkSampler sampler)
 	VkDescriptorPool descriptorPool = currentRenderPass->pipeline.descriptorPool;
 	VkDescriptorSetLayout descriptorSetLayout = currentRenderPass->pipeline.descriptorSetLayout;
 
-	if (currentRenderPass->pipeline.descriptorSetsMap.contains(&image))
+	std::hash<VkImage> hasher;
+	size_t hash = 0;
+	hash_combine(hash, hasher(image.image));
+
+	if (currentRenderPass->pipeline.descriptorSetsMap.contains(hash))
 	{
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &currentRenderPass->pipeline.descriptorSetsMap[&image], 0, nullptr);
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &currentRenderPass->pipeline.descriptorSetsMap[hash], 0, nullptr);
 		return;
 	}
 	else {
@@ -629,7 +633,7 @@ void Device::bindTexture(const GpuImage& image, VkSampler sampler)
 
 			vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
 		
-		currentRenderPass->pipeline.descriptorSetsMap[&image] = descriptorSet;
+		currentRenderPass->pipeline.descriptorSetsMap[hash] = descriptorSet;
 		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 	}
 
@@ -677,8 +681,35 @@ void Device::drawPacket(const MeshPacket& packet)
 
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 
-	//UBO
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &packet.internalData.descriptorSet, 0, nullptr);
+	VkDescriptorPool descriptorPool = currentRenderPass->pipeline.descriptorPool;
+	VkDescriptorSetLayout descriptorSetLayout = currentRenderPass->pipeline.descriptorSetLayout;
+	std::vector<BindingDesc>& bindings = currentRenderPass->pipeline.bindings;
+
+	std::hash<VkImageView> img_hasher;
+	std::hash<VkSampler> sampler_hasher;
+	std::hash<VkBuffer> buffer_hasher;
+	size_t hash = 0;
+	hash_combine(hash, buffer_hasher(uniformBuffers[current_frame].buffer));
+	hash_combine(hash, img_hasher(packet.texture.view));
+	hash_combine(hash, sampler_hasher(packet.sampler));
+
+	if (currentRenderPass->pipeline.descriptorSetsMap.contains(hash))
+	{
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &currentRenderPass->pipeline.descriptorSetsMap[hash], 0, nullptr);
+	}
+	else {
+		VkDescriptorSet descriptorSet;
+		createDescriptorSets(descriptorSetLayout, descriptorPool, &descriptorSet, 1);
+
+		std::vector<VkDescriptorImageInfo> images = { getDescriptorImageInfo(packet.texture, packet.sampler)};
+		std::vector<VkDescriptorBufferInfo> buffers = { getDescriptorBufferInfo(uniformBuffers[current_frame])};
+		updateDescriptorSet(bindings, images, buffers, descriptorSet);
+		currentRenderPass->pipeline.descriptorSetsMap[hash] = descriptorSet;
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+
+	}
+
+	//vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &packet.internalData.descriptorSet, 0, nullptr);
 
 
 	{

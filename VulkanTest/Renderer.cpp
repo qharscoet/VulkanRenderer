@@ -6,6 +6,11 @@
 
 #include <imgui.h>
 
+/* TODOs:
+	- Separate UBO from other descriptor sets, or include it in the hashing ?
+	- Barriers using subpasses
+*/
+
 void Renderer::init(GLFWwindow* window, DeviceOptions options)
 {
 	device_options = options;
