@@ -123,8 +123,8 @@ void Renderer::initPipeline()
 
 	PipelineDesc desc = {
 		.type = PipelineType::Graphics,
-		.vertexShader = "./shaders/basic.vert.spv",
-		.pixelShader = "./shaders/basic.frag.spv",
+		.vertexShader = "basic.vert.spv",
+		.pixelShader = "basic.ps.spv",
 
 		.bindingDescription = &bindingDescription,
 		.attributeDescriptions = attributeDescriptions.data(),
@@ -187,7 +187,7 @@ void Renderer::initComputePipeline()
 	{
 		PipelineDesc desc = {
 			.type = PipelineType::Compute,
-			.computeShader = "./shaders/particles.comp.spv",
+			.computeShader = "particles.comp.spv",
 
 			.bindings = {
 				{
@@ -219,8 +219,8 @@ void Renderer::initComputePipeline()
 
 		PipelineDesc desc = {
 			.type = PipelineType::Graphics,
-			.vertexShader = "./shaders/particles.vert.spv",
-			.pixelShader = "./shaders/particles.frag.spv",
+			.vertexShader = "particles.vert.spv",
+			.pixelShader = "particles.frag.spv",
 
 			.bindingDescription = &bindingDescription,
 			.attributeDescriptions = attributeDescriptions.data(),
@@ -268,8 +268,8 @@ void Renderer::initTestPipeline()
 
 	PipelineDesc desc = {
 		.type = PipelineType::Graphics,
-		.vertexShader = "./shaders/fill.vert.spv",
-		.pixelShader = "./shaders/fill.frag.spv",
+		.vertexShader = "fill.vert.spv",
+		.pixelShader = "fill.frag.spv",
 
 		.blendMode = BlendMode::Opaque,
 		.topology = PrimitiveToplogy::TriangleList,
@@ -335,8 +335,8 @@ void Renderer::initTestPipeline2()
 
 	PipelineDesc desc = {
 		.type = PipelineType::Graphics,
-		.vertexShader = "./shaders/blit.vert.spv",
-		.pixelShader = "./shaders/blit.frag.spv",
+		.vertexShader = "blit.vert.spv",
+		.pixelShader = "blit.frag.spv",
 
 		.blendMode = BlendMode::Opaque,
 		.topology = PrimitiveToplogy::TriangleStrip,

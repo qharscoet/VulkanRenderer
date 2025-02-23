@@ -36,8 +36,9 @@ static const float debug_colors[][4] = {
 	{ 0.5f, 0.5f, 0.5f, 1.0f }, //Grey
 };
 
-
 static_assert(sizeof(debug_colors) / sizeof(debug_colors[0]) == (int)DebugColor::Nb, "Debug colors array size mismatch");
+
+static const std::string baseShaderPath = "./shaders/spv/";
 
 VkDescriptorSetLayout Device::createDescriptorSetLayout(BindingDesc* bindingDescs, size_t count) {
 	VkDescriptorSetLayout out_layout;
@@ -238,8 +239,11 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 {
 	Pipeline out_pipeline;
 
-	auto vertShaderCode = readFile(desc.vertexShader);
-	auto fragShaderCode = readFile(desc.pixelShader);
+	auto vertShaderCode = readFile(baseShaderPath + desc.vertexShader);
+	auto fragShaderCode = readFile(baseShaderPath + desc.pixelShader);
+
+	const bool isVertHLSL = strstr(desc.pixelShader, ".vs") != NULL;
+	const bool isFragHLSL = strstr(desc.pixelShader, ".ps") != NULL;
 
 	VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
 	VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
@@ -251,13 +255,13 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
 	vertShaderStageInfo.module = vertShaderModule;
-	vertShaderStageInfo.pName = "main";
+	vertShaderStageInfo.pName = isVertHLSL?"VSMain":"main";
 
 	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
 	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	fragShaderStageInfo.module = fragShaderModule;
-	fragShaderStageInfo.pName = "main";
+	fragShaderStageInfo.pName = isFragHLSL ? "PSMain":"main";
 
 	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
@@ -480,7 +484,7 @@ Pipeline Device::createComputePipeline(PipelineDesc desc)
 {
 	Pipeline out_pipeline;
 
-	auto computeShaderCode = readFile(desc.computeShader);
+	auto computeShaderCode = readFile(baseShaderPath + desc.computeShader);
 
 	VkShaderModule computeShaderModule = createShaderModule(computeShaderCode);
 
