@@ -70,7 +70,6 @@ void Renderer::draw()
 		m_device.recordRenderPass(renderPass);
 	}
 
-
 	m_device.recordImGui();
 
 	m_device.endDraw();

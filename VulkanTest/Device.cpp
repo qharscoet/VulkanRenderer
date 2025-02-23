@@ -774,40 +774,6 @@ void Device::createComputeDescriptorSets(const Pipeline& computePipeline) {
 	createDescriptorSets(computePipeline.descriptorSetLayout, computePipeline.descriptorPool, computeDescriptorSets.data(), MAX_FRAMES_IN_FLIGHT);
 }
 
-void Device::updateDescriptorSet(VkImageView imageView, VkSampler sampler, VkDescriptorSet set) {
-		VkDescriptorBufferInfo bufferInfo{};
-		bufferInfo.buffer = uniformBuffers[current_frame].buffer;
-		bufferInfo.offset = 0;
-		bufferInfo.range = sizeof(UniformBufferObject);
-
-		VkDescriptorImageInfo imageInfo{ };
-		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		imageInfo.imageView = imageView;
-		imageInfo.sampler = sampler;
-
-		std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
-		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[0].dstSet = set;
-		descriptorWrites[0].dstBinding = 0;
-		descriptorWrites[0].dstArrayElement = 0;
-		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		descriptorWrites[0].descriptorCount = 1;
-		descriptorWrites[0].pBufferInfo = &bufferInfo;
-		descriptorWrites[0].pImageInfo = nullptr; // Optional
-		descriptorWrites[0].pTexelBufferView = nullptr; // Optional
-
-		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[1].dstSet = set;
-		descriptorWrites[1].dstBinding = 1;
-		descriptorWrites[1].dstArrayElement = 0;
-		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		descriptorWrites[1].descriptorCount = 1;
-		descriptorWrites[1].pBufferInfo = nullptr;
-		descriptorWrites[1].pImageInfo = &imageInfo; // Optional
-		descriptorWrites[1].pTexelBufferView = nullptr; // Optional
-
-		vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
-}
 
 VkDescriptorBufferInfo& Device::getDescriptorBufferInfo(const Buffer& buffer) {
 	VkDescriptorBufferInfo info { 
@@ -869,6 +835,7 @@ void Device::updateDescriptorSet(const std::vector<BindingDesc>& bindings, std::
 }
 
 void Device::updateComputeDescriptorSets(const std::vector<Buffer>& buffers) {
+	//TODO: Make this usable with the above one
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		VkDescriptorBufferInfo uniformBufferInfo{};
 		uniformBufferInfo.buffer = computeUniformBuffers[i].buffer;
@@ -935,19 +902,6 @@ void Device::createCommandBuffer() {
 	}
 }
 
-void Device::recordCommandBuffer(VkCommandBuffer commandBuffer) {
-
-	//TODO: remove
-	//recordRenderPass(commandBuffer, currentRenderPass);
-	////for (const auto& renderPass : renderPasses)
-	////{
-	////	recordRenderPass(commandBuffer, renderPass);
-	////}
-
-
-	//recordImGui();
-
-}
 
 void Device::recordComputeCommandBuffer(VkCommandBuffer commandBuffer, const Pipeline& computePipeline) {
 	VkCommandBufferBeginInfo beginInfo{};
@@ -1243,11 +1197,6 @@ void Device::endDraw()
 	}
 
 	current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
-}
-
-void Device::drawFrame() {
-
-	recordCommandBuffer(commandBuffers[current_frame]);
 }
 
 void Device::dispatchCompute(const Pipeline& computePipeline)
@@ -1644,45 +1593,11 @@ bool Device::hasStencilComponent(VkFormat format) {
 
 void Device::createColorResources() {
 	createRenderTarget(swapChainExtent.width, swapChainExtent.height, colorTarget, this->usesMsaa);
-
-	//TODO : remove
-	//ImageDesc desc = {
-	//.width = swapChainExtent.width,
-	//.height = swapChainExtent.height,
-	//.mipLevels = 1,
-	//.numSamples = getMsaaSamples(),
-	//.format = swapChainImageFormat,
-	//.tiling = VK_IMAGE_TILING_OPTIMAL,
-	//.usage_flags = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-	//.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-	//.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-	//};
-
-	//createImage(desc, colorTarget);
-	//colorTarget.view = createImageView(colorTarget.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
-
 }
 
 void Device::createDepthBufferResources() {
 
 	createDepthTarget(swapChainExtent.width, swapChainExtent.height, depthBuffer, this->usesMsaa);
-
-	//TODO : remove
-	//ImageDesc desc = {
-	//	.width = swapChainExtent.width,
-	//	.height = swapChainExtent.height,
-	//	.mipLevels = 1,
-	//	.numSamples = getMsaaSamples(),
-	//	.format = findDepthFormat(),
-	//	.tiling = VK_IMAGE_TILING_OPTIMAL,
-	//	.usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-	//	.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-	//	.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-	//};
-
-	//createImage(desc, depthBuffer);
-	//depthBuffer.view = createImageView(depthBuffer.image, desc.format, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
-
 }
 
 

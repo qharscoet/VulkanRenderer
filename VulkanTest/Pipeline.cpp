@@ -109,7 +109,7 @@ void Device::createDescriptorSets(VkDescriptorSetLayout layout, VkDescriptorPool
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = pool;
-	allocInfo.descriptorSetCount = count; //TODO: Fix count
+	allocInfo.descriptorSetCount = count;
 	allocInfo.pSetLayouts = layouts.data();
 
 	if (vkAllocateDescriptorSets(device, &allocInfo, out_sets) != VK_SUCCESS) {
@@ -577,9 +577,6 @@ MeshPacket Device::createPacket(Mesh& mesh, Texture& tex)
 	out_packet.texture = this->createTexture(tex);
 	out_packet.sampler = this->createTextureSampler(out_packet.texture.mipLevels);
 
-	createDescriptorSets(currentRenderPass->pipeline.descriptorSetLayout, currentRenderPass->pipeline.descriptorPool, &out_packet.internalData.descriptorSet, 1);
-	updateDescriptorSet(out_packet.texture.view, out_packet.sampler, out_packet.internalData.descriptorSet);
-
 	return out_packet;
 }
 
@@ -709,7 +706,6 @@ void Device::drawPacket(const MeshPacket& packet)
 
 	}
 
-	//vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &packet.internalData.descriptorSet, 0, nullptr);
 
 
 	{
