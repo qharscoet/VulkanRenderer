@@ -11,6 +11,7 @@
 	- Barriers using subpasses
 */
 
+
 void Renderer::init(GLFWwindow* window, DeviceOptions options)
 {
 	device_options = options;
@@ -22,6 +23,9 @@ void Renderer::init(GLFWwindow* window, DeviceOptions options)
 	initTestPipeline2();
 
 	initParticlesBuffers();
+
+	float cubePos[3] = { 0.0f, 0.0f, 0.0f };
+	addPacket(m_device.createCubePacket(cubePos, 3));
 
 	currentDrawPassPtr = device_options.usesMsaa ? &renderPassMsaa : &renderPass;
 	lastTime = glfwGetTime();
@@ -97,7 +101,7 @@ void Renderer::drawImgui()
 
 			char label[32];
 			sprintf(label, "Object %d", i);
-			if (ImGui::TreeNode(p.name.c_str()))
+			if (ImGui::TreeNode(p.name.empty() ? "Packet" : p.name.c_str()))
 			{
 				ImGui::SliderFloat3("Translate", p.transform.translation, -5.0f, 5.0f);
 				ImGui::SliderFloat3("Rot", p.transform.rotation, 0.0f, 1.0f);
@@ -110,6 +114,7 @@ void Renderer::drawImgui()
 }
 
 void Renderer::drawRenderPass() {
+	//awCube(0.0f, 0.0f, 0.0f, 10.f);
 	for (const auto& packet : packets)
 	{
 		drawPacket(packet);
@@ -418,10 +423,11 @@ MeshPacket Renderer::createPacket(std::filesystem::path path, std::string textur
 	else if (path.extension() == ".gltf")
 	{
 		loadGltf(path.string().c_str(), &out_mesh);
-		tex = out_mesh.textures.size() > 0 ? out_mesh.textures[0] : loadTexture("assets/viking_room.png");
+		if (out_mesh.textures.size() > 0)
+			tex = out_mesh.textures[0];
 	}
 
-	out_packet = m_device.createPacket(out_mesh, tex);
+	out_packet = m_device.createPacket(out_mesh, tex.pixels.empty() ? nullptr:&tex);
 
 	out_packet.transform = {
 		.translation = {0.0f, 0.0f, 0.0f},

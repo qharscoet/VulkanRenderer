@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <string>
+#include <variant>
 
 
 
@@ -28,8 +29,24 @@ struct Mesh {
 	std::vector<Texture> textures;
 };
 
-struct Scene {
+//GLtf like structures
+struct Camera
+{
+	float fov;
+	float aspect;
+	float znear;
+	float zfar;
+};
 
+struct Node {
+	std::string name;
+	std::variant<Mesh, Camera> data;
+	std::vector<Node*> children;
+	//glm::mat4 transform; // transform
+};
+
+struct Scene {
+	std::vector<Node> nodes;
 };
 
 std::vector<char> readFile(const std::string& filename);

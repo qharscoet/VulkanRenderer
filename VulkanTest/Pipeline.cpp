@@ -598,15 +598,37 @@ void Device::setRenderPass(RenderPass& renderPass)
 }
 
 
-MeshPacket Device::createPacket(Mesh& mesh, Texture& tex)
+MeshPacket Device::createPacket(Mesh& mesh, Texture* tex)
 {
 	MeshPacket out_packet;
 	out_packet.vertexBuffer = this->createVertexBuffer(mesh.vertices.size() * sizeof(mesh.vertices[0]), (void*)mesh.vertices.data());
 	out_packet.indexBuffer = this->createIndexBuffer(mesh.indices.size() * sizeof(mesh.indices[0]), (void*)mesh.indices.data());
 
 
-	out_packet.texture = this->createTexture(tex);
+	out_packet.texture = tex != nullptr ? this->createTexture(*tex) : defaultTexture;
 	out_packet.sampler = this->createTextureSampler(out_packet.texture.mipLevels);
+
+	return out_packet;
+}
+
+MeshPacket Device::createCubePacket(float pos[3], float size)
+{
+	MeshPacket out_packet;
+
+	auto vertices = Vertex::getCubeVertices();
+	auto indices = Vertex::getCubeIndices();
+	out_packet.vertexBuffer = this->createVertexBuffer(vertices.size() * sizeof(vertices[0]), (void*)vertices.data());
+	out_packet.indexBuffer = this->createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
+
+
+	out_packet.texture = defaultTexture;
+	out_packet.sampler = defaultSampler;
+	out_packet.name = "Cube";
+
+	memcpy(out_packet.transform.translation, pos, 3 * sizeof(float));
+	out_packet.transform.scale[0] = size;
+	out_packet.transform.scale[1] = size;
+	out_packet.transform.scale[2] = size;
 
 	return out_packet;
 }
@@ -769,6 +791,7 @@ void Device::drawPacket(const MeshPacket& packet)
 	else
 		vkCmdDraw(commandBuffer, packet.vertexBuffer.count, 1, 0, 0);
 }
+
 
 void Device::destroyPipeline(Pipeline pipeline)
 {

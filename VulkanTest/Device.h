@@ -129,6 +129,60 @@ struct Vertex {
 
 		return attributeDescriptions;
 	}
+
+	static std::vector<Vertex> getCubeVertices()
+	{
+		return {
+			// Front face
+			{{-0.5f, -0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // Bottom-left
+			{{ 0.5f, -0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}}, // Bottom-right
+			{{ 0.5f,  0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}}, // Top-right
+			{{-0.5f,  0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, 1.0f}}, // Top-left
+
+			// Back face
+			{{ 0.5f, -0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {1.0f, 0.0f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
+			{{-0.5f, -0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {0.0f, 1.0f, 1.0f}, {1.0f, 0.0f}}, // Bottom-right
+			{{-0.5f,  0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}, // Top-right
+			{{ 0.5f,  0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {0.5f, 0.5f, 0.5f}, {0.0f, 1.0f}}, // Top-left
+
+			// Left face
+			{{-0.5f, -0.5f, -0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 0.5f, 0.0f}, {0.0f, 0.0f}}, // Bottom-left
+			{{-0.5f, -0.5f,  0.5f}, {-1.0f,  0.0f,  0.0f}, {0.5f, 1.0f, 0.0f}, {1.0f, 0.0f}}, // Bottom-right
+			{{-0.5f,  0.5f,  0.5f}, {-1.0f,  0.0f,  0.0f}, {0.0f, 0.5f, 1.0f}, {1.0f, 1.0f}}, // Top-right
+			{{-0.5f,  0.5f, -0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 0.0f, 0.5f}, {0.0f, 1.0f}}, // Top-left
+
+			// Right face
+			{{ 0.5f, -0.5f,  0.5f}, {1.0f,  0.0f,  0.0f}, {0.5f, 0.0f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
+			{{ 0.5f, -0.5f, -0.5f}, {1.0f,  0.0f,  0.0f}, {1.0f, 0.5f, 1.0f}, {1.0f, 0.0f}}, // Bottom-right
+			{{ 0.5f,  0.5f, -0.5f}, {1.0f,  0.0f,  0.0f}, {0.0f, 1.0f, 0.5f}, {1.0f, 1.0f}}, // Top-right
+			{{ 0.5f,  0.5f,  0.5f}, {1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, 1.0f}}, // Top-left
+
+			// Bottom face
+			{{-0.5f, -0.5f, -0.5f}, {0.0f, -1.0f,  0.0f}, {0.5f, 0.5f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
+			{{ 0.5f, -0.5f, -0.5f}, {0.0f, -1.0f,  0.0f}, {1.0f, 0.0f, 0.5f}, {1.0f, 0.0f}}, // Bottom-right
+			{{ 0.5f, -0.5f,  0.5f}, {0.0f, -1.0f,  0.0f}, {0.0f, 1.0f, 0.5f}, {1.0f, 1.0f}}, // Top-right
+			{{-0.5f, -0.5f,  0.5f}, {0.0f, -1.0f,  0.0f}, {0.5f, 1.0f, 1.0f}, {0.0f, 1.0f}}, // Top-left
+
+			// Top face
+			{{-0.5f,  0.5f,  0.5f}, {0.0f,  1.0f,  0.0f}, {1.0f, 0.5f, 0.5f}, {0.0f, 0.0f}}, // Bottom-left
+			{{ 0.5f,  0.5f,  0.5f}, {0.0f,  1.0f,  0.0f}, {0.5f, 1.0f, 0.5f}, {1.0f, 0.0f}}, // Bottom-right
+			{{ 0.5f,  0.5f, -0.5f}, {0.0f,  1.0f,  0.0f}, {0.0f, 0.5f, 1.0f}, {1.0f, 1.0f}}, // Top-right
+			{{-0.5f,  0.5f, -0.5f}, {0.0f,  1.0f,  0.0f}, {1.0f, 1.0f, 0.5f}, {0.0f, 1.0f}}, // Top-left
+		};
+
+	}
+	
+	static std::vector<uint32_t> getCubeIndices() {
+		return {
+			0, 1, 2, 2, 3, 0, // Front face
+			4, 5, 6, 6, 7, 4, // Back face
+			8, 9, 10, 10, 11, 8, // Left face
+			12, 13, 14, 14, 15, 12, // Right face
+			16, 17, 18, 18, 19, 16, // Bottom face
+			20, 21, 22, 22, 23, 20 // Top face
+		};
+	}
+
 };
 
 
@@ -201,6 +255,9 @@ private:
 
 	VkRenderPass defaultRenderPass;
 	bool usesMsaa;
+
+	GpuImage defaultTexture;
+	VkSampler defaultSampler;
 
 
 	RenderPass* currentRenderPass;
@@ -292,6 +349,8 @@ private:
 	void createCommandPool();
 	void createUniformBuffers();
 	void createSyncObjects();
+
+	void createDefaultTexture();
 
 	VkSampleCountFlagBits getMsaaSamples() { return this->usesMsaa ? msaaSamples : VK_SAMPLE_COUNT_1_BIT; };
 
@@ -427,7 +486,8 @@ public:
 	Pipeline createComputePipeline(PipelineDesc desc);
 	RenderPass createRenderPassAndPipeline(RenderPassDesc renderPassDesc, PipelineDesc pipelineDesc);
 	void setRenderPass(RenderPass& renderPass);
-	MeshPacket createPacket(Mesh& mesh, Texture& tex);
+	MeshPacket createPacket(Mesh& mesh, Texture* tex);
+	MeshPacket createCubePacket(float pos[3], float scale);
 	void drawPacket(const MeshPacket& packet);
 	void destroyPipeline(Pipeline pipeline);
 	void destroyRenderPass(RenderPass renderPass);
