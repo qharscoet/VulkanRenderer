@@ -205,6 +205,7 @@ int loadGltf(const char* path, Mesh* out_mesh)
 			const std::optional<AttributeInfo> pos_info = get_accessor_start_addr(model, 0, "POSITION");
 			const std::optional<AttributeInfo> texCoords_info = get_accessor_start_addr(model, 0, "TEXCOORD_0");
 			const std::optional<AttributeInfo> color_info = get_accessor_start_addr(model, 0, "COLOR_0");
+			const std::optional<AttributeInfo> normal_info = get_accessor_start_addr(model, 0, "NORMAL");
 			
 			if (!pos_info.has_value())
 				return -1;
@@ -216,6 +217,9 @@ int loadGltf(const char* path, Mesh* out_mesh)
 				MeshVertex v = {};
 
 				memcpy(v.pos, positions.start_addr + i * positions.stride, positions.elem_size);
+
+				if (normal_info.has_value())
+					memcpy(v.normals, normal_info->start_addr + i * normal_info->stride, normal_info->elem_size);
 
 				if (texCoords_info.has_value())
 					memcpy(v.texCoord, texCoords_info->start_addr + i * texCoords_info->stride, texCoords_info->elem_size);

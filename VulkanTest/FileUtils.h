@@ -17,6 +17,7 @@ struct Texture {
 struct MeshVertex
 {
 	float pos[3];
+	float normals[3];
 	float color[3];
 	float texCoord[2];
 };
