@@ -17,9 +17,9 @@ struct PSInput
 };
 
 [[vk::binding(1, 0)]]
-Texture2D g_texture : register(t0);
+Texture2D g_texture : register(t1);
 [[vk::binding(1, 0)]]
-SamplerState g_sampler : register(s0);
+SamplerState g_sampler : register(s1);
 
 PSInput VSMain(float4 position : POSITION, float4 uv : TEXCOORD)
 {

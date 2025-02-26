@@ -242,7 +242,7 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	auto vertShaderCode = readFile(baseShaderPath + desc.vertexShader);
 	auto fragShaderCode = readFile(baseShaderPath + desc.pixelShader);
 
-	const bool isVertHLSL = strstr(desc.pixelShader, ".vs") != NULL;
+	const bool isVertHLSL = strstr(desc.vertexShader, ".vs") != NULL;
 	const bool isFragHLSL = strstr(desc.pixelShader, ".ps") != NULL;
 
 	VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
@@ -611,7 +611,7 @@ MeshPacket Device::createPacket(Mesh& mesh, Texture* tex)
 	return out_packet;
 }
 
-MeshPacket Device::createCubePacket(float pos[3], float size)
+MeshPacket Device::createCubePacket(const float pos[3], float size)
 {
 	MeshPacket out_packet;
 

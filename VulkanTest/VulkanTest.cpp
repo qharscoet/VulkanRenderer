@@ -29,7 +29,7 @@
 
 
 Renderer::CameraInfo camera{
-	.position = { 2.0f, 2.0f, 2.0f },
+	.position = { 10.0f, 10.0f, 10.0f },
 
 	.yaw = -145.f,
 	.pitch = -45,
@@ -114,8 +114,8 @@ DeviceOptions device_options = {
 class HelloTriangleApplication {
 
 private:
-	const uint32_t WIDTH = 800;
-	const uint32_t HEIGHT = 600;
+	const uint32_t WIDTH = 1280;
+	const uint32_t HEIGHT = 720;
 
 	//Device m_device;
 	GLFWwindow* window = nullptr;
@@ -167,8 +167,9 @@ private:
 
 	void loadPackets()
 	{
+		static const std::string gltfAssetsPath = "E:\\glTF-Sample-Assets\\Models\\";
 		m_renderer.addPacket(m_renderer.createPacket("assets/viking_room.obj", "assets/viking_room.png"));
-		m_renderer.addPacket(m_renderer.createPacket("assets/Cube/Cube.gltf"));
+		m_renderer.addPacket(m_renderer.createPacket(gltfAssetsPath  + "Box/glTF/Box.gltf"));
 	}
 
 
@@ -260,6 +261,8 @@ public:
 		m_renderer.init(window, device_options);
 
 		loadPackets();
+		const float lightPos[3] = { 3.0f, 3.0f, 3.0f };
+		m_renderer.addLight(lightPos);
 
 		mainLoop();
 

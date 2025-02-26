@@ -27,6 +27,12 @@ public:
 	};
 
 
+	struct Light {
+		float position[3] = { 0.0f, 0.0f, 0.0f };
+
+		MeshPacket cube;
+	};
+
 
 	//Pipeline createPipeline(PipelineDesc desc);
 	//Pipeline createComputePipeline(PipelineDesc desc);
@@ -68,12 +74,14 @@ private:
 
 
 	std::vector<MeshPacket> packets;
+	std::vector<Light> lights;
 
 	CameraInfo cameraInfo;
 
 	//Draw callbacks
 	void drawRenderPass();
 	void drawParticles();
+	void drawLightsRenderPass();
 
 	double lastTime;
 	double lastFrameTime;
@@ -82,6 +90,8 @@ private:
 	void initComputePipeline();
 	void initTestPipeline();
 	void initTestPipeline2();
+
+	void initDrawLightsRenderPass();
 
 	void initParticlesBuffers();
 	void cleanupParticles();
@@ -102,5 +112,9 @@ public:
 	void addPacket(const MeshPacket& packet);
 	void drawPacket(const MeshPacket& packet);
 	void destroyPacket(MeshPacket packet);
+
+
+	void addLight(const float pos[3]);
+
 
 };

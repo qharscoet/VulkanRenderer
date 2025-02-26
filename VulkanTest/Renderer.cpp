@@ -18,14 +18,13 @@ void Renderer::init(GLFWwindow* window, DeviceOptions options)
 	m_device.init(window, options);
 
 	initPipeline();
-	initComputePipeline();
-	initTestPipeline();
-	initTestPipeline2();
+	//initComputePipeline();
+	//initTestPipeline();
+	//initTestPipeline2();
 
-	initParticlesBuffers();
+	//initParticlesBuffers();
 
-	float cubePos[3] = { 0.0f, 0.0f, 0.0f };
-	addPacket(m_device.createCubePacket(cubePos, 3));
+	initDrawLightsRenderPass();
 
 	currentDrawPassPtr = device_options.usesMsaa ? &renderPassMsaa : &renderPass;
 	lastTime = glfwGetTime();
@@ -39,13 +38,18 @@ void Renderer::cleanup()
 		destroyPacket(packet);
 	}
 
+	for (auto& pass : renderPasses)
+	{
+		m_device.destroyRenderPass(pass);
+	}
 
-	cleanupParticles();
+
+	//cleanupParticles();
 
 	m_device.destroyRenderPass(renderPass);
 	m_device.destroyRenderPass(renderPassMsaa);
-	m_device.destroyPipeline(computePipeline);
-	m_device.destroyRenderPass(drawParticlesPass);
+	//m_device.destroyPipeline(computePipeline);
+	//m_device.destroyRenderPass(drawParticlesPass);
 
 }
 
@@ -64,17 +68,20 @@ void Renderer::draw()
 	updateUniformBuffer();
 	updateComputeUniformBuffer();
 
-	m_device.dispatchCompute(computePipeline);
+	//m_device.dispatchCompute(computePipeline);
 	m_device.beginDraw();
 
+
 	m_device.recordRenderPass(*currentDrawPassPtr);
-	m_device.recordRenderPass(drawParticlesPass);
+	//m_device.recordRenderPass(drawParticlesPass);
 	for (auto& renderPass : renderPasses)
 	{
 		m_device.recordRenderPass(renderPass);
 	}
 
 	m_device.recordImGui();
+
+
 
 	m_device.endDraw();
 
@@ -101,7 +108,26 @@ void Renderer::drawImgui()
 
 			char label[32];
 			sprintf(label, "Object %d", i);
-			if (ImGui::TreeNode(p.name.empty() ? "Packet" : p.name.c_str()))
+			if (ImGui::TreeNode(p.name.empty() ? label : p.name.c_str()))
+			{
+				ImGui::SliderFloat3("Translate", p.transform.translation, -5.0f, 5.0f);
+				ImGui::SliderFloat3("Rot", p.transform.rotation, 0.0f, 1.0f);
+				ImGui::SliderFloat3("Scale", p.transform.scale, 0.0f, 4.0f);
+
+				ImGui::TreePop();
+			}
+		}
+	}
+
+	if (ImGui::CollapsingHeader("Light List"))
+	{
+		for (int i = 0; i < lights.size(); i++)
+		{
+			MeshPacket& p = lights[i].cube;
+
+			char label[32];
+			sprintf(label, "Light %d", i);
+			if (ImGui::TreeNode(p.name.empty() ? label : p.name.c_str()))
 			{
 				ImGui::SliderFloat3("Translate", p.transform.translation, -5.0f, 5.0f);
 				ImGui::SliderFloat3("Rot", p.transform.rotation, 0.0f, 1.0f);
@@ -128,8 +154,8 @@ void Renderer::initPipeline()
 
 	PipelineDesc desc = {
 		.type = PipelineType::Graphics,
-		.vertexShader = "basic.vert.spv",
-		.pixelShader = "basic.ps.spv",
+		.vertexShader = "phong.vs.spv",
+		.pixelShader = "phong.ps.spv",
 
 		.bindingDescription = &bindingDescription,
 		.attributeDescriptions = attributeDescriptions.data(),
@@ -177,6 +203,67 @@ void Renderer::initPipeline()
 	renderPassMsaa = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 
 	m_device.setRenderPass(device_options.usesMsaa ? renderPassMsaa : renderPass);
+}
+
+void Renderer::drawLightsRenderPass()
+{
+	for (const auto& l : lights)
+	{
+		m_device.drawPacket(l.cube);
+	}
+}
+
+void Renderer::initDrawLightsRenderPass()
+{
+	auto attributeDescriptions = Vertex::getAttributeDescriptions();
+	auto bindingDescription = Vertex::getBindingDescription();
+
+	PipelineDesc desc = {
+		.type = PipelineType::Graphics,
+		.vertexShader = "basic.vert.spv",
+		.pixelShader = "basic.ps.spv",
+
+		.bindingDescription = &bindingDescription,
+		.attributeDescriptions = attributeDescriptions.data(),
+		.attributeDescriptionsCount = attributeDescriptions.size(),
+
+		.blendMode = BlendMode::Opaque,
+		.topology = PrimitiveToplogy::TriangleList,
+		.bindings = {
+			{
+				.slot = 0,
+				.type = BindingType::UBO,
+				.stageFlags = e_Vertex,
+			},
+			{
+				.slot = 1,
+				.type = BindingType::ImageSampler,
+				.stageFlags = e_Pixel,
+			}
+		},
+		.pushConstantsRanges = {
+			{
+				.offset = 0,
+				.size = sizeof(MeshPacket::PushConstantsData),
+				.stageFlags = e_Vertex
+			}
+		}
+	};
+
+	RenderPassDesc renderPassDesc = {
+		.colorAttachement_count = 1,
+		.hasDepth = true,
+		.useMsaa = device_options.usesMsaa,
+		.doClear = false,
+		.writeSwapChain = true,
+		.drawFunction = [&]() { drawLightsRenderPass(); },
+		.debugInfo = {
+				.name = "Draw light Cubes Render Pass",
+				.color = DebugColor::Blue,
+		},
+	};
+
+	renderPasses.push_back(m_device.createRenderPassAndPipeline(renderPassDesc, desc));
 }
 
 
@@ -507,4 +594,14 @@ void Renderer::updateComputeUniformBuffer()
 void Renderer::updateCamera(const CameraInfo& cameraInfo)
 {
 	this->cameraInfo = cameraInfo;
+}
+
+
+void Renderer::addLight(const float pos[3])
+{
+	Light light;
+	memcpy(light.position, pos, 3 * sizeof(float));
+	light.cube = m_device.createCubePacket(pos, 0.5f);
+
+	lights.push_back(light);
 }

@@ -487,7 +487,7 @@ public:
 	RenderPass createRenderPassAndPipeline(RenderPassDesc renderPassDesc, PipelineDesc pipelineDesc);
 	void setRenderPass(RenderPass& renderPass);
 	MeshPacket createPacket(Mesh& mesh, Texture* tex);
-	MeshPacket createCubePacket(float pos[3], float scale);
+	MeshPacket createCubePacket(const float pos[3], float scale);
 	void drawPacket(const MeshPacket& packet);
 	void destroyPipeline(Pipeline pipeline);
 	void destroyRenderPass(RenderPass renderPass);
