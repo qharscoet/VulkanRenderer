@@ -1396,6 +1396,18 @@ Buffer Device::createIndexBuffer(size_t size,void* src_data) {
 	return buff;
 }
 
+Buffer Device::createUniformBuffer(size_t size, void* src_data) {
+	Buffer ret_buffer;
+	createBuffer(size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, ret_buffer.buffer, ret_buffer.memory);
+	vkMapMemory(device, ret_buffer.memory, 0, size, 0, &ret_buffer.mapped_memory);
+	ret_buffer.size = size;
+
+	if (src_data)
+		memcpy(ret_buffer.mapped_memory, src_data, size);
+
+	return ret_buffer;
+}
+
 void Device::destroyBuffer(Buffer buffer) {
 	vkDestroyBuffer(device, buffer.buffer, nullptr);
 	vkFreeMemory(device, buffer.memory, nullptr);

@@ -98,6 +98,7 @@ private:
 
 	void updateUniformBuffer();
 	void updateComputeUniformBuffer();
+	void updateLightData();
 
 public:
 

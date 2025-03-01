@@ -113,7 +113,7 @@ struct Vertex {
 		attributeDescriptions[1].binding = 0;
 		attributeDescriptions[1].location = 1;
 		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[1].offset = offsetof(Vertex, pos);
+		attributeDescriptions[1].offset = offsetof(Vertex, normal);
 
 		attributeDescriptions[2].binding = 0;
 		attributeDescriptions[2].location = 2;
@@ -448,6 +448,7 @@ public:
 	Buffer createLocalBuffer(size_t size,VkBufferUsageFlags usage,  void* src_data = nullptr);
 	Buffer createVertexBuffer(size_t size, void* src_data = nullptr);
 	Buffer createIndexBuffer(size_t size, void* src_data = nullptr);
+	Buffer createUniformBuffer(size_t size, void* src_data = nullptr);
 	void destroyBuffer(Buffer buffer);
 
 	GpuImage createTexture(Texture tex);
@@ -494,6 +495,7 @@ public:
 
 	void bindVertexBuffer(Buffer& buffer);
 	void bindTexture(const GpuImage& image, VkSampler sampler);
+	void bindBuffer(const Buffer& buiffer, uint32_t set, uint32_t binding);
 	void transitionImage(BarrierDesc desc);
 	void drawCommand(uint32_t vertex_count);
 	void pushConstants(void* data, uint32_t size, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE);

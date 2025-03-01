@@ -70,6 +70,7 @@ void Renderer::draw()
 {
 	updateUniformBuffer();
 	updateComputeUniformBuffer();
+	updateLightData();
 
 	//m_device.dispatchCompute(computePipeline);
 	m_device.beginDraw();
@@ -306,8 +307,14 @@ void Renderer::drawImgui()
 	}
 }
 
+struct LightData
+{
+	float pos[3];
+};
+Buffer light_data;
+
 void Renderer::drawRenderPass() {
-	//awCube(0.0f, 0.0f, 0.0f, 10.f);
+	m_device.bindBuffer(light_data, 1, 0);
 	for (const auto& packet : packets)
 	{
 		drawPacket(packet);
@@ -333,15 +340,22 @@ void Renderer::initPipeline()
 		.bindings = {
 			{
 				{
-				.slot = 0,
-				.type = BindingType::UBO,
-				.stageFlags = e_Vertex,
+					.slot = 0,
+					.type = BindingType::UBO,
+					.stageFlags = e_Vertex,
+				},
+				{
+					.slot = 1,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				}
 			},
 			{
-				.slot = 1,
-				.type = BindingType::ImageSampler,
-				.stageFlags = e_Pixel,
-			}
+				{
+					.slot = 0,
+					.type = BindingType::UBO,
+					.stageFlags = e_Pixel,
+				},
 			}
 		},
 		.pushConstantsRanges = {
@@ -366,6 +380,7 @@ void Renderer::initPipeline()
 		},
 	};
 
+	light_data = m_device.createUniformBuffer(10 * sizeof(LightData));
 	renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 
 	renderPassDesc.useMsaa = true;
@@ -401,15 +416,15 @@ void Renderer::initDrawLightsRenderPass()
 		.bindings = {
 			{
 				{
-				.slot = 0,
-				.type = BindingType::UBO,
-				.stageFlags = e_Vertex,
-			},
-			{
-				.slot = 1,
-				.type = BindingType::ImageSampler,
-				.stageFlags = e_Pixel,
-			}
+					.slot = 0,
+					.type = BindingType::UBO,
+					.stageFlags = e_Vertex,
+				},
+				{
+					.slot = 1,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				}
 			}
 		},
 		.pushConstantsRanges = {
@@ -455,20 +470,20 @@ void Renderer::initComputePipeline()
 			.bindings = {
 				{
 					{
-					.slot = 0,
-					.type = BindingType::UBO,
-					.stageFlags = e_Compute,
-				},
-				{
-					.slot = 1,
-					.type = BindingType::StorageBuffer,
-					.stageFlags = e_Compute,
-				},
-				{
-					.slot = 2,
-					.type = BindingType::StorageBuffer,
-					.stageFlags = e_Compute,
-				}
+						.slot = 0,
+						.type = BindingType::UBO,
+						.stageFlags = e_Compute,
+					},
+					{
+						.slot = 1,
+						.type = BindingType::StorageBuffer,
+						.stageFlags = e_Compute,
+					},
+					{
+						.slot = 2,
+						.type = BindingType::StorageBuffer,
+						.stageFlags = e_Compute,
+					}
 				}
 			},
 		};
@@ -608,10 +623,10 @@ void Renderer::initTestPipeline2()
 		.bindings = {
 			{
 				{
-				.slot = 0,
-				.type = BindingType::ImageSampler,
-				.stageFlags = e_Pixel,
-			}
+					.slot = 0,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				}
 			}
 		},
 	};
@@ -763,6 +778,16 @@ void Renderer::updateComputeUniformBuffer()
 	ParticleUBO ubo{};
 	ubo.deltaTime = lastFrameTime * 2.0f;
 	m_device.updateComputeUniformBuffer(&ubo, sizeof(ParticleUBO));
+}
+
+void Renderer::updateLightData()
+{
+	const Light& l = lights[0];
+
+	LightData data;
+	memcpy(data.pos, l.position, 3 * sizeof(float));
+
+	memcpy(light_data.mapped_memory, &data, sizeof(data));
 }
 
 void Renderer::updateCamera(const CameraInfo& cameraInfo)

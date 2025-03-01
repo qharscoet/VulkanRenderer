@@ -404,7 +404,6 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	colorBlending.blendConstants[2] = 0.0f; // Optional
 	colorBlending.blendConstants[3] = 0.0f; // Optional
 
-	VkDescriptorSetLayout setLayout = createDescriptorSetLayout(desc.bindings.data(), desc.bindings.size());
 
 	size_t setCount = desc.bindings.size();
 
@@ -510,7 +509,6 @@ Pipeline Device::createComputePipeline(PipelineDesc desc)
 		setLayouts.push_back(createDescriptorSetLayout(bindingSet.data(), bindingSet.size()));
 	}
 
-	VkDescriptorSetLayout setLayout = createDescriptorSetLayout(desc.bindings.data(), desc.bindings.size());
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = setLayouts.size(); // Optional
@@ -707,6 +705,50 @@ void Device::bindTexture(const GpuImage& image, VkSampler sampler)
 	//vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &image.descriptorSet, 0, nullptr);
 }
 
+void Device::bindBuffer(const Buffer& buffer, uint32_t set, uint32_t binding)
+{
+	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
+
+	VkDescriptorPool descriptorPool = currentRenderPass->pipeline.descriptorPool;
+	VkDescriptorSetLayout descriptorSetLayout = currentRenderPass->pipeline.descriptorSetLayouts[set];
+
+	std::hash<VkBuffer> hasher;
+	size_t hash = 0;
+	hash_combine(hash, hasher(buffer.buffer));
+
+	if (currentRenderPass->pipeline.descriptorSetsMap.contains(hash))
+	{
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, set, 1, &currentRenderPass->pipeline.descriptorSetsMap[hash], 0, nullptr);
+		return;
+	}
+	else {
+		VkDescriptorSet descriptorSet;
+		createDescriptorSets(descriptorSetLayout, descriptorPool, &descriptorSet, 1);
+
+		//updateDescriptorSet(image.view, sampler, descriptorSet);
+
+		VkDescriptorBufferInfo bufferInfo = getDescriptorBufferInfo(buffer);
+
+		VkWriteDescriptorSet descriptorWrite{};
+
+		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrite.dstSet = descriptorSet;
+		descriptorWrite.dstBinding = 0;
+		descriptorWrite.dstArrayElement = 0;
+		descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrite.descriptorCount = 1;
+		descriptorWrite.pBufferInfo = &bufferInfo;
+		descriptorWrite.pImageInfo = nullptr;
+		descriptorWrite.pTexelBufferView = nullptr; // Optional
+
+		vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+
+		currentRenderPass->pipeline.descriptorSetsMap[hash] = descriptorSet;
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, set, 1, &descriptorSet, 0, nullptr);
+	}
+
+}
+
 void Device::transitionImage(BarrierDesc desc)
 {
 	const VkImageLayout layoutMap[ImageLayout::Nb] = {
@@ -769,7 +811,6 @@ void Device::drawPacket(const MeshPacket& packet)
 		updateDescriptorSet(bindings, images, buffers, descriptorSet);
 		currentRenderPass->pipeline.descriptorSetsMap[hash] = descriptorSet;
 		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
-
 	}
 
 

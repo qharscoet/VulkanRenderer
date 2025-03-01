@@ -26,6 +26,16 @@ cbuffer ubo : register(b0, space0)
 	UBO ubo;
 }
 
+struct Light
+{
+	float3 position;
+};
+	
+[[vk::binding(0, 1)]]
+cbuffer light_data : register(b0, space1)
+{
+	Light light;
+}
 
 struct Constants
 {
@@ -55,5 +65,5 @@ SamplerState g_sampler : register(s0);
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	return g_texture.Sample(g_sampler, input.uv) * float4(input.color, 0);
+	return g_texture.Sample(g_sampler, input.uv) * float4(input.color, 0) * float4(light.position, 1.0f);
 }
