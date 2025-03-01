@@ -406,6 +406,14 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 
 	VkDescriptorSetLayout setLayout = createDescriptorSetLayout(desc.bindings.data(), desc.bindings.size());
 
+	size_t setCount = desc.bindings.size();
+
+	std::vector<VkDescriptorSetLayout> setLayouts;
+	for (int i = 0; i < setCount; i++)
+	{
+		setLayouts.push_back(createDescriptorSetLayout(desc.bindings[i].data(), desc.bindings[i].size()));
+	}
+
 	std::vector<VkPushConstantRange> pushConstantsRanges;
 
 	for (auto& range : desc.pushConstantsRanges)
@@ -425,8 +433,8 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1; // Optional
-	pipelineLayoutInfo.pSetLayouts = &setLayout;
+	pipelineLayoutInfo.setLayoutCount = setLayouts.size(); // Optional
+	pipelineLayoutInfo.pSetLayouts = setLayouts.data();
 	pipelineLayoutInfo.pushConstantRangeCount = pushConstantsRanges.size(); // Optional
 	pipelineLayoutInfo.pPushConstantRanges = pushConstantsRanges.data(); // Optional
 
@@ -468,10 +476,10 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	vkDestroyShaderModule(device, vertShaderModule, nullptr);
 
 
-	out_pipeline.descriptorSetLayout = setLayout;
+	out_pipeline.descriptorSetLayouts = setLayouts;
 	out_pipeline.renderPass = renderPass;
 	out_pipeline.pipelineLayout = out_pipelineLayout;
-	out_pipeline.descriptorPool = createDescriptorPool(desc.bindings.data(), desc.bindings.size());;
+	out_pipeline.descriptorPool = createDescriptorPool(desc.bindings[0].data(), desc.bindings[0].size()); //TODO: reconsider this
 
 	out_pipeline.descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
 	out_pipeline.bindings = std::move(desc.bindings);
@@ -496,12 +504,17 @@ Pipeline Device::createComputePipeline(PipelineDesc desc)
 	computeShaderStageInfo.pName = "main";
 
 
+	std::vector<VkDescriptorSetLayout> setLayouts;
+	for (auto& bindingSet : desc.bindings)
+	{
+		setLayouts.push_back(createDescriptorSetLayout(bindingSet.data(), bindingSet.size()));
+	}
 
 	VkDescriptorSetLayout setLayout = createDescriptorSetLayout(desc.bindings.data(), desc.bindings.size());
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1; // Optional
-	pipelineLayoutInfo.pSetLayouts = &setLayout;
+	pipelineLayoutInfo.setLayoutCount = setLayouts.size(); // Optional
+	pipelineLayoutInfo.pSetLayouts = setLayouts.data();
 	pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
 	pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
@@ -524,7 +537,7 @@ Pipeline Device::createComputePipeline(PipelineDesc desc)
 	vkDestroyShaderModule(device, computeShaderModule, nullptr);
 
 
-	out_pipeline.descriptorSetLayout = setLayout;
+	out_pipeline.descriptorSetLayouts = setLayouts;
 	out_pipeline.renderPass = VK_NULL_HANDLE;
 	out_pipeline.pipelineLayout = computePipelineLayout;
 	out_pipeline.descriptorPool = VK_NULL_HANDLE;
@@ -647,7 +660,7 @@ void Device::bindTexture(const GpuImage& image, VkSampler sampler)
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 
 	VkDescriptorPool descriptorPool = currentRenderPass->pipeline.descriptorPool;
-	VkDescriptorSetLayout descriptorSetLayout = currentRenderPass->pipeline.descriptorSetLayout;
+	VkDescriptorSetLayout descriptorSetLayout = currentRenderPass->pipeline.descriptorSetLayouts[0];
 
 	std::hash<VkImage> hasher;
 	size_t hash = 0;
@@ -732,8 +745,8 @@ void Device::drawPacket(const MeshPacket& packet)
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 
 	VkDescriptorPool descriptorPool = currentRenderPass->pipeline.descriptorPool;
-	VkDescriptorSetLayout descriptorSetLayout = currentRenderPass->pipeline.descriptorSetLayout;
-	std::vector<BindingDesc>& bindings = currentRenderPass->pipeline.bindings;
+	VkDescriptorSetLayout descriptorSetLayout = currentRenderPass->pipeline.descriptorSetLayouts[0];
+	std::vector<BindingDesc>& bindings = currentRenderPass->pipeline.bindings[0];
 
 	std::hash<VkImageView> img_hasher;
 	std::hash<VkSampler> sampler_hasher;
@@ -795,7 +808,11 @@ void Device::drawPacket(const MeshPacket& packet)
 
 void Device::destroyPipeline(Pipeline pipeline)
 {
-	vkDestroyDescriptorSetLayout(device, pipeline.descriptorSetLayout, nullptr);
+	for (const auto setLayout : pipeline.descriptorSetLayouts)
+	{
+		vkDestroyDescriptorSetLayout(device, setLayout, nullptr);
+	}
+
 	vkDestroyPipeline(device, pipeline.graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(device, pipeline.pipelineLayout, nullptr);
 	if(pipeline.descriptorPool)

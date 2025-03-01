@@ -57,7 +57,7 @@ struct PipelineDesc {
 	//Descriptors params
 	BlendMode blendMode;
 	PrimitiveToplogy topology;
-	std::vector<BindingDesc> bindings;
+	std::vector<std::vector<BindingDesc>> bindings; //vector of sets of bindings
 
 	std::vector<PushConstantsRange> pushConstantsRanges;
 
@@ -135,10 +135,10 @@ struct RenderPassDesc
 
 struct Pipeline {
 	VkRenderPass renderPass;
-	VkDescriptorSetLayout descriptorSetLayout;
+	std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
 	std::vector<VkDescriptorSet> descriptorSets;
 	std::unordered_map<size_t, VkDescriptorSet> descriptorSetsMap;
-	std::vector<BindingDesc> bindings;
+	std::vector<std::vector<BindingDesc>> bindings;
 	VkDescriptorPool descriptorPool;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;

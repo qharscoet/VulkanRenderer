@@ -332,6 +332,7 @@ void Renderer::initPipeline()
 		.topology = PrimitiveToplogy::TriangleList,
 		.bindings = {
 			{
+				{
 				.slot = 0,
 				.type = BindingType::UBO,
 				.stageFlags = e_Vertex,
@@ -340,6 +341,7 @@ void Renderer::initPipeline()
 				.slot = 1,
 				.type = BindingType::ImageSampler,
 				.stageFlags = e_Pixel,
+			}
 			}
 		},
 		.pushConstantsRanges = {
@@ -398,6 +400,7 @@ void Renderer::initDrawLightsRenderPass()
 		.topology = PrimitiveToplogy::TriangleList,
 		.bindings = {
 			{
+				{
 				.slot = 0,
 				.type = BindingType::UBO,
 				.stageFlags = e_Vertex,
@@ -406,6 +409,7 @@ void Renderer::initDrawLightsRenderPass()
 				.slot = 1,
 				.type = BindingType::ImageSampler,
 				.stageFlags = e_Pixel,
+			}
 			}
 		},
 		.pushConstantsRanges = {
@@ -450,6 +454,7 @@ void Renderer::initComputePipeline()
 
 			.bindings = {
 				{
+					{
 					.slot = 0,
 					.type = BindingType::UBO,
 					.stageFlags = e_Compute,
@@ -464,11 +469,12 @@ void Renderer::initComputePipeline()
 					.type = BindingType::StorageBuffer,
 					.stageFlags = e_Compute,
 				}
+				}
 			},
 		};
 
 		computePipeline = m_device.createComputePipeline(desc);
-		computePipeline.descriptorPool = m_device.createDescriptorPool(desc.bindings.data(), desc.bindings.size());
+		computePipeline.descriptorPool = m_device.createDescriptorPool(desc.bindings[0].data(), desc.bindings[0].size()); //TODO: reconsider this
 		m_device.createComputeDescriptorSets(computePipeline);
 	}
 
@@ -601,9 +607,11 @@ void Renderer::initTestPipeline2()
 		.topology = PrimitiveToplogy::TriangleStrip,
 		.bindings = {
 			{
+				{
 				.slot = 0,
 				.type = BindingType::ImageSampler,
 				.stageFlags = e_Pixel,
+			}
 			}
 		},
 	};

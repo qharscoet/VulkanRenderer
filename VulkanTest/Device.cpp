@@ -830,7 +830,7 @@ void Device::createUniformBuffers() {
 
 void Device::createComputeDescriptorSets(const Pipeline& computePipeline) {
 	computeDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-	createDescriptorSets(computePipeline.descriptorSetLayout, computePipeline.descriptorPool, computeDescriptorSets.data(), MAX_FRAMES_IN_FLIGHT);
+	createDescriptorSets(computePipeline.descriptorSetLayouts[0], computePipeline.descriptorPool, computeDescriptorSets.data(), MAX_FRAMES_IN_FLIGHT);
 }
 
 
