@@ -247,8 +247,9 @@ int loadGltf(const char* path, Mesh* out_mesh)
 			size_t stride = bufferView.byteStride > 0 ? bufferView.byteStride : elem_size;
 			for (int i = 0; i < accessor.count; i++)
 			{
-
-				out_mesh->indices.push_back(*(data + i * stride));
+				//TODO: read the format correctly;
+				uint16_t* addr = (uint16_t*)(data + i * stride);
+				out_mesh->indices.push_back(*addr);
 			}
 
 		}
