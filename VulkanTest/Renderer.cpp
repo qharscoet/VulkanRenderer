@@ -5,12 +5,14 @@
 #include <random>
 
 #include <imgui.h>
+#include <ImGuizmo.h>
 
 /* TODOs:
 	- Separate UBO from other descriptor sets, or include it in the hashing ?
 	- Barriers using subpasses
 */
 
+static UniformBufferObject ubo{};
 
 void Renderer::init(GLFWwindow* window, DeviceOptions options)
 {
@@ -61,6 +63,7 @@ void Renderer::waitIdle()
 void Renderer::newImGuiFrame()
 {
 	m_device.newImGuiFrame();
+	ImGuizmo::BeginFrame();
 }
 
 void Renderer::draw()
@@ -90,6 +93,122 @@ void Renderer::draw()
 		nextRenderPassPtr.reset();
 	}
 
+}
+
+static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::TRANSLATE);
+static int lastUsing = 0;
+
+static const float identityMatrix[16] =
+{ 1.f, 0.f, 0.f, 0.f,
+	0.f, 1.f, 0.f, 0.f,
+	0.f, 0.f, 1.f, 0.f,
+	0.f, 0.f, 0.f, 1.f };
+
+void EditTransform(float* cameraView, float* cameraProjection, float* matrixTranslation, float* matrixRotation, float* matrixScale, bool editTransformDecomposition)
+{
+	static ImGuizmo::MODE mCurrentGizmoMode(ImGuizmo::WORLD);
+	static bool useSnap = false;
+	static float snap[3] = { 1.f, 1.f, 1.f };
+	static float bounds[] = { -0.5f, -0.5f, -0.5f, 0.5f, 0.5f, 0.5f };
+	static float boundsSnap[] = { 0.1f, 0.1f, 0.1f };
+	static bool boundSizing = false;
+	static bool boundSizingSnap = false;
+
+	float matrix[16];
+
+	if (editTransformDecomposition)
+	{
+		//if (ImGui::IsKeyPressed(90))
+		//	mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+		//if (ImGui::IsKeyPressed(69))
+		//	mCurrentGizmoOperation = ImGuizmo::ROTATE;
+		//if (ImGui::IsKeyPressed(82)) // r Key
+		//	mCurrentGizmoOperation = ImGuizmo::SCALE;
+		if (ImGui::RadioButton("Translate", mCurrentGizmoOperation == ImGuizmo::TRANSLATE))
+			mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+		ImGui::SameLine();
+		if (ImGui::RadioButton("Rotate", mCurrentGizmoOperation == ImGuizmo::ROTATE))
+			mCurrentGizmoOperation = ImGuizmo::ROTATE;
+		ImGui::SameLine();
+		if (ImGui::RadioButton("Scale", mCurrentGizmoOperation == ImGuizmo::SCALE))
+			mCurrentGizmoOperation = ImGuizmo::SCALE;
+
+		ImGui::InputFloat3("Tr", matrixTranslation);
+		ImGui::InputFloat3("Rt", matrixRotation);
+		ImGui::InputFloat3("Sc", matrixScale);
+
+
+		ImGuizmo::RecomposeMatrixFromComponents(matrixTranslation, matrixRotation, matrixScale, matrix);
+
+		if (mCurrentGizmoOperation != ImGuizmo::SCALE)
+		{
+			if (ImGui::RadioButton("Local", mCurrentGizmoMode == ImGuizmo::LOCAL))
+				mCurrentGizmoMode = ImGuizmo::LOCAL;
+			ImGui::SameLine();
+			if (ImGui::RadioButton("World", mCurrentGizmoMode == ImGuizmo::WORLD))
+				mCurrentGizmoMode = ImGuizmo::WORLD;
+		}
+		//if (ImGui::IsKeyPressed(83))
+		//	useSnap = !useSnap;
+		ImGui::Checkbox("snap", &useSnap);
+		ImGui::SameLine();
+
+		switch (mCurrentGizmoOperation)
+		{
+		case ImGuizmo::TRANSLATE:
+			ImGui::InputFloat3("Snap", &snap[0]);
+			break;
+		case ImGuizmo::ROTATE:
+			ImGui::InputFloat("Angle Snap", &snap[0]);
+			break;
+		case ImGuizmo::SCALE:
+			ImGui::InputFloat("Scale Snap", &snap[0]);
+			break;
+		}
+		ImGui::Checkbox("Bound Sizing", &boundSizing);
+		if (boundSizing)
+		{
+			ImGui::PushID(3);
+			ImGui::Checkbox("", &boundSizingSnap);
+			ImGui::SameLine();
+			ImGui::InputFloat3("Snap", boundsSnap);
+			ImGui::PopID();
+		}
+	}
+
+	ImGuiIO& io = ImGui::GetIO();
+	float viewManipulateRight = io.DisplaySize.x;
+	float viewManipulateTop = 0;
+	if (false)//useWindow)
+	{
+		ImGui::SetNextWindowSize(ImVec2(800, 400));
+		ImGui::SetNextWindowPos(ImVec2(400, 20));
+		ImGui::PushStyleColor(ImGuiCol_WindowBg, (ImVec4)ImColor(0.35f, 0.3f, 0.3f));
+		ImGui::Begin("Gizmo", 0, ImGuiWindowFlags_NoMove);
+		ImGuizmo::SetDrawlist();
+		float windowWidth = (float)ImGui::GetWindowWidth();
+		float windowHeight = (float)ImGui::GetWindowHeight();
+		ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, windowWidth, windowHeight);
+		viewManipulateRight = ImGui::GetWindowPos().x + windowWidth;
+		viewManipulateTop = ImGui::GetWindowPos().y;
+	}
+	else
+	{
+		ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
+	}
+
+	ImGuizmo::DrawGrid(cameraView, cameraProjection, identityMatrix, 100.f);
+	//ImGuizmo::DrawCubes(cameraView, cameraProjection, &objectMatrix[0][0], gizmoCount);
+	ImGuizmo::Manipulate(cameraView, cameraProjection, mCurrentGizmoOperation, mCurrentGizmoMode, matrix, NULL, useSnap ? &snap[0] : NULL, boundSizing ? bounds : NULL, boundSizingSnap ? boundsSnap : NULL);
+
+	//ImGuizmo::ViewManipulate(cameraView, camDistance, ImVec2(viewManipulateRight - 128, viewManipulateTop), ImVec2(128, 128), 0x10101010);
+
+	ImGuizmo::DecomposeMatrixToComponents(matrix, matrixTranslation, matrixRotation, matrixScale);
+	if (false)//useWindow)
+	{
+		ImGui::End();
+		ImGui::PopStyleColor(1);
+	}
 }
 
 void Renderer::drawImgui()
@@ -123,19 +242,67 @@ void Renderer::drawImgui()
 	{
 		for (int i = 0; i < lights.size(); i++)
 		{
-			MeshPacket& p = lights[i].cube;
+			Light& l = lights[i];
+			MeshPacket& p = l.cube;
 
 			char label[32];
 			sprintf(label, "Light %d", i);
 			if (ImGui::TreeNode(p.name.empty() ? label : p.name.c_str()))
 			{
-				ImGui::SliderFloat3("Translate", p.transform.translation, -5.0f, 5.0f);
+				ImGui::SliderFloat3("Translate", p.transform.translation , -5.0f, 5.0f);
 				ImGui::SliderFloat3("Rot", p.transform.rotation, 0.0f, 1.0f);
 				ImGui::SliderFloat3("Scale", p.transform.scale, 0.0f, 4.0f);
+
+				memcpy(l.position, p.transform.translation, 3 * sizeof(float));
 
 				ImGui::TreePop();
 			}
 		}
+	}
+
+	if (ImGui::CollapsingHeader("Test guizmo"))
+	{
+		auto m = ubo.proj;
+		m[1][1] *= -1;
+
+		ImGuizmo::SetOrthographic(false);
+		if (ImGuizmo::IsUsing())
+		{
+			ImGui::Text("Using gizmo");
+		}
+		else
+		{
+			ImGui::Text(ImGuizmo::IsOver() ? "Over gizmo" : "");
+			ImGui::SameLine();
+			ImGui::Text(ImGuizmo::IsOver(ImGuizmo::TRANSLATE) ? "Over translate gizmo" : "");
+			ImGui::SameLine();
+			ImGui::Text(ImGuizmo::IsOver(ImGuizmo::ROTATE) ? "Over rotate gizmo" : "");
+			ImGui::SameLine();
+			ImGui::Text(ImGuizmo::IsOver(ImGuizmo::SCALE) ? "Over scale gizmo" : "");
+		}
+
+		ImGui::Separator();
+		for (int matId = 0; matId <  packets.size(); matId++)
+		{
+			ImGuizmo::SetID(matId);
+
+			MeshPacket& packet = packets[matId];
+
+			auto t = packets[matId].transform;
+
+			float* translate = packet.transform.translation;
+			float* rotation = packet.transform.rotation;
+			float* scale = packet.transform.scale;
+
+	
+		
+			EditTransform(&ubo.view[0][0], &m[0][0], translate, rotation, scale, lastUsing == matId);
+			if (ImGuizmo::IsUsing())
+			{
+				lastUsing = matId;
+			}
+		}
+
 	}
 }
 
@@ -571,7 +738,6 @@ void Renderer::updateUniformBuffer() {
 	glm::vec3 up = glm::vec3(cameraInfo.up[0], cameraInfo.up[1], cameraInfo.up[2]);
 	glm::vec3 forward = glm::vec3(cameraInfo.forward[0], cameraInfo.forward[1], cameraInfo.forward[2]);
 
-	UniformBufferObject ubo{};
 	ubo.view = glm::lookAt(pos, pos + forward, up);
 	ubo.proj = glm::perspective(glm::radians(45.0f), dim.width / (float)dim.height, 0.1f, 20.0f);
 	ubo.proj[1][1] *= -1;
