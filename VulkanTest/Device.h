@@ -130,48 +130,48 @@ struct Vertex {
 		return attributeDescriptions;
 	}
 
+
 	static std::vector<Vertex> getCubeVertices()
 	{
 		return {
 			// Front face
-			{{-0.5f, -0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // Bottom-left
-			{{ 0.5f, -0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}}, // Bottom-right
-			{{ 0.5f,  0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}}, // Top-right
-			{{-0.5f,  0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, 1.0f}}, // Top-left
+			{{-0.5f, -0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
+			{{ 0.5f, -0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}}, // Bottom-right
+			{{ 0.5f,  0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}, // Top-right
+			{{-0.5f,  0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}, // Top-left
 
 			// Back face
-			{{ 0.5f, -0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {1.0f, 0.0f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
-			{{-0.5f, -0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {0.0f, 1.0f, 1.0f}, {1.0f, 0.0f}}, // Bottom-right
+			{{ 0.5f, -0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
+			{{-0.5f, -0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}}, // Bottom-right
 			{{-0.5f,  0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}, // Top-right
-			{{ 0.5f,  0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {0.5f, 0.5f, 0.5f}, {0.0f, 1.0f}}, // Top-left
+			{{ 0.5f,  0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}, // Top-left
 
 			// Left face
-			{{-0.5f, -0.5f, -0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 0.5f, 0.0f}, {0.0f, 0.0f}}, // Bottom-left
-			{{-0.5f, -0.5f,  0.5f}, {-1.0f,  0.0f,  0.0f}, {0.5f, 1.0f, 0.0f}, {1.0f, 0.0f}}, // Bottom-right
-			{{-0.5f,  0.5f,  0.5f}, {-1.0f,  0.0f,  0.0f}, {0.0f, 0.5f, 1.0f}, {1.0f, 1.0f}}, // Top-right
-			{{-0.5f,  0.5f, -0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 0.0f, 0.5f}, {0.0f, 1.0f}}, // Top-left
+			{{-0.5f, -0.5f, -0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
+			{{-0.5f, -0.5f,  0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}}, // Bottom-right
+			{{-0.5f,  0.5f,  0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}, // Top-right
+			{{-0.5f,  0.5f, -0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}, // Top-left
 
 			// Right face
-			{{ 0.5f, -0.5f,  0.5f}, {1.0f,  0.0f,  0.0f}, {0.5f, 0.0f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
-			{{ 0.5f, -0.5f, -0.5f}, {1.0f,  0.0f,  0.0f}, {1.0f, 0.5f, 1.0f}, {1.0f, 0.0f}}, // Bottom-right
-			{{ 0.5f,  0.5f, -0.5f}, {1.0f,  0.0f,  0.0f}, {0.0f, 1.0f, 0.5f}, {1.0f, 1.0f}}, // Top-right
-			{{ 0.5f,  0.5f,  0.5f}, {1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, 1.0f}}, // Top-left
+			{{ 0.5f, -0.5f,  0.5f}, {1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
+			{{ 0.5f, -0.5f, -0.5f}, {1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}}, // Bottom-right
+			{{ 0.5f,  0.5f, -0.5f}, {1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}, // Top-right
+			{{ 0.5f,  0.5f,  0.5f}, {1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}, // Top-left
 
 			// Bottom face
-			{{-0.5f, -0.5f, -0.5f}, {0.0f, -1.0f,  0.0f}, {0.5f, 0.5f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
-			{{ 0.5f, -0.5f, -0.5f}, {0.0f, -1.0f,  0.0f}, {1.0f, 0.0f, 0.5f}, {1.0f, 0.0f}}, // Bottom-right
-			{{ 0.5f, -0.5f,  0.5f}, {0.0f, -1.0f,  0.0f}, {0.0f, 1.0f, 0.5f}, {1.0f, 1.0f}}, // Top-right
-			{{-0.5f, -0.5f,  0.5f}, {0.0f, -1.0f,  0.0f}, {0.5f, 1.0f, 1.0f}, {0.0f, 1.0f}}, // Top-left
+			{{-0.5f, -0.5f, -0.5f}, {0.0f, -1.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
+			{{ 0.5f, -0.5f, -0.5f}, {0.0f, -1.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}}, // Bottom-right
+			{{ 0.5f, -0.5f,  0.5f}, {0.0f, -1.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}, // Top-right
+			{{-0.5f, -0.5f,  0.5f}, {0.0f, -1.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}, // Top-left
 
 			// Top face
-			{{-0.5f,  0.5f,  0.5f}, {0.0f,  1.0f,  0.0f}, {1.0f, 0.5f, 0.5f}, {0.0f, 0.0f}}, // Bottom-left
-			{{ 0.5f,  0.5f,  0.5f}, {0.0f,  1.0f,  0.0f}, {0.5f, 1.0f, 0.5f}, {1.0f, 0.0f}}, // Bottom-right
-			{{ 0.5f,  0.5f, -0.5f}, {0.0f,  1.0f,  0.0f}, {0.0f, 0.5f, 1.0f}, {1.0f, 1.0f}}, // Top-right
-			{{-0.5f,  0.5f, -0.5f}, {0.0f,  1.0f,  0.0f}, {1.0f, 1.0f, 0.5f}, {0.0f, 1.0f}}, // Top-left
+			{{-0.5f,  0.5f,  0.5f}, {0.0f,  1.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
+			{{ 0.5f,  0.5f,  0.5f}, {0.0f,  1.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}}, // Bottom-right
+			{{ 0.5f,  0.5f, -0.5f}, {0.0f,  1.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}, // Top-right
+			{{-0.5f,  0.5f, -0.5f}, {0.0f,  1.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}, // Top-left
 		};
 
 	}
-	
 	static std::vector<uint32_t> getCubeIndices() {
 		return {
 			0, 1, 2, 2, 3, 0, // Front face
@@ -498,7 +498,7 @@ public:
 	void bindBuffer(const Buffer& buiffer, uint32_t set, uint32_t binding);
 	void transitionImage(BarrierDesc desc);
 	void drawCommand(uint32_t vertex_count);
-	void pushConstants(void* data, uint32_t size, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE);
+	void pushConstants(void* data, uint32_t offset, uint32_t size, StageFlags = e_Vertex, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE);
 
 	void recordRenderPass(RenderPass& renderPass);
 	void recordImGui();

@@ -14,6 +14,22 @@
 
 static UniformBufferObject ubo{};
 
+struct LightData
+{
+	float ambiantStrenght = 0.1f;
+	float specularStrength = 0.5;
+	float shininess = 32;
+	float pad;
+
+	float pos[3];
+	float padding;
+
+	float color[3];
+};
+
+static LightData light_data;
+static bool light_autorotate;
+
 void Renderer::init(GLFWwindow* window, DeviceOptions options)
 {
 	device_options = options;
@@ -241,6 +257,9 @@ void Renderer::drawImgui()
 
 	if (ImGui::CollapsingHeader("Light List"))
 	{
+		ImGui::SliderFloat("Ambiant Strength", &light_data.ambiantStrenght, 0.f, 1.f);
+		ImGui::SliderFloat("Specular Strength", &light_data.specularStrength, 0.f, 1.f);
+		ImGui::SliderFloat("Shininess", &light_data.shininess, 0.f, 256.f);
 		for (int i = 0; i < lights.size(); i++)
 		{
 			Light& l = lights[i];
@@ -250,11 +269,15 @@ void Renderer::drawImgui()
 			sprintf(label, "Light %d", i);
 			if (ImGui::TreeNode(p.name.empty() ? label : p.name.c_str()))
 			{
-				ImGui::SliderFloat3("Translate", p.transform.translation , -5.0f, 5.0f);
+				ImGui::Checkbox("Light rotate", &light_autorotate);
+				ImGui::SliderFloat3("Translate", l.position, -5.0f, 5.0f);
 				ImGui::SliderFloat3("Rot", p.transform.rotation, 0.0f, 1.0f);
 				ImGui::SliderFloat3("Scale", p.transform.scale, 0.0f, 4.0f);
 
-				memcpy(l.position, p.transform.translation, 3 * sizeof(float));
+				ImGui::ColorEdit3("Color", l.color);
+
+				memcpy(p.transform.translation, l.position,  3 * sizeof(float));
+
 
 				ImGui::TreePop();
 			}
@@ -307,14 +330,10 @@ void Renderer::drawImgui()
 	}
 }
 
-struct LightData
-{
-	float pos[3];
-};
-Buffer light_data;
-
+Buffer light_data_gpu;
 void Renderer::drawRenderPass() {
-	m_device.bindBuffer(light_data, 1, 0);
+	m_device.bindBuffer(light_data_gpu, 1, 0);
+	m_device.pushConstants(cameraInfo.position, sizeof(MeshPacket::PushConstantsData), 3 * sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
 	for (const auto& packet : packets)
 	{
 		drawPacket(packet);
@@ -361,9 +380,14 @@ void Renderer::initPipeline()
 		.pushConstantsRanges = {
 			{
 				.offset = 0,
-				.size = sizeof(MeshPacket::PushConstantsData),
-				.stageFlags = e_Vertex
-			}
+				.size = sizeof(MeshPacket::PushConstantsData) + sizeof(float) * 3,
+				.stageFlags = (StageFlags)(e_Vertex | e_Pixel)
+			},
+			//{
+			//	.offset = sizeof(MeshPacket::PushConstantsData),
+			//	.size = ,
+			//	.stageFlags = (StageFlags)(e_Pixel | e_Vertex)
+			//}
 		}
 	};
 
@@ -380,7 +404,7 @@ void Renderer::initPipeline()
 		},
 	};
 
-	light_data = m_device.createUniformBuffer(10 * sizeof(LightData));
+	light_data_gpu = m_device.createUniformBuffer(10 * sizeof(LightData));
 	renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 
 	renderPassDesc.useMsaa = true;
@@ -393,6 +417,7 @@ void Renderer::drawLightsRenderPass()
 {
 	for (const auto& l : lights)
 	{
+		m_device.pushConstants((void*)&l.color[0], sizeof(MeshPacket::PushConstantsData), 3 * sizeof(float), (StageFlags)(e_Vertex | e_Pixel));
 		m_device.drawPacket(l.cube);
 	}
 }
@@ -430,8 +455,8 @@ void Renderer::initDrawLightsRenderPass()
 		.pushConstantsRanges = {
 			{
 				.offset = 0,
-				.size = sizeof(MeshPacket::PushConstantsData),
-				.stageFlags = e_Vertex
+				.size = sizeof(MeshPacket::PushConstantsData) + 3 * sizeof(float), // + light color
+				.stageFlags = (StageFlags)(e_Vertex | e_Pixel)
 			}
 		}
 	};
@@ -538,7 +563,7 @@ static VkSampler defaultSampler;
 void drawTest(Device& device)
 {
 	auto c = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-	device.pushConstants(&c, sizeof(glm::vec4));
+	device.pushConstants(&c, 0,  sizeof(glm::vec4));
 	device.drawCommand(3);
 }
 
@@ -782,12 +807,27 @@ void Renderer::updateComputeUniformBuffer()
 
 void Renderer::updateLightData()
 {
-	const Light& l = lights[0];
+	static auto startTime = std::chrono::high_resolution_clock::now();
 
-	LightData data;
-	memcpy(data.pos, l.position, 3 * sizeof(float));
+	auto currentTime = std::chrono::high_resolution_clock::now();
+	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-	memcpy(light_data.mapped_memory, &data, sizeof(data));
+	float angle = time;
+
+	Light& l = lights[0];
+
+	if (light_autorotate)
+	{
+		l.position[0] = 2.0f * cos(angle);
+		l.position[2] = 2.0f * sin(angle);
+
+		memcpy(l.cube.transform.translation, l.position, 3 * sizeof(float));
+	}
+
+	memcpy(&light_data.pos, l.position, 3*sizeof(float));
+	memcpy(&light_data.color, l.color, 3*sizeof(float));
+
+	memcpy(light_data_gpu.mapped_memory, &light_data, sizeof(light_data));
 }
 
 void Renderer::updateCamera(const CameraInfo& cameraInfo)

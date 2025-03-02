@@ -11,7 +11,8 @@
         "glfw-binding",
         "vulkan-binding"
       ]
-    }
+    },
+    "imguizmo"
   ],
   "builtin-baseline": "74ec888e385d189b42d6b398d0bbaa6f1b1d3b0e"
 }

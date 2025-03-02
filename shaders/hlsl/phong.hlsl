@@ -12,6 +12,7 @@ struct PSInput
 	[[vk::location(0)]] float3 color : COLOR0;
 	[[vk::location(1)]] float2 uv : TEXCOORD;
 	[[vk::location(2)]] float3 normal : NORMAL;
+	[[vk::location(3)]] float3 worldPos : WORLDPOSITION;
 };
 
 
@@ -29,21 +30,64 @@ cbuffer ubo : register(b0, space0)
 struct Light
 {
 	float3 position;
+	float3 color;
 };
 	
 [[vk::binding(0, 1)]]
 cbuffer light_data : register(b0, space1)
 {
+	float ambiant;
+	float specularStrength;
+	float shininess;
+	float pad;
+	
 	Light light;
 }
 
 struct Constants
 {
 	float4x4 model;
+	float3 eye;
 };
 
 [[vk::push_constant]]
 Constants pc;
+
+//ChatGPT generated as it's not built-in, but we won't need this when we upgrade models
+float3x3 Inverse3x3(float3x3 m)
+{
+    // Compute determinant of the 3x3 matrix
+	float det =
+        m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+        m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+        m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+
+	if (abs(det) < 1e-6)
+	{
+        // If determinant is too small, return identity matrix (fallback)
+		return float3x3(1.0, 0.0, 0.0,
+                        0.0, 1.0, 0.0,
+                        0.0, 0.0, 1.0);
+	}
+
+	float invDet = 1.0 / det;
+
+    // Compute inverse using cofactor method
+	float3x3 invMat;
+	invMat[0][0] = (m[1][1] * m[2][2] - m[1][2] * m[2][1]) * invDet;
+	invMat[0][1] = (m[0][2] * m[2][1] - m[0][1] * m[2][2]) * invDet;
+	invMat[0][2] = (m[0][1] * m[1][2] - m[0][2] * m[1][1]) * invDet;
+
+	invMat[1][0] = (m[1][2] * m[2][0] - m[1][0] * m[2][2]) * invDet;
+	invMat[1][1] = (m[0][0] * m[2][2] - m[0][2] * m[2][0]) * invDet;
+	invMat[1][2] = (m[0][2] * m[1][0] - m[0][0] * m[1][2]) * invDet;
+
+	invMat[2][0] = (m[1][0] * m[2][1] - m[1][1] * m[2][0]) * invDet;
+	invMat[2][1] = (m[0][1] * m[2][0] - m[0][0] * m[2][1]) * invDet;
+	invMat[2][2] = (m[0][0] * m[1][1] - m[0][1] * m[1][0]) * invDet;
+
+	return invMat;
+}
 
 PSInput VSMain(VSInput input)
 {
@@ -52,7 +96,15 @@ PSInput VSMain(VSInput input)
 	result.position = mul(ubo.proj, mul(ubo.view, mul(pc.model, float4(input.Position.xyz, 1.0))));;
 	result.uv = input.TexCoords;
 	result.color = input.Color;
-	result.normal = input.Normal;
+	
+	// Extract the upper-left 3x3 part of the model matrix
+	float3x3 normalMatrix = (float3x3) pc.model;
+
+    // Compute the inverse transpose of the normal matrix
+	normalMatrix = transpose(Inverse3x3(normalMatrix));
+	
+	result.normal = mul(normalMatrix, input.Normal);
+	result.worldPos = mul(pc.model, float4(input.Position.xyz, 1.0f));
 	return result;
 }
 
@@ -65,5 +117,24 @@ SamplerState g_sampler : register(s0);
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	return g_texture.Sample(g_sampler, input.uv) * float4(input.color, 0) * float4(light.position, 1.0f);
+	float4 texColor = g_texture.Sample(g_sampler, input.uv) * float4(input.color, 0);
+	
+	//Ambiant
+	float4 ambiantLight = float4(light.color * ambiant, 1.0f);
+	
+	float3 light_vec = normalize(light.position - input.worldPos.xyz);
+	
+	float3 norm = normalize(input.normal);
+	
+	//Diffuse
+	float diffuse = max(dot(light_vec, norm), 0.0f);
+	float4 diffuseLight = float4(light.color * diffuse, 1.0f);
+	
+	//Specular
+	float3 view_vec = normalize(pc.eye - input.worldPos.xyz);
+	float3 reflect_vec = reflect(-light_vec, norm);
+	float specular = pow(max(dot(view_vec, reflect_vec), 0.0f), shininess);
+	float4 specularLight = float4(light.color * specular * specularStrength, 1.0f);
+
+	return texColor * (ambiantLight + diffuseLight + specularLight);
 }

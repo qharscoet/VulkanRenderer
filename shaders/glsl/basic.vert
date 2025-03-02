@@ -21,6 +21,7 @@ layout(binding = 0) uniform UniformBufferObject {
 layout( push_constant ) uniform constants
 {
 	mat4 render_matrix;
+	vec3 color;
 };
 
 layout(location = 0) in vec3 inPosition;
@@ -34,6 +35,6 @@ layout(location = 1) out vec2 fragTexCoords;
 void main() {
 //    gl_Position = vec4(inPosition, 0.0, 1.0);
 	gl_Position = ubo.proj * ubo.view * render_matrix * vec4(inPosition, 1.0);
-    fragColor = inColor;
+    fragColor = inColor * color;
 	fragTexCoords = inTexCoords;
 }

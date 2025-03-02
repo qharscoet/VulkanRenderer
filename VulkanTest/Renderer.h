@@ -29,6 +29,7 @@ public:
 
 	struct Light {
 		float position[3] = { 0.0f, 0.0f, 0.0f };
+		float color[3] = { 1.0f, 1.0f, 1.0f };
 
 		MeshPacket cube;
 	};

@@ -40,6 +40,17 @@ static_assert(sizeof(debug_colors) / sizeof(debug_colors[0]) == (int)DebugColor:
 
 static const std::string baseShaderPath = "./shaders/spv/";
 
+
+uint32_t getVkStageFlags(StageFlags stageFlags)
+{
+	uint32_t vkStageFlags = 0;
+	if ( stageFlags & e_Pixel)		vkStageFlags |= VK_SHADER_STAGE_FRAGMENT_BIT;
+	if ( stageFlags & e_Vertex)		vkStageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
+	if ( stageFlags & e_Compute)	vkStageFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
+
+	return vkStageFlags;
+}
+
 VkDescriptorSetLayout Device::createDescriptorSetLayout(BindingDesc* bindingDescs, size_t count) {
 	VkDescriptorSetLayout out_layout;
 
@@ -771,14 +782,14 @@ void Device::drawCommand(uint32_t vertex_count)
 	vkCmdDraw(commandBuffer, vertex_count, 1, 0, 0);
 }
 
-void Device::pushConstants(void* data, uint32_t size, VkPipelineLayout pipelineLayout)
+void Device::pushConstants(void* data, uint32_t offset, uint32_t size, StageFlags stageFlags, VkPipelineLayout pipelineLayout)
 {
 
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 
 	VkPipelineLayout layout = (pipelineLayout == VK_NULL_HANDLE) ? currentRenderPass->pipeline.pipelineLayout : pipelineLayout;
 
-	vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, size, data);
+	vkCmdPushConstants(commandBuffer, layout, getVkStageFlags(stageFlags), offset, size, data);
 }
 
 void Device::drawPacket(const MeshPacket& packet)
@@ -826,7 +837,7 @@ void Device::drawPacket(const MeshPacket& packet)
 		model = glm::rotate(model, rotation[2] * glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 		model = glm::scale(model, glm::vec3(scale[0], scale[1], scale[2]));
 
-		vkCmdPushConstants(commandBuffer, currentRenderPass->pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPacket::PushConstantsData), &model);
+		vkCmdPushConstants(commandBuffer, currentRenderPass->pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MeshPacket::PushConstantsData), &model);
 	}
 
 	{
