@@ -31,11 +31,20 @@ foreach(HLSL ${HLSL_SOURCE_FILES})
   set(SPIRV_VS "${PROJECT_SOURCE_DIR}/shaders/spv/${FILE_NAME}.vs.spv")
   set(SPIRV_PS "${PROJECT_SOURCE_DIR}/shaders/spv/${FILE_NAME}.ps.spv")
   message(STATUS ${HLSL})
-  add_custom_command(
-	OUTPUT ${SPIRV_VS} ${SPIRV_PS}
-	COMMAND ${HLSL_VALIDATOR} ${HLSL} -spirv -T vs_6_0 -E VSMain -Fo ${SPIRV_VS}
-	COMMAND ${HLSL_VALIDATOR} ${HLSL} -spirv -T ps_6_0 -E PSMain -Fo ${SPIRV_PS}
-	DEPENDS ${HLSL})
+  if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+	add_custom_command(
+		OUTPUT ${SPIRV_VS} ${SPIRV_PS}
+		COMMAND ${HLSL_VALIDATOR} ${HLSL} -spirv -T vs_6_0 -E VSMain -Fo ${SPIRV_VS} -fspv-extension=SPV_KHR_non_semantic_info -fspv-debug=vulkan-with-source
+		COMMAND ${HLSL_VALIDATOR} ${HLSL} -spirv -T ps_6_0 -E PSMain -Fo ${SPIRV_PS} -fspv-extension=SPV_KHR_non_semantic_info -fspv-debug=vulkan-with-source
+		DEPENDS ${HLSL})
+  else()
+	add_custom_command(
+		OUTPUT ${SPIRV_VS} ${SPIRV_PS}
+		COMMAND ${HLSL_VALIDATOR} ${HLSL} -spirv -T vs_6_0 -E VSMain -Fo ${SPIRV_VS}
+		COMMAND ${HLSL_VALIDATOR} ${HLSL} -spirv -T ps_6_0 -E PSMain -Fo ${SPIRV_PS}
+		DEPENDS ${HLSL})
+  endif()
+
   list(APPEND SPIRV_BINARY_FILES ${SPIRV_VS} ${SPIRV_PS})
  endforeach(HLSL)
 
