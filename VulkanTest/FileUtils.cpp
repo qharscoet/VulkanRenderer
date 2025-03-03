@@ -74,11 +74,13 @@ void loadObj(const char* path, Mesh* out_mesh)
 		struct {
 			uint16_t pos;
 			uint16_t texCood;
+			uint16_t normal;
+			uint16_t color;
 		};
-		uint32_t val;
+		uint64_t val;
 	};
 
-	std::unordered_map<uint32_t, uint32_t> uniqueVertices{};
+	std::unordered_map<uint64_t, uint32_t> uniqueVertices{};
 
 	auto& attrib = reader.GetAttrib();
 
@@ -91,16 +93,28 @@ void loadObj(const char* path, Mesh* out_mesh)
 			vertex.pos[1] = attrib.vertices[3 * index.vertex_index + 1];
 			vertex.pos[2] = attrib.vertices[3 * index.vertex_index + 2];
 
-			vertex.texCoord[0] = attrib.texcoords[2 * index.texcoord_index + 0];
-			vertex.texCoord[1] = 1.0f - attrib.texcoords[2 * index.texcoord_index + 1];
+			if (index.texcoord_index >= 0)
+			{
+				vertex.texCoord[0] = attrib.texcoords[2 * index.texcoord_index + 0];
+				vertex.texCoord[1] = 1.0f - attrib.texcoords[2 * index.texcoord_index + 1];
+			}
+
+			if (index.normal_index >= 0)
+			{
+				vertex.normals[0] = attrib.normals[3 * index.normal_index + 0];
+				vertex.normals[1] = attrib.normals[3 * index.normal_index + 1];
+				vertex.normals[2] = attrib.normals[3 * index.normal_index + 2];
+			}
 
 			vertex.color[0] = 1.0f;
 			vertex.color[1] = 1.0f;
 			vertex.color[2] = 1.0f;
 
+			//TODO: careful components are uint16 so collision is likely for models of more that 65K indices
 			idx_hash to_hash;
 			to_hash.pos = index.vertex_index;
 			to_hash.texCood = index.texcoord_index;
+			to_hash.normal = index.normal_index;
 
 			if (uniqueVertices.count(to_hash.val) == 0)
 			{
