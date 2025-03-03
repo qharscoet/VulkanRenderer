@@ -494,8 +494,9 @@ public:
 	void destroyRenderPass(RenderPass renderPass);
 
 	void bindVertexBuffer(Buffer& buffer);
-	void bindTexture(const GpuImage& image, VkSampler sampler);
-	void bindBuffer(const Buffer& buiffer, uint32_t set, uint32_t binding);
+	/*Deprecated*/void bindTexture(const GpuImage& image, VkSampler sampler);
+	/*Deprecated*/void bindBuffer(const Buffer& buiffer, uint32_t set, uint32_t binding);
+	void bindRessources(uint32_t set, std::vector<const Buffer*> buffers, std::vector<const GpuImage*> images);
 	void transitionImage(BarrierDesc desc);
 	void drawCommand(uint32_t vertex_count);
 	void pushConstants(void* data, uint32_t offset, uint32_t size, StageFlags = e_Vertex, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE);

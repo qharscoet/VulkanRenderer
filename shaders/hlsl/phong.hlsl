@@ -44,6 +44,17 @@ cbuffer light_data : register(b0, space1)
 	Light light;
 }
 
+
+[[vk::binding(1, 1)]]
+cbuffer material_data : register(b1, space1)
+{
+	float3 mat_diffuse;
+	float pad2;
+	float3 mat_specular;
+	float pad3;
+	float mat_shininess;
+}
+
 struct Constants
 {
 	float4x4 model;
@@ -123,17 +134,16 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float4 ambiantLight = float4(light.color * ambiant, 1.0f);
 	
 	float3 light_vec = normalize(light.position - input.worldPos.xyz);
-	
 	float3 norm = normalize(input.normal);
 	
 	//Diffuse
 	float diffuse = max(dot(light_vec, norm), 0.0f);
-	float4 diffuseLight = float4(light.color * diffuse, 1.0f);
+	float4 diffuseLight = float4(light.color * (diffuse * mat_diffuse), 1.0f);
 	
 	//Specular
 	float3 view_vec = normalize(pc.eye - input.worldPos.xyz);
 	float3 reflect_vec = reflect(-light_vec, norm);
-	float specular = pow(max(dot(view_vec, reflect_vec), 0.0f), shininess);
+	float specular = pow(max(dot(view_vec, reflect_vec), 0.0f), mat_shininess * 128.0f);
 	float4 specularLight = float4(light.color * specular * specularStrength, 1.0f);
 
 	return texColor * (ambiantLight + diffuseLight + specularLight);

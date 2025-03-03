@@ -30,6 +30,59 @@ struct LightData
 static LightData light_data;
 static bool light_autorotate;
 
+Buffer light_data_gpu;
+Buffer material_data;
+
+struct MaterialData
+{
+	float diffuse[4];
+	float specular[4];
+	float shininess;
+};
+
+enum MaterialType {
+	EMERALD, JADE, OBSIDIAN, PEARL, RUBY, TURQUOISE,
+	BRASS, BRONZE, CHROME, COPPER, GOLD, SILVER,
+	BLACK_PLASTIC, CYAN_PLASTIC, GREEN_PLASTIC, RED_PLASTIC, WHITE_PLASTIC, YELLOW_PLASTIC,
+	BLACK_RUBBER, CYAN_RUBBER, GREEN_RUBBER, RED_RUBBER, WHITE_RUBBER, YELLOW_RUBBER,
+	MATERIAL_COUNT
+};
+
+const char* materialNames[MATERIAL_COUNT] = {
+	"Emerald", "Jade", "Obsidian", "Pearl", "Ruby", "Turquoise",
+	"Brass", "Bronze", "Chrome", "Copper", "Gold", "Silver",
+	"Black Plastic", "Cyan Plastic", "Green Plastic", "Red Plastic", "White Plastic", "Yellow Plastic",
+	"Black Rubber", "Cyan Rubber", "Green Rubber", "Red Rubber", "White Rubber", "Yellow Rubber"
+};
+
+MaterialData materials[MATERIAL_COUNT] = {
+	{ {0.07568f, 0.61424f, 0.07568f}, {0.633f, 0.727811f, 0.633f}, 0.6f }, // EMERALD
+	{ {0.54f, 0.89f, 0.63f}, {0.316228f, 0.316228f, 0.316228f}, 0.1f }, // JADE
+	{ {0.18275f, 0.17f, 0.22525f}, {0.332741f, 0.328634f, 0.346435f}, 0.3f }, // OBSIDIAN
+	{ {1.0f, 0.829f, 0.829f}, {0.296648f, 0.296648f, 0.296648f}, 0.088f }, // PEARL
+	{ {0.61424f, 0.04136f, 0.04136f}, {0.727811f, 0.626959f, 0.626959f}, 0.6f }, // RUBY
+	{ {0.396f, 0.74151f, 0.69102f}, {0.297254f, 0.30829f, 0.306678f}, 0.1f }, // TURQUOISE
+	{ {0.780392f, 0.568627f, 0.113725f}, {0.992157f, 0.941176f, 0.807843f}, 0.21794872f }, // BRASS
+	{ {0.714f, 0.4284f, 0.18144f}, {0.393548f, 0.271906f, 0.166721f}, 0.2f }, // BRONZE
+	{ {0.4f, 0.4f, 0.4f}, {0.774597f, 0.774597f, 0.774597f}, 0.6f }, // CHROME
+	{ {0.7038f, 0.27048f, 0.0828f}, {0.256777f, 0.137622f, 0.086014f}, 0.1f }, // COPPER
+	{ {0.75164f, 0.60648f, 0.22648f}, {0.628281f, 0.555802f, 0.366065f}, 0.4f }, // GOLD
+	{ {0.50754f, 0.50754f, 0.50754f}, {0.508273f, 0.508273f, 0.508273f}, 0.4f }, // SILVER
+	{ {0.01f, 0.01f, 0.01f}, {0.50f, 0.50f, 0.50f}, 0.25f }, // BLACK_PLASTIC
+	{ {0.0f, 0.50980392f, 0.50980392f}, {0.50196078f, 0.50196078f, 0.50196078f}, 0.25f }, // CYAN_PLASTIC
+	{ {0.1f, 0.35f, 0.1f}, {0.45f, 0.55f, 0.45f}, 0.25f }, // GREEN_PLASTIC
+	{ {0.5f, 0.0f, 0.0f}, {0.7f, 0.6f, 0.6f}, 0.25f }, // RED_PLASTIC
+	{ {0.55f, 0.55f, 0.55f}, {0.70f, 0.70f, 0.70f}, 0.25f }, // WHITE_PLASTIC
+	{ {0.5f, 0.5f, 0.0f}, {0.60f, 0.60f, 0.50f}, 0.25f }, // YELLOW_PLASTIC
+	{ {0.01f, 0.01f, 0.01f}, {0.4f, 0.4f, 0.4f}, 0.078125f }, // BLACK_RUBBER
+	{ {0.4f, 0.5f, 0.5f}, {0.04f, 0.7f, 0.7f}, 0.078125f }, // CYAN_RUBBER
+	{ {0.4f, 0.5f, 0.4f}, {0.04f, 0.7f, 0.04f}, 0.078125f }, // GREEN_RUBBER
+	{ {0.5f, 0.4f, 0.4f}, {0.7f, 0.04f, 0.04f}, 0.078125f }, // RED_RUBBER
+	{ {0.5f, 0.5f, 0.5f}, {0.7f, 0.7f, 0.7f}, 0.078125f }, // WHITE_RUBBER
+	{ {0.5f, 0.5f, 0.4f}, {0.7f, 0.7f, 0.04f}, 0.078125f }  // YELLOW_RUBBER
+};
+
+
 void Renderer::init(GLFWwindow* window, DeviceOptions options)
 {
 	device_options = options;
@@ -255,6 +308,11 @@ void Renderer::drawImgui()
 		}
 	}
 
+	static int selectedMaterial = 0;
+	ImGui::Text("Select Material:");
+	if (ImGui::Combo("##Material", &selectedMaterial, materialNames, MATERIAL_COUNT))
+		memcpy(material_data.mapped_memory, &materials[selectedMaterial], sizeof(MaterialData));
+		
 	if (ImGui::CollapsingHeader("Light List"))
 	{
 		ImGui::SliderFloat("Ambiant Strength", &light_data.ambiantStrenght, 0.f, 1.f);
@@ -330,9 +388,9 @@ void Renderer::drawImgui()
 	}
 }
 
-Buffer light_data_gpu;
+
 void Renderer::drawRenderPass() {
-	m_device.bindBuffer(light_data_gpu, 1, 0);
+	m_device.bindRessources(1, {&light_data_gpu, &material_data }, {});
 	m_device.pushConstants(cameraInfo.position, sizeof(MeshPacket::PushConstantsData), 3 * sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
 	for (const auto& packet : packets)
 	{
@@ -358,11 +416,13 @@ void Renderer::initPipeline()
 		.topology = PrimitiveToplogy::TriangleList,
 		.bindings = {
 			{
+				// View & proj Matrices
 				{
 					.slot = 0,
 					.type = BindingType::UBO,
 					.stageFlags = e_Vertex,
 				},
+				//Single texture
 				{
 					.slot = 1,
 					.type = BindingType::ImageSampler,
@@ -370,11 +430,18 @@ void Renderer::initPipeline()
 				}
 			},
 			{
+				//Light Data
 				{
 					.slot = 0,
 					.type = BindingType::UBO,
 					.stageFlags = e_Pixel,
 				},
+				//Material data
+				{
+					.slot = 1,
+					.type = BindingType::UBO,
+					.stageFlags = e_Pixel,
+				}
 			}
 		},
 		.pushConstantsRanges = {
@@ -405,6 +472,9 @@ void Renderer::initPipeline()
 	};
 
 	light_data_gpu = m_device.createUniformBuffer(10 * sizeof(LightData));
+	material_data = m_device.createUniformBuffer(sizeof(MaterialData));
+	memcpy(material_data.mapped_memory, &materials[EMERALD], sizeof(MaterialData));
+
 	renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 
 	renderPassDesc.useMsaa = true;

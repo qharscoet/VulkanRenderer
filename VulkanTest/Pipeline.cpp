@@ -744,7 +744,7 @@ void Device::bindBuffer(const Buffer& buffer, uint32_t set, uint32_t binding)
 
 		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		descriptorWrite.dstSet = descriptorSet;
-		descriptorWrite.dstBinding = 0;
+		descriptorWrite.dstBinding = binding;
 		descriptorWrite.dstArrayElement = 0;
 		descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		descriptorWrite.descriptorCount = 1;
@@ -758,6 +758,63 @@ void Device::bindBuffer(const Buffer& buffer, uint32_t set, uint32_t binding)
 		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, set, 1, &descriptorSet, 0, nullptr);
 	}
 
+}
+
+void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, std::vector<const GpuImage*> images)
+{
+	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
+
+	VkDescriptorPool descriptorPool = currentRenderPass->pipeline.descriptorPool;
+	VkDescriptorSetLayout descriptorSetLayout = currentRenderPass->pipeline.descriptorSetLayouts[set];
+	std::vector<BindingDesc>& bindings = currentRenderPass->pipeline.bindings[set];
+
+	std::hash<VkImageView> img_hasher;
+	std::hash<VkSampler> sampler_hasher;
+	std::hash<VkBuffer> buffer_hasher;
+	size_t hash = 0;
+
+	auto imageIt = images.begin();
+	auto bufferIt = buffers.begin();
+
+	for (const auto& binding : bindings)
+	{
+
+		switch (binding.type)
+		{
+		case BindingType::UBO:
+		case BindingType::StorageBuffer:
+			hash_combine(hash, buffer_hasher((*bufferIt++)->buffer));
+			break;
+
+		case BindingType::ImageSampler:
+			hash_combine(hash, img_hasher((*imageIt++)->view));
+			break;
+		}
+
+	}
+
+	if (currentRenderPass->pipeline.descriptorSetsMap.contains(hash))
+	{
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, set, 1, &currentRenderPass->pipeline.descriptorSetsMap[hash], 0, nullptr);
+	}
+	else {
+		VkDescriptorSet descriptorSet;
+		createDescriptorSets(descriptorSetLayout, descriptorPool, &descriptorSet, 1);
+
+		std::vector<VkDescriptorImageInfo> descriptorImageInfos;
+		std::vector<VkDescriptorBufferInfo> descriptorBufferInfos;
+		descriptorImageInfos.reserve(images.size());
+		descriptorBufferInfos.reserve(images.size());
+		std::transform(images.begin(), images.end(), std::back_inserter(descriptorImageInfos), [&](const GpuImage* img) { return getDescriptorImageInfo(*img, defaultSampler); });
+		std::transform(buffers.begin(), buffers.end(), std::back_inserter(descriptorBufferInfos), [&](const Buffer* buff) { return getDescriptorBufferInfo(*buff); });
+
+		//auto descriptorImageInfos = images | std::views::transform([&](const GpuImage* img) { return getDescriptorImageInfo(*img, defaultSampler); });
+		//auto descriptorBufferInfos = buffers | std::views::transform([&](const Buffer* buff) { return getDescriptorBufferInfo(*buff); });
+
+		updateDescriptorSet(bindings, descriptorImageInfos, descriptorBufferInfos, descriptorSet);
+		currentRenderPass->pipeline.descriptorSetsMap[hash] = descriptorSet;
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, set, 1, &descriptorSet, 0, nullptr);
+	}
 }
 
 void Device::transitionImage(BarrierDesc desc)

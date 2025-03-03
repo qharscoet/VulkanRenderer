@@ -856,6 +856,10 @@ VkDescriptorImageInfo& Device::getDescriptorImageInfo(const GpuImage& image, VkS
 	return info;
 }
 
+// Tried stuff but wtf c++
+//template <std::ranges::range ImageRange, std::ranges::range BufferRange>
+//requires std::same_as<std::ranges::range_value_t<ImageRange>, VkDescriptorImageInfo>&&
+//		std::same_as<std::ranges::range_value_t<BufferRange>, VkDescriptorBufferInfo>
 void Device::updateDescriptorSet(const std::vector<BindingDesc>& bindings, std::vector<VkDescriptorImageInfo>& images, std::vector<VkDescriptorBufferInfo>& buffers, VkDescriptorSet set)
 {
 	std::vector<VkWriteDescriptorSet> descriptorWrites{};
