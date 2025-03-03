@@ -261,8 +261,12 @@ public:
 		m_renderer.init(window, device_options);
 
 		loadPackets();
-		const float lightPos[3] = { 3.0f, 3.0f, 3.0f };
-		m_renderer.addLight(lightPos);
+		const float lightPos[2][3] = { 
+			{3.0f, 3.0f, 3.0f},
+			{0.0f, 2.0f, 0.0f} 
+		};
+		m_renderer.addLight(lightPos[0]);
+		m_renderer.addLight(lightPos[1]);
 
 		mainLoop();
 

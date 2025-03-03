@@ -29,6 +29,11 @@ cbuffer ubo : register(b0, space0)
 
 struct Light
 {
+	float ambiant;
+	float diffuse;
+	float specularStrength;
+	float shininess;
+	
 	float3 position;
 	float3 color;
 };
@@ -36,12 +41,7 @@ struct Light
 [[vk::binding(0, 1)]]
 cbuffer light_data : register(b0, space1)
 {
-	float ambiant;
-	float specularStrength;
-	float shininess;
-	float pad;
-	
-	Light light;
+	Light light[10];
 }
 
 
@@ -59,6 +59,7 @@ struct Constants
 {
 	float4x4 model;
 	float3 eye;
+	float light_count;
 };
 
 [[vk::push_constant]]
@@ -126,25 +127,39 @@ Texture2D g_texture : register(t0);
 [[vk::binding(1, 0)]]
 SamplerState g_sampler : register(s0);
 
-float4 PSMain(PSInput input) : SV_TARGET
+
+float4 calcLight(PSInput input, Light l)
 {
-	float4 texColor = g_texture.Sample(g_sampler, input.uv) * float4(input.color, 0);
-	
 	//Ambiant
-	float4 ambiantLight = float4(light.color * ambiant, 1.0f);
+	float4 ambiantLight = float4(l.color * l.ambiant, 1.0f);
 	
-	float3 light_vec = normalize(light.position - input.worldPos.xyz);
+	float3 light_vec = normalize(l.position - input.worldPos.xyz);
 	float3 norm = normalize(input.normal);
 	
 	//Diffuse
 	float diffuse = max(dot(light_vec, norm), 0.0f);
-	float4 diffuseLight = float4(light.color * (diffuse * mat_diffuse), 1.0f);
+	float4 diffuseLight = float4(l.color * (diffuse * mat_diffuse), 1.0f);
 	
 	//Specular
 	float3 view_vec = normalize(pc.eye - input.worldPos.xyz);
 	float3 reflect_vec = reflect(-light_vec, norm);
 	float specular = pow(max(dot(view_vec, reflect_vec), 0.0f), mat_shininess * 128.0f);
-	float4 specularLight = float4(light.color * specular * specularStrength, 1.0f);
+	float4 specularLight = float4(l.color * specular * l.specularStrength, 1.0f);
+	
+	return (ambiantLight + diffuseLight + specularLight);
+	
+}
 
-	return texColor * (ambiantLight + diffuseLight + specularLight);
+float4 PSMain(PSInput input) : SV_TARGET
+{
+	float4 texColor = g_texture.Sample(g_sampler, input.uv) * float4(input.color, 0);
+	float4 output = 0;
+	
+	for (int i = 0; i < 2; i++)
+	{
+
+		output += texColor * calcLight(input, light[i]);
+	}
+	
+	return output;
 }

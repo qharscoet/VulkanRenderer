@@ -31,6 +31,11 @@ public:
 		float position[3] = { 0.0f, 0.0f, 0.0f };
 		float color[3] = { 1.0f, 1.0f, 1.0f };
 
+		float ambiant = 0.1f;
+		float diffuse = 1.0f;
+		float specular = 0.5;
+		float shininess = 32;
+
 		MeshPacket cube;
 	};
 

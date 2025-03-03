@@ -17,17 +17,17 @@ static UniformBufferObject ubo{};
 struct LightData
 {
 	float ambiantStrenght = 0.1f;
+	float diffuse = 1.0f;
 	float specularStrength = 0.5;
 	float shininess = 32;
-	float pad;
 
 	float pos[3];
 	float padding;
 
 	float color[3];
+	float pad;
 };
 
-static LightData light_data;
 static bool light_autorotate;
 
 Buffer light_data_gpu;
@@ -315,9 +315,6 @@ void Renderer::drawImgui()
 		
 	if (ImGui::CollapsingHeader("Light List"))
 	{
-		ImGui::SliderFloat("Ambiant Strength", &light_data.ambiantStrenght, 0.f, 1.f);
-		ImGui::SliderFloat("Specular Strength", &light_data.specularStrength, 0.f, 1.f);
-		ImGui::SliderFloat("Shininess", &light_data.shininess, 0.f, 256.f);
 		for (int i = 0; i < lights.size(); i++)
 		{
 			Light& l = lights[i];
@@ -325,12 +322,18 @@ void Renderer::drawImgui()
 
 			char label[32];
 			sprintf(label, "Light %d", i);
-			if (ImGui::TreeNode(p.name.empty() ? label : p.name.c_str()))
+			if (ImGui::TreeNode(label))
 			{
 				ImGui::Checkbox("Light rotate", &light_autorotate);
+
 				ImGui::SliderFloat3("Translate", l.position, -5.0f, 5.0f);
 				ImGui::SliderFloat3("Rot", p.transform.rotation, 0.0f, 1.0f);
 				ImGui::SliderFloat3("Scale", p.transform.scale, 0.0f, 4.0f);
+
+				ImGui::SliderFloat("Ambiant Strength", &l.ambiant, 0.f, 1.f);
+				ImGui::SliderFloat("Diffuse Strength", &l.diffuse, 0.f, 1.f);
+				ImGui::SliderFloat("Specular Strength", &l.specular, 0.f, 1.f);
+				ImGui::SliderFloat("Shininess", &l.shininess, 0.f, 256.f);
 
 				ImGui::ColorEdit3("Color", l.color);
 
@@ -392,6 +395,9 @@ void Renderer::drawImgui()
 void Renderer::drawRenderPass() {
 	m_device.bindRessources(1, {&light_data_gpu, &material_data }, {});
 	m_device.pushConstants(cameraInfo.position, sizeof(MeshPacket::PushConstantsData), 3 * sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
+
+	size_t count = lights.size();
+	m_device.pushConstants(&count, sizeof(MeshPacket::PushConstantsData) + 3 * sizeof(float), sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
 	for (const auto& packet : packets)
 	{
 		drawPacket(packet);
@@ -447,7 +453,7 @@ void Renderer::initPipeline()
 		.pushConstantsRanges = {
 			{
 				.offset = 0,
-				.size = sizeof(MeshPacket::PushConstantsData) + sizeof(float) * 3,
+				.size = sizeof(MeshPacket::PushConstantsData) + sizeof(float) * 4,
 				.stageFlags = (StageFlags)(e_Vertex | e_Pixel)
 			},
 			//{
@@ -894,10 +900,21 @@ void Renderer::updateLightData()
 		memcpy(l.cube.transform.translation, l.position, 3 * sizeof(float));
 	}
 
-	memcpy(&light_data.pos, l.position, 3*sizeof(float));
-	memcpy(&light_data.color, l.color, 3*sizeof(float));
+	LightData data;
+	size_t offset = 0;
+	for (const auto& l : lights)
+	{
+		memcpy(&data.pos, l.position, 3 * sizeof(float));
+		memcpy(&data.color, l.color, 3*sizeof(float));
 
-	memcpy(light_data_gpu.mapped_memory, &light_data, sizeof(light_data));
+		data.ambiantStrenght = l.ambiant;
+		data.specularStrength = l.specular;
+		data.shininess = l.shininess;
+		data.diffuse = l.diffuse;
+
+		memcpy((uint8_t*)(light_data_gpu.mapped_memory) + offset, &data, sizeof(data));
+		offset += sizeof(data);
+	}
 }
 
 void Renderer::updateCamera(const CameraInfo& cameraInfo)
