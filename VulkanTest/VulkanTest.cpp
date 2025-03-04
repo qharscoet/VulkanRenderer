@@ -268,6 +268,10 @@ public:
 		m_renderer.addLight(lightPos[0]);
 		m_renderer.addLight(lightPos[1]);
 
+		float sun[3] = { 0.0, -1.0f, 0.0f };
+		m_renderer.addDirectionalLight(sun);
+
+
 		mainLoop();
 
 		m_renderer.cleanup();

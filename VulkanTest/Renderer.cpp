@@ -22,13 +22,24 @@ struct LightData
 	float shininess = 32;
 
 	float pos[3];
-	float padding;
+	uint32_t type;
+
+	union {
+		struct {
+			float constant;
+			float linear;
+			float quadratic;
+			float pad;
+		} pointLight;
+		struct {
+			float direction[3];
+			float cutOff;
+		} spotLight;
+	} params;
 
 	float color[3];
 	float pad;
 };
-
-static bool light_autorotate;
 
 Buffer light_data_gpu;
 Buffer material_data;
@@ -324,16 +335,32 @@ void Renderer::drawImgui()
 			sprintf(label, "Light %d", i);
 			if (ImGui::TreeNode(label))
 			{
-				ImGui::Checkbox("Light rotate", &light_autorotate);
+				switch (l.type)
+				{
+				case LightType::Directional: ImGui::Text("Directional light"); break;
+				case LightType::Point: ImGui::Text("Point light"); break;
+				case LightType::Spotlight: ImGui::Text("Spotlight"); break;
+				}
 
-				ImGui::SliderFloat3("Translate", l.position, -5.0f, 5.0f);
-				ImGui::SliderFloat3("Rot", p.transform.rotation, 0.0f, 1.0f);
-				ImGui::SliderFloat3("Scale", p.transform.scale, 0.0f, 4.0f);
+				ImGui::Checkbox("Light rotate", &l.light_autorotate);
+
+				ImGui::SliderFloat3(l.type == LightType::Directional ? "Direction" :"Translate", l.position, -5.0f, 5.0f);
+				if(l.type == LightType::Spotlight)
+					ImGui::SliderFloat3("Rot", p.transform.rotation, 0.0f, 1.0f);
+				//ImGui::SliderFloat3("Scale", p.transform.scale, 0.0f, 4.0f);
 
 				ImGui::SliderFloat("Ambiant Strength", &l.ambiant, 0.f, 1.f);
 				ImGui::SliderFloat("Diffuse Strength", &l.diffuse, 0.f, 1.f);
 				ImGui::SliderFloat("Specular Strength", &l.specular, 0.f, 1.f);
 				ImGui::SliderFloat("Shininess", &l.shininess, 0.f, 256.f);
+
+				if (l.type == LightType::Point)
+				{
+					ImGui::Text("Attenuation params:");
+					ImGui::SliderFloat("Constant", &l.params.pointLight.constant, 0.f, 1.f);
+					ImGui::SliderFloat("Linear", &l.params.pointLight.linear, 0.f, 1.f);
+					ImGui::SliderFloat("Quadratic", &l.params.pointLight.quadratic, 0.f, 1.f);
+				}
 
 				ImGui::ColorEdit3("Color", l.color);
 
@@ -396,7 +423,7 @@ void Renderer::drawRenderPass() {
 	m_device.bindRessources(1, {&light_data_gpu, &material_data }, {});
 	m_device.pushConstants(cameraInfo.position, sizeof(MeshPacket::PushConstantsData), 3 * sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
 
-	size_t count = lights.size();
+	uint32_t count = lights.size();
 	m_device.pushConstants(&count, sizeof(MeshPacket::PushConstantsData) + 3 * sizeof(float), sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
 	for (const auto& packet : packets)
 	{
@@ -493,8 +520,11 @@ void Renderer::drawLightsRenderPass()
 {
 	for (const auto& l : lights)
 	{
-		m_device.pushConstants((void*)&l.color[0], sizeof(MeshPacket::PushConstantsData), 3 * sizeof(float), (StageFlags)(e_Vertex | e_Pixel));
-		m_device.drawPacket(l.cube);
+		if (l.cube.vertexBuffer.buffer != VK_NULL_HANDLE)
+		{
+			m_device.pushConstants((void*)&l.color[0], sizeof(MeshPacket::PushConstantsData), 3 * sizeof(float), (StageFlags)(e_Vertex | e_Pixel));
+			m_device.drawPacket(l.cube);
+		}
 	}
 }
 
@@ -892,18 +922,20 @@ void Renderer::updateLightData()
 
 	Light& l = lights[0];
 
-	if (light_autorotate)
-	{
-		l.position[0] = 2.0f * cos(angle);
-		l.position[2] = 2.0f * sin(angle);
-
-		memcpy(l.cube.transform.translation, l.position, 3 * sizeof(float));
-	}
 
 	LightData data;
 	size_t offset = 0;
-	for (const auto& l : lights)
+	for (auto& l : lights)
 	{
+		if (l.light_autorotate)
+		{
+			l.position[0] = 2.0f * cos(angle);
+			l.position[2] = 2.0f * sin(angle);
+
+			memcpy(l.cube.transform.translation, l.position, 3 * sizeof(float));
+		}
+
+
 		memcpy(&data.pos, l.position, 3 * sizeof(float));
 		memcpy(&data.color, l.color, 3*sizeof(float));
 
@@ -911,6 +943,9 @@ void Renderer::updateLightData()
 		data.specularStrength = l.specular;
 		data.shininess = l.shininess;
 		data.diffuse = l.diffuse;
+
+		data.type = static_cast<uint32_t>(l.type);
+		memcpy(&data.params, &l.params, sizeof(l.params));
 
 		memcpy((uint8_t*)(light_data_gpu.mapped_memory) + offset, &data, sizeof(data));
 		offset += sizeof(data);
@@ -927,7 +962,39 @@ void Renderer::addLight(const float pos[3])
 {
 	Light light;
 	memcpy(light.position, pos, 3 * sizeof(float));
-	light.cube = m_device.createCubePacket(pos, 0.5f);
 
+	light.type = LightType::Point;
+	light.params.pointLight.constant = 1.0f;
+	light.params.pointLight.linear = 0.14f;
+	light.params.pointLight.quadratic = 0.07f;
+
+	light.cube = m_device.createCubePacket(pos, 0.2f);
+
+	lights.push_back(light);
+}
+
+void Renderer::addDirectionalLight(const float pos[3])
+{
+	Light light;
+	memcpy(light.position, pos, 3 * sizeof(float));
+
+	light.type = LightType::Directional;
+
+	//light.cube = m_device.createCubePacket(pos, 0.5f);
+
+	lights.push_back(light);
+}
+
+void Renderer::addSpotlight(const float pos[3])
+{
+	Light light;
+	memcpy(light.position, pos, 3 * sizeof(float));
+
+	light.type = LightType::Spotlight;
+	light.color[0] = 1.0f;
+	light.color[1] = 0.0f;
+	light.color[2] = 0.0f;
+
+	light.cube = m_device.createCubePacket(pos, 0.5f);
 	lights.push_back(light);
 }

@@ -36,9 +36,9 @@ struct QueueFamilyIndices {
 };
 
 struct Buffer {
-	VkBuffer buffer;
-	VkDeviceMemory memory;
-	void* mapped_memory;
+	VkBuffer buffer = VK_NULL_HANDLE;
+	VkDeviceMemory memory = VK_NULL_HANDLE;
+	void* mapped_memory = nullptr;
 
 	size_t size;
 	size_t count;

@@ -35,9 +35,24 @@ struct Light
 	float shininess;
 	
 	float3 position;
+	uint type;
+		
+	float4 params;
+	
 	float3 color;
 };
-	
+
+#define constant params.x
+#define linear params.y
+#define quadratic params.z
+
+#define direction params
+#define cutOff params.z
+
+#define POINTLIGHT 0
+#define DIRLIGHT 1
+#define SPOTLIGHT 2
+
 [[vk::binding(0, 1)]]
 cbuffer light_data : register(b0, space1)
 {
@@ -59,7 +74,7 @@ struct Constants
 {
 	float4x4 model;
 	float3 eye;
-	float light_count;
+	uint light_count;
 };
 
 [[vk::push_constant]]
@@ -133,7 +148,14 @@ float4 calcLight(PSInput input, Light l)
 	//Ambiant
 	float4 ambiantLight = float4(l.color * l.ambiant, 1.0f);
 	
-	float3 light_vec = normalize(l.position - input.worldPos.xyz);
+	float3 light_vec;
+	
+	if (l.type == DIRLIGHT)
+		light_vec = normalize(-l.position); //position is used as direction in dirlight
+	else	
+		light_vec = normalize(l.position - input.worldPos.xyz);
+	
+	
 	float3 norm = normalize(input.normal);
 	
 	//Diffuse
@@ -146,7 +168,16 @@ float4 calcLight(PSInput input, Light l)
 	float specular = pow(max(dot(view_vec, reflect_vec), 0.0f), mat_shininess * 128.0f);
 	float4 specularLight = float4(l.color * specular * l.specularStrength, 1.0f);
 	
-	return (ambiantLight + diffuseLight + specularLight);
+	float attenuation = 1.0f;
+	
+	if(l.type == POINTLIGHT)
+	{
+		float d = length(l.position - input.worldPos.xyz);
+		attenuation = 1.0f / (l.constant + d * l.linear + d * d * l.quadratic);
+
+	}
+	
+	return (ambiantLight + diffuseLight + specularLight) * attenuation;
 	
 }
 
@@ -155,9 +186,8 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float4 texColor = g_texture.Sample(g_sampler, input.uv) * float4(input.color, 0);
 	float4 output = 0;
 	
-	for (int i = 0; i < 2; i++)
+	for (int i = 0; i < pc.light_count ; i++)
 	{
-
 		output += texColor * calcLight(input, light[i]);
 	}
 	

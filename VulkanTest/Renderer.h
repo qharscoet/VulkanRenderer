@@ -27,6 +27,10 @@ public:
 	};
 
 
+	enum class LightType {
+		Point, Directional, Spotlight
+	};
+
 	struct Light {
 		float position[3] = { 0.0f, 0.0f, 0.0f };
 		float color[3] = { 1.0f, 1.0f, 1.0f };
@@ -36,6 +40,22 @@ public:
 		float specular = 0.5;
 		float shininess = 32;
 
+		LightType type;
+
+		union {
+			struct {
+				float constant;
+				float linear;
+				float quadratic;
+				float pad;
+			} pointLight;
+			struct {
+				float direction[3];
+				float cutOff;
+			} spotLight;
+		} params;
+
+		bool light_autorotate;
 		MeshPacket cube;
 	};
 
@@ -122,6 +142,8 @@ public:
 
 
 	void addLight(const float pos[3]);
+	void addDirectionalLight(const float direction[3]);
+	void addSpotlight(const float position[3]);
 
 
 };
