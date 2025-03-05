@@ -979,12 +979,19 @@ void Device::recordRenderPass(VkCommandBuffer commandBuffer, RenderPass& renderP
 
 void Device::recordRenderPass(RenderPass& renderPass)
 {
+	if (skipDraw)
+		return;
+
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 	recordRenderPass(commandBuffer, renderPass);
 }
 
 void Device::recordImGui()
 {
+	ImGui::Render();
+
+	if (skipDraw)
+		return;
 
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 

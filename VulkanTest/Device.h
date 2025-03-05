@@ -357,6 +357,7 @@ private:
 
 private:
 	bool hasRecorededCompute = false;
+	bool skipDraw = false;
 
 public:
 	bool framebufferResized = false; //public for now but may change

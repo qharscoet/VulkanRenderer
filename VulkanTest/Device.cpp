@@ -1174,8 +1174,11 @@ void Device::beginDraw()
 	case VK_ERROR_OUT_OF_DATE_KHR:
 	case VK_SUBOPTIMAL_KHR:
 		recreateSwapChain();
+		skipDraw = true;
 		return;
-	case VK_SUCCESS: break;
+	case VK_SUCCESS:
+	case VK_SUBOPTIMAL_KHR:
+		break;
 	default:
 		throw std::runtime_error("failed to acquire swap chain image!");
 	}
@@ -1213,6 +1216,12 @@ void Device::beginDraw()
 
 void Device::endDraw()
 {
+
+	if (skipDraw)
+	{
+		skipDraw = false;
+		return;
+	}
 
 	if (vkEndCommandBuffer(commandBuffers[current_frame]) != VK_SUCCESS) {
 		throw std::runtime_error("failed to record command buffer!");
