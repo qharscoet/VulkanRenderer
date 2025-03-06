@@ -47,7 +47,7 @@ struct Light
 #define quadratic params.z
 
 #define direction params
-#define cutOff params.z
+#define cutOff params.w
 
 #define POINTLIGHT 0
 #define DIRLIGHT 1
@@ -175,6 +175,11 @@ float4 calcLight(PSInput input, Light l)
 		float d = length(l.position - input.worldPos.xyz);
 		attenuation = 1.0f / (l.constant + d * l.linear + d * d * l.quadratic);
 
+	}
+	else if (l.type == SPOTLIGHT)
+	{
+		float c = dot(light_vec, normalize(-l.direction.xyz));
+		attenuation = c > l.cutOff;	
 	}
 	
 	return (ambiantLight + diffuseLight + specularLight) * attenuation;

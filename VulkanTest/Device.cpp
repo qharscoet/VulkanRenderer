@@ -1172,7 +1172,6 @@ void Device::beginDraw()
 
 	switch (res) {
 	case VK_ERROR_OUT_OF_DATE_KHR:
-	case VK_SUBOPTIMAL_KHR:
 		recreateSwapChain();
 		skipDraw = true;
 		return;

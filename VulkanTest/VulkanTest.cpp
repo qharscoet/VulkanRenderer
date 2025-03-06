@@ -261,12 +261,15 @@ public:
 		m_renderer.init(window, device_options);
 
 		loadPackets();
+		float sun[3] = { 0.0, -1.0f, 0.0f };
+		m_renderer.addDirectionalLight(sun);
+
 		const float lightPos[2][3] = { 
 			{3.0f, 3.0f, 3.0f},
 			{0.0f, 2.0f, 0.0f} 
 		};
 		m_renderer.addLight(lightPos[0]);
-		m_renderer.addLight(lightPos[1]);
+		m_renderer.addSpotlight(lightPos[1]);
 
 		float sun[3] = { 0.0, -1.0f, 0.0f };
 		m_renderer.addDirectionalLight(sun);

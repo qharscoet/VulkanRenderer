@@ -7,6 +7,8 @@
 #include <imgui.h>
 #include <ImGuizmo.h>
 
+#include <glm/gtc/type_ptr.hpp>
+
 /* TODOs:
 	- Separate UBO from other descriptor sets, or include it in the hashing ?
 	- Barriers using subpasses
@@ -360,6 +362,12 @@ void Renderer::drawImgui()
 					ImGui::SliderFloat("Constant", &l.params.pointLight.constant, 0.f, 1.f);
 					ImGui::SliderFloat("Linear", &l.params.pointLight.linear, 0.f, 1.f);
 					ImGui::SliderFloat("Quadratic", &l.params.pointLight.quadratic, 0.f, 1.f);
+				}
+				else if (l.type == LightType::Spotlight)
+				{
+					ImGui::Text("Params");
+					ImGui::SliderFloat3("Direction", l.params.spotLight.direction, 0.0f, 1.0f);
+					ImGui::SliderFloat("Angle Cutoff", &l.params.spotLight.cutOff, 0.0f, 1.0f);
 				}
 
 				ImGui::ColorEdit3("Color", l.color);
@@ -933,6 +941,39 @@ void Renderer::updateLightData()
 			l.position[2] = 2.0f * sin(angle);
 
 			memcpy(l.cube.transform.translation, l.position, 3 * sizeof(float));
+
+		}
+		if (l.type == LightType::Spotlight)
+		{
+			glm::vec3 direction = normalize(-glm::make_vec3(l.position));
+			memcpy(l.params.spotLight.direction, &direction[0], 3 * sizeof(float));
+
+			glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f); // Default up vector
+
+			// Compute rotation axis and angle
+			glm::vec3 rotationAxis = glm::cross(up, direction);
+			float angle = acos(glm::dot(up, direction));
+
+			// Create quaternion rotation
+			glm::quat rotationQuat = glm::angleAxis(angle, glm::normalize(rotationAxis));
+
+			// Convert quaternion to Euler angles (in radians)
+			glm::vec3 eulerRotation = glm::eulerAngles(rotationQuat);
+			glm::vec3 eulerRotationDegrees = glm::degrees(eulerRotation);
+			glm::vec3 eulerRotationFinal = eulerRotationDegrees / 90.0f;
+			memcpy(l.cube.transform.rotation, &eulerRotationFinal[0], 3 * sizeof(float));
+
+			auto matrix = glm::lookAt(glm::make_vec3(l.position), glm::vec3(0.0f, 0.0f, 0.0f), up);
+
+			float yaw = glm::degrees(atan2(matrix[0][2], matrix[2][2]));
+			float pitch = glm::degrees(asin(-matrix[1][2]));
+			float roll = glm::degrees(atan2(matrix[1][0], matrix[1][1]));
+
+			l.cube.transform.rotation[0] = pitch/90.f;
+			l.cube.transform.rotation[1] = yaw/90.f;
+			l.cube.transform.rotation[2] = roll/90.f;
+
+			//// Convert to degrees if needed
 		}
 
 
@@ -946,6 +987,15 @@ void Renderer::updateLightData()
 
 		data.type = static_cast<uint32_t>(l.type);
 		memcpy(&data.params, &l.params, sizeof(l.params));
+
+		////TODO : temp override for initial testing
+		//if (l.type == LightType::Spotlight)
+		//{
+		//	memcpy(&data.params.spotLight.direction, &cameraInfo.forward, 3 * sizeof(float));
+		//	memcpy(&data.pos, cameraInfo.position, 3 * sizeof(float));
+		//	memcpy(l.params.spotLight.direction, &cameraInfo.forward, 3 * sizeof(float));
+		//	memcpy(l.position, cameraInfo.position, 3 * sizeof(float));
+		//}
 
 		memcpy((uint8_t*)(light_data_gpu.mapped_memory) + offset, &data, sizeof(data));
 		offset += sizeof(data);
@@ -992,9 +1042,11 @@ void Renderer::addSpotlight(const float pos[3])
 
 	light.type = LightType::Spotlight;
 	light.color[0] = 1.0f;
-	light.color[1] = 0.0f;
+	light.color[1] = 1.0f;
 	light.color[2] = 0.0f;
 
-	light.cube = m_device.createCubePacket(pos, 0.5f);
+	light.params.spotLight.cutOff = glm::cos(glm::radians(12.5f));
+
+	light.cube = m_device.createConePacket(pos, 0.5f);
 	lights.push_back(light);
 }

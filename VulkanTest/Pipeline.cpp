@@ -655,6 +655,28 @@ MeshPacket Device::createCubePacket(const float pos[3], float size)
 	return out_packet;
 }
 
+MeshPacket Device::createConePacket(const float pos[3], float size)
+{
+	MeshPacket out_packet;
+
+	auto vertices = Vertex::getConeVertices();
+	auto indices = Vertex::getConeIndices();
+	out_packet.vertexBuffer = this->createVertexBuffer(vertices.size() * sizeof(vertices[0]), (void*)vertices.data());
+	out_packet.indexBuffer = this->createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
+
+
+	out_packet.texture = defaultTexture;
+	out_packet.sampler = defaultSampler;
+	out_packet.name = "Cube";
+
+	memcpy(out_packet.transform.translation, pos, 3 * sizeof(float));
+	out_packet.transform.scale[0] = size;
+	out_packet.transform.scale[1] = size;
+	out_packet.transform.scale[2] = size;
+
+	return out_packet;
+}
+
 void Device::bindVertexBuffer(Buffer& buffer)
 {
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
@@ -1011,8 +1033,6 @@ void Device::recordImGui()
 
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-
-	ImGui::Render();
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
 
 	vkCmdEndRenderPass(commandBuffer);

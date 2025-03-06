@@ -183,6 +183,43 @@ struct Vertex {
 		};
 	}
 
+	static std::vector<Vertex> getConeVertices()
+	{
+		return {
+			// Tip of the cone (apex, now at the bottom)
+			{{0.0f, -1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.5f, 1.0f}},
+
+			// Base vertices (forming a circle in the XZ plane at y = 0)
+			{{0.5f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, 0.5f}},
+			{{0.25f, 0.0f, 0.433f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.75f, 0.75f}},
+			{{-0.25f, 0.0f, 0.433f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.5f, 1.0f}},
+			{{-0.5f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.25f, 0.75f}},
+			{{-0.25f, 0.0f, -0.433f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, 0.5f}},
+			{{0.25f, 0.0f, -0.433f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.25f, 0.25f}},
+			{{0.5f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.5f, 0.0f}}
+		};
+
+	}
+	static std::vector<uint32_t> getConeIndices() {
+		return {
+			// Side triangles (connect the tip to each base vertex)
+			0, 1, 2,
+			0, 2, 3,
+			0, 3, 4,
+			0, 4, 5,
+			0, 5, 6,
+			0, 6, 7,
+
+			// Base triangles (fan around the center)
+			1, 3, 2,
+			1, 4, 3,
+			1, 5, 4,
+			1, 6, 5,
+			1, 7, 6
+		};
+	}
+
+
 };
 
 
@@ -490,6 +527,7 @@ public:
 	void setRenderPass(RenderPass& renderPass);
 	MeshPacket createPacket(Mesh& mesh, Texture* tex);
 	MeshPacket createCubePacket(const float pos[3], float scale);
+	MeshPacket createConePacket(const float pos[3], float scale);
 	void drawPacket(const MeshPacket& packet);
 	void destroyPipeline(Pipeline pipeline);
 	void destroyRenderPass(RenderPass renderPass);
