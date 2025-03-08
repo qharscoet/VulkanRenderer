@@ -13,6 +13,8 @@ struct Texture {
 	int channels;
 	std::vector<unsigned char> pixels;
 	size_t size;
+
+	std::string name;
 };
 
 struct MeshVertex
@@ -27,6 +29,14 @@ struct Mesh {
 	std::vector<MeshVertex> vertices;
 	std::vector<uint32_t> indices;
 	std::vector<Texture> textures;
+
+	struct Material {
+		int baseColor;
+		int mettalicRoughness;
+		int normal;
+		int emissive;
+		int occlusion;
+	} material;
 };
 
 //GLtf like structures

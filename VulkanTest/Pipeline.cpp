@@ -627,9 +627,28 @@ MeshPacket Device::createPacket(Mesh& mesh, Texture* tex)
 	out_packet.indexBuffer = this->createIndexBuffer(mesh.indices.size() * sizeof(mesh.indices[0]), (void*)mesh.indices.data());
 
 
-	out_packet.texture = tex != nullptr ? this->createTexture(*tex) : defaultTexture;
-	out_packet.sampler = this->createTextureSampler(out_packet.texture.mipLevels);
+	//out_packet.texture = tex != nullptr ? this->createTexture(*tex) : defaultTexture;
 
+	memcpy(&out_packet.materialData, &mesh.material, sizeof(mesh.material));
+
+	if (tex != nullptr)
+	{
+		out_packet.textures.push_back(createTexture(*tex));
+		out_packet.materialData.baseColor = 0;
+	}
+
+	for (const auto& texture : mesh.textures)
+	{
+		out_packet.textures.push_back(createTexture(texture));
+	}
+
+	if (out_packet.textures.empty())
+	{
+		out_packet.textures.push_back(defaultTexture);
+		out_packet.materialData.baseColor = 0;
+	}
+
+	out_packet.sampler = this->createTextureSampler(out_packet.textures[0].mipLevels);
 	return out_packet;
 }
 
@@ -643,7 +662,7 @@ MeshPacket Device::createCubePacket(const float pos[3], float size)
 	out_packet.indexBuffer = this->createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
 
 
-	out_packet.texture = defaultTexture;
+	out_packet.textures.push_back(defaultTexture);
 	out_packet.sampler = defaultSampler;
 	out_packet.name = "Cube";
 
@@ -651,6 +670,9 @@ MeshPacket Device::createCubePacket(const float pos[3], float size)
 	out_packet.transform.scale[0] = size;
 	out_packet.transform.scale[1] = size;
 	out_packet.transform.scale[2] = size;
+
+	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
+	out_packet.materialData.baseColor = 0;
 
 	return out_packet;
 }
@@ -665,7 +687,7 @@ MeshPacket Device::createConePacket(const float pos[3], float size)
 	out_packet.indexBuffer = this->createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
 
 
-	out_packet.texture = defaultTexture;
+	out_packet.textures.push_back(defaultTexture);
 	out_packet.sampler = defaultSampler;
 	out_packet.name = "Cube";
 
@@ -673,6 +695,9 @@ MeshPacket Device::createConePacket(const float pos[3], float size)
 	out_packet.transform.scale[0] = size;
 	out_packet.transform.scale[1] = size;
 	out_packet.transform.scale[2] = size;
+
+	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
+	out_packet.materialData.baseColor = 0;
 
 	return out_packet;
 }
@@ -880,12 +905,16 @@ void Device::drawPacket(const MeshPacket& packet)
 	VkDescriptorSetLayout descriptorSetLayout = currentRenderPass->pipeline.descriptorSetLayouts[0];
 	std::vector<BindingDesc>& bindings = currentRenderPass->pipeline.bindings[0];
 
+	const GpuImage& baseColor = packet.textures[packet.materialData.baseColor];
+	const GpuImage& normal = packet.materialData.normal >= 0 ? packet.textures[packet.materialData.normal] : defaultTexture;
+
 	std::hash<VkImageView> img_hasher;
 	std::hash<VkSampler> sampler_hasher;
 	std::hash<VkBuffer> buffer_hasher;
 	size_t hash = 0;
 	hash_combine(hash, buffer_hasher(uniformBuffers[current_frame].buffer));
-	hash_combine(hash, img_hasher(packet.texture.view));
+	hash_combine(hash, img_hasher(baseColor.view));
+	hash_combine(hash, img_hasher(normal.view));
 	hash_combine(hash, sampler_hasher(packet.sampler));
 
 	if (currentRenderPass->pipeline.descriptorSetsMap.contains(hash))
@@ -896,7 +925,10 @@ void Device::drawPacket(const MeshPacket& packet)
 		VkDescriptorSet descriptorSet;
 		createDescriptorSets(descriptorSetLayout, descriptorPool, &descriptorSet, 1);
 
-		std::vector<VkDescriptorImageInfo> images = { getDescriptorImageInfo(packet.texture, packet.sampler)};
+		std::vector<VkDescriptorImageInfo> images = {
+			getDescriptorImageInfo(packet.textures[packet.materialData.baseColor], packet.sampler),
+			getDescriptorImageInfo(normal, packet.sampler),
+		};
 		std::vector<VkDescriptorBufferInfo> buffers = { getDescriptorBufferInfo(uniformBuffers[current_frame])};
 		updateDescriptorSet(bindings, images, buffers, descriptorSet);
 		currentRenderPass->pipeline.descriptorSetsMap[hash] = descriptorSet;
@@ -911,9 +943,9 @@ void Device::drawPacket(const MeshPacket& packet)
 		const float* scale = packet.transform.scale;
 
 		glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(translate[0], translate[1], translate[2]));
-		model = glm::rotate(model, rotation[0] * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		model = glm::rotate(model, rotation[0] * glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 		model = glm::rotate(model, rotation[1] * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-		model = glm::rotate(model, rotation[2] * glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+		model = glm::rotate(model, rotation[2] * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 		model = glm::scale(model, glm::vec3(scale[0], scale[1], scale[2]));
 
 		vkCmdPushConstants(commandBuffer, currentRenderPass->pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MeshPacket::PushConstantsData), &model);

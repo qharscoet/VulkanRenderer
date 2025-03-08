@@ -142,6 +142,9 @@ Texture2D g_texture : register(t0);
 [[vk::binding(1, 0)]]
 SamplerState g_sampler : register(s0);
 
+[[vk::binding(2,0)]]
+Texture2D g_normal : register(t1);
+
 
 float4 calcLight(PSInput input, Light l)
 {
@@ -196,6 +199,8 @@ float4 PSMain(PSInput input) : SV_TARGET
 	{
 		output += texColor * calcLight(input, light[i]);
 	}
+	
+	output += g_normal.Sample(g_sampler, input.uv);
 	
 	return output;
 }

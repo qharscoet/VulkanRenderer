@@ -278,10 +278,22 @@ int loadGltf(const char* path, Mesh* out_mesh)
 			t.channels = img.component;
 			t.size = img.width * img.height * img.component ;
 			t.pixels = img.image;
+			t.name = img.name;
 
 			out_mesh->textures.push_back(t);
 			
 		}
+
+		const tinygltf::Material& material = model.materials[m.primitives[0].material];
+
+		out_mesh->material = {
+			.baseColor = material.pbrMetallicRoughness.baseColorTexture.index,
+			.mettalicRoughness = material.pbrMetallicRoughness.metallicRoughnessTexture.index,
+			.normal = material.normalTexture.index,
+			.emissive = material.emissiveTexture.index,
+			.occlusion = material.occlusionTexture.index,
+		};
+
 	}
 
 	return 0;

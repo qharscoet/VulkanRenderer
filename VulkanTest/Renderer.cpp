@@ -468,6 +468,12 @@ void Renderer::initPipeline()
 					.slot = 1,
 					.type = BindingType::ImageSampler,
 					.stageFlags = e_Pixel,
+				},
+				// Normal
+				{
+					.slot = 2,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
 				}
 			},
 			{
@@ -561,6 +567,11 @@ void Renderer::initDrawLightsRenderPass()
 				},
 				{
 					.slot = 1,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				},
+				{
+					.slot = 2,
 					.type = BindingType::ImageSampler,
 					.stageFlags = e_Pixel,
 				}
@@ -835,12 +846,14 @@ MeshPacket Renderer::createPacket(std::filesystem::path path, std::string textur
 	if (path.extension() == ".obj") {
 		loadObj(path.string().c_str(), &out_mesh);
 		tex = loadTexture(texture_path.c_str());
+
+		memset(&out_mesh.material, -1, sizeof(out_mesh.material));
 	}
 	else if (path.extension() == ".gltf")
 	{
 		loadGltf(path.string().c_str(), &out_mesh);
-		if (out_mesh.textures.size() > 0)
-			tex = out_mesh.textures[0];
+		//if (out_mesh.textures.size() > 0)
+		//	tex = out_mesh.textures[0];
 	}
 
 	out_packet = m_device.createPacket(out_mesh, tex.pixels.empty() ? nullptr:&tex);
@@ -853,9 +866,19 @@ MeshPacket Renderer::createPacket(std::filesystem::path path, std::string textur
 
 	out_packet.name = path.filename().replace_extension("").string();
 
-	m_device.SetImageName(out_packet.texture.image, (out_packet.name + "/BaseColor").c_str());
+	//m_device.SetImageName(out_packet.texture.image, (out_packet.name + "/BaseColor").c_str());
 	m_device.SetBufferName(out_packet.vertexBuffer.buffer, (out_packet.name + "/VertexBuffer").c_str());
 	m_device.SetBufferName(out_packet.indexBuffer.buffer, (out_packet.name + "/IndexBuffer").c_str());
+
+	for (int i = 0; i < out_packet.textures.size();  i++)
+	{
+		if (out_mesh.textures.size() > i)
+		{
+			const GpuImage& image = out_packet.textures[i];
+			const Texture& t = out_mesh.textures[i];
+			m_device.SetImageName(image.image, (out_packet.name + "/" + t.name).c_str());
+		}
+	}
 
 	return out_packet;
 }
@@ -866,8 +889,13 @@ void Renderer::destroyPacket(MeshPacket packet)
 	m_device.destroyBuffer(packet.vertexBuffer);
 	m_device.destroyBuffer(packet.indexBuffer);
 
-	m_device.destroyImage(packet.texture);
+	//m_device.destroyImage(packet.texture);
 	m_device.destroySampler(packet.sampler);
+
+	for (GpuImage& tex : packet.textures)
+	{
+		m_device.destroyImage(tex);
+	}
 }
 
 void Renderer::addPacket(const MeshPacket& packet)
@@ -950,30 +978,29 @@ void Renderer::updateLightData()
 
 			glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f); // Default up vector
 
-			// Compute rotation axis and angle
+			//// Compute rotation axis and angle
 			glm::vec3 rotationAxis = glm::cross(up, direction);
 			float angle = acos(glm::dot(up, direction));
 
-			// Create quaternion rotation
+			//// Create quaternion rotation
 			glm::quat rotationQuat = glm::angleAxis(angle, glm::normalize(rotationAxis));
 
-			// Convert quaternion to Euler angles (in radians)
+			//// Convert quaternion to Euler angles (in radians)
 			glm::vec3 eulerRotation = glm::eulerAngles(rotationQuat);
-			glm::vec3 eulerRotationDegrees = glm::degrees(eulerRotation);
-			glm::vec3 eulerRotationFinal = eulerRotationDegrees / 90.0f;
+			//glm::vec3 eulerRotationDegrees = glm::degrees(eulerRotation);
+			glm::vec3 eulerRotationFinal = eulerRotation / glm::radians(90.f);
 			memcpy(l.cube.transform.rotation, &eulerRotationFinal[0], 3 * sizeof(float));
 
-			auto matrix = glm::lookAt(glm::make_vec3(l.position), glm::vec3(0.0f, 0.0f, 0.0f), up);
+			//auto matrix = glm::lookAt(glm::make_vec3(l.position), glm::vec3(0.0f, 0.0f, 0.0f), up);
 
-			float yaw = glm::degrees(atan2(matrix[0][2], matrix[2][2]));
-			float pitch = glm::degrees(asin(-matrix[1][2]));
-			float roll = glm::degrees(atan2(matrix[1][0], matrix[1][1]));
+			//float yaw = glm::degrees(atan2(matrix[0][2], matrix[2][2]));
+			//float pitch = glm::degrees(asin(-matrix[1][2]));
+			//float roll = glm::degrees(atan2(matrix[1][0], matrix[1][1]));
 
-			l.cube.transform.rotation[0] = pitch/90.f;
-			l.cube.transform.rotation[1] = yaw/90.f;
-			l.cube.transform.rotation[2] = roll/90.f;
+			//l.cube.transform.rotation[0] = pitch/90.f;
+			//l.cube.transform.rotation[1] = yaw/90.f;
+			//l.cube.transform.rotation[2] = roll/90.f;
 
-			//// Convert to degrees if needed
 		}
 
 
