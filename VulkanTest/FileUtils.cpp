@@ -158,6 +158,7 @@ struct AttributeInfo {
 	const size_t elem_size;
 	const size_t count;
 	const size_t stride;
+	const double maxRange;
 };
 const std::optional<AttributeInfo> get_accessor_start_addr(const tinygltf::Model& model, size_t mesh_idx, std::string attr)
 {
@@ -174,8 +175,19 @@ const std::optional<AttributeInfo> get_accessor_start_addr(const tinygltf::Model
 	size_t elem_size = get_accessor_elem_size(accessor);
 	size_t stride = bufferView.byteStride > 0 ? bufferView.byteStride : elem_size;
 
+	double maxRange = 0.0f;
+	for (int i = 0; i < accessor.minValues.size(); i++)
+	{
+		const double min = accessor.minValues[i];
+		const double max = accessor.maxValues[i];
+		const double range = max - min;
 
-	return AttributeInfo{ data, elem_size, accessor.count, stride };
+		maxRange = std::max(range, maxRange);
+	}
+	
+
+
+	return AttributeInfo{ data, elem_size, accessor.count, stride, maxRange};
 }
 
 int loadGltf(const char* path, Mesh* out_mesh)
@@ -231,6 +243,14 @@ int loadGltf(const char* path, Mesh* out_mesh)
 				MeshVertex v = {};
 
 				memcpy(v.pos, positions.start_addr + i * positions.stride, positions.elem_size);
+
+				if (positions.maxRange > 0)
+				{
+					const float factor = 1.0f / positions.maxRange;
+					v.pos[0] *= factor;
+					v.pos[1] *= factor;
+					v.pos[2] *= factor;
+				}
 
 				if (normal_info.has_value())
 					memcpy(v.normals, normal_info->start_addr + i * normal_info->stride, normal_info->elem_size);
