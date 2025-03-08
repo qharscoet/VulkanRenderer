@@ -179,7 +179,8 @@ float4 calcLight(PSInput input, Light l)
 	else if (l.type == SPOTLIGHT)
 	{
 		float c = dot(light_vec, normalize(-l.direction.xyz));
-		attenuation = c > l.cutOff;	
+		float n = dot(norm, light_vec);
+		attenuation = c > l.cutOff && n > 0;
 	}
 	
 	return (ambiantLight + diffuseLight + specularLight) * attenuation;
