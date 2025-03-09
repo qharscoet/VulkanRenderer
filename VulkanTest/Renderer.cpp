@@ -178,6 +178,7 @@ void Renderer::draw()
 
 }
 
+static bool normal_mode = false;
 static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::TRANSLATE);
 static int lastUsing = 0;
 
@@ -304,6 +305,7 @@ void Renderer::drawImgui()
 
 	if (ImGui::CollapsingHeader("Object List"))
 	{
+		ImGui::Checkbox("Use Normal Map", &normal_mode);
 		for (int i = 0; i < packets.size(); i++)
 		{
 			MeshPacket& p = packets[i];
@@ -433,6 +435,8 @@ void Renderer::drawRenderPass() {
 
 	uint32_t count = lights.size();
 	m_device.pushConstants(&count, sizeof(MeshPacket::PushConstantsData) + 3 * sizeof(float), sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
+
+	m_device.pushConstants(&normal_mode, sizeof(MeshPacket::PushConstantsData) + 4 * sizeof(float), sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
 	for (const auto& packet : packets)
 	{
 		drawPacket(packet);
@@ -494,7 +498,7 @@ void Renderer::initPipeline()
 		.pushConstantsRanges = {
 			{
 				.offset = 0,
-				.size = sizeof(MeshPacket::PushConstantsData) + sizeof(float) * 4,
+				.size = sizeof(MeshPacket::PushConstantsData) + sizeof(float) * 5,
 				.stageFlags = (StageFlags)(e_Vertex | e_Pixel)
 			},
 			//{

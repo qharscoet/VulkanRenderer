@@ -70,8 +70,10 @@ struct MeshPacket {
 	Buffer vertexBuffer;
 	Buffer indexBuffer;
 
-	GpuImage texture;
+	//GpuImage texture;
 	VkSampler sampler;
+
+	std::vector<GpuImage> textures;
 
 
 	struct Transform {
@@ -84,6 +86,14 @@ struct MeshPacket {
 		glm::mat4 model;
 	};
 
+	struct MaterialData {
+		int baseColor;
+		int mettalicRoughness;
+		int normal;
+		int emissive;
+		int occlusion;
+	} materialData;
+
 	std::string name;
 };
 
@@ -92,6 +102,7 @@ struct Vertex {
 	glm::vec3 normal;
 	glm::vec3 color;
 	glm::vec2 texCoord;
+	glm::vec4 tangent;
 
 	static VkVertexInputBindingDescription getBindingDescription() {
 		VkVertexInputBindingDescription bindingDescription{};
@@ -102,8 +113,8 @@ struct Vertex {
 		return bindingDescription;
 	}
 
-	static std::array<VkVertexInputAttributeDescription, 4> getAttributeDescriptions() {
-		std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions{};
+	static std::array<VkVertexInputAttributeDescription, 5> getAttributeDescriptions() {
+		std::array<VkVertexInputAttributeDescription, 5> attributeDescriptions{};
 
 		attributeDescriptions[0].binding = 0;
 		attributeDescriptions[0].location = 0;
@@ -124,6 +135,11 @@ struct Vertex {
 		attributeDescriptions[3].location = 3;
 		attributeDescriptions[3].format = VK_FORMAT_R32G32_SFLOAT;
 		attributeDescriptions[3].offset = offsetof(Vertex, texCoord);
+		
+		attributeDescriptions[4].binding = 0;
+		attributeDescriptions[4].location = 4;
+		attributeDescriptions[4].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		attributeDescriptions[4].offset = offsetof(Vertex, tangent);
 
 
 
@@ -134,41 +150,29 @@ struct Vertex {
 	static std::vector<Vertex> getCubeVertices()
 	{
 		return {
-			// Front face
-			{{-0.5f, -0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
-			{{ 0.5f, -0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}}, // Bottom-right
-			{{ 0.5f,  0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}, // Top-right
-			{{-0.5f,  0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}, // Top-left
+			// Front face (Z+)
+			{{-0.5f, -0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
+			{{ 0.5f, -0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
+			{{ 0.5f,  0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
+			{{-0.5f,  0.5f,  0.5f}, {0.0f,  0.0f,  1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
 
-			// Back face
-			{{ 0.5f, -0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
-			{{-0.5f, -0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}}, // Bottom-right
-			{{-0.5f,  0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}, // Top-right
-			{{ 0.5f,  0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}, // Top-left
+			// Back face (Z-)
+			{{ 0.5f, -0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f, 1.0f}},
+			{{-0.5f, -0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}, {-1.0f, 0.0f, 0.0f, 1.0f}},
+			{{-0.5f,  0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}, {-1.0f, 0.0f, 0.0f, 1.0f}},
+			{{ 0.5f,  0.5f, -0.5f}, {0.0f,  0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {-1.0f, 0.0f, 0.0f, 1.0f}},
 
-			// Left face
-			{{-0.5f, -0.5f, -0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
-			{{-0.5f, -0.5f,  0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}}, // Bottom-right
-			{{-0.5f,  0.5f,  0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}, // Top-right
-			{{-0.5f,  0.5f, -0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}, // Top-left
+			// Left face (X-)
+			{{-0.5f, -0.5f, -0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},
+			{{-0.5f, -0.5f,  0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},
+			{{-0.5f,  0.5f,  0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},
+			{{-0.5f,  0.5f, -0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},
 
-			// Right face
-			{{ 0.5f, -0.5f,  0.5f}, {1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
-			{{ 0.5f, -0.5f, -0.5f}, {1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}}, // Bottom-right
-			{{ 0.5f,  0.5f, -0.5f}, {1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}, // Top-right
-			{{ 0.5f,  0.5f,  0.5f}, {1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}, // Top-left
-
-			// Bottom face
-			{{-0.5f, -0.5f, -0.5f}, {0.0f, -1.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
-			{{ 0.5f, -0.5f, -0.5f}, {0.0f, -1.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}}, // Bottom-right
-			{{ 0.5f, -0.5f,  0.5f}, {0.0f, -1.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}, // Top-right
-			{{-0.5f, -0.5f,  0.5f}, {0.0f, -1.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}, // Top-left
-
-			// Top face
-			{{-0.5f,  0.5f,  0.5f}, {0.0f,  1.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}}, // Bottom-left
-			{{ 0.5f,  0.5f,  0.5f}, {0.0f,  1.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}}, // Bottom-right
-			{{ 0.5f,  0.5f, -0.5f}, {0.0f,  1.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}, // Top-right
-			{{-0.5f,  0.5f, -0.5f}, {0.0f,  1.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}, // Top-left
+			// Right face (X+)
+			{{ 0.5f, -0.5f,  0.5f}, {1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, -1.0f, 1.0f}},
+			{{ 0.5f, -0.5f, -0.5f}, {1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, -1.0f, 1.0f}},
+			{{ 0.5f,  0.5f, -0.5f}, {1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, -1.0f, 1.0f}},
+			{{ 0.5f,  0.5f,  0.5f}, {1.0f,  0.0f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, -1.0f, 1.0f}},
 		};
 
 	}
@@ -186,19 +190,18 @@ struct Vertex {
 	static std::vector<Vertex> getConeVertices()
 	{
 		return {
-			// Tip of the cone (apex, now at the bottom)
-			{{0.0f, -1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.5f, 1.0f}},
+			// Tip of the cone (apex)
+			{{0.0f, -1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.5f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
 
 			// Base vertices (forming a circle in the XZ plane at y = 0)
-			{{0.5f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, 0.5f}},
-			{{0.25f, 0.0f, 0.433f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.75f, 0.75f}},
-			{{-0.25f, 0.0f, 0.433f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.5f, 1.0f}},
-			{{-0.5f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.25f, 0.75f}},
-			{{-0.25f, 0.0f, -0.433f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, 0.5f}},
-			{{0.25f, 0.0f, -0.433f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.25f, 0.25f}},
-			{{0.5f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.5f, 0.0f}}
+			{{0.5f, 0.0f, 0.0f},  {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, 0.5f}, {0.0f, 0.0f, 1.0f, 1.0f}},
+			{{0.25f, 0.0f, 0.433f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.75f, 0.75f}, {-0.866f, 0.0f, 0.5f, 1.0f}},
+			{{-0.25f, 0.0f, 0.433f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.5f, 1.0f}, {-0.866f, 0.0f, -0.5f, 1.0f}},
+			{{-0.5f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.25f, 0.75f}, {0.0f, 0.0f, -1.0f, 1.0f}},
+			{{-0.25f, 0.0f, -0.433f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, 0.5f}, {0.866f, 0.0f, -0.5f, 1.0f}},
+			{{0.25f, 0.0f, -0.433f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.25f, 0.25f}, {0.866f, 0.0f, 0.5f, 1.0f}},
+			{{0.5f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}}
 		};
-
 	}
 	static std::vector<uint32_t> getConeIndices() {
 		return {
@@ -217,6 +220,60 @@ struct Vertex {
 			1, 6, 5,
 			1, 7, 6
 		};
+	}
+
+
+	static void ComputeTangents(std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices) {
+		// Temporary containers to store tangents
+		std::vector<glm::vec3> tangents(vertices.size(), glm::vec3(0.0f));
+
+		// Iterate over each triangle
+		for (size_t i = 0; i < indices.size(); i += 3) {
+			// Get triangle indices
+			uint32_t i0 = indices[i];
+			uint32_t i1 = indices[i + 1];
+			uint32_t i2 = indices[i + 2];
+
+			// Get triangle vertices
+			Vertex& v0 = vertices[i0];
+			Vertex& v1 = vertices[i1];
+			Vertex& v2 = vertices[i2];
+
+			// Compute edge vectors
+			glm::vec3 edge1 = v1.pos - v0.pos;
+			glm::vec3 edge2 = v2.pos - v0.pos;
+
+			// Compute delta UVs
+			glm::vec2 deltaUV1 = v1.texCoord - v0.texCoord;
+			glm::vec2 deltaUV2 = v2.texCoord - v0.texCoord;
+
+			// Compute tangent
+			float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+			glm::vec3 tangent = f * (deltaUV2.y * edge1 - deltaUV1.y * edge2);
+
+			// Accumulate tangents
+			tangents[i0] += tangent;
+			tangents[i1] += tangent;
+			tangents[i2] += tangent;
+		}
+
+		// Normalize and store tangents
+		for (size_t i = 0; i < vertices.size(); ++i) {
+			glm::vec3 T = glm::normalize(tangents[i]);
+
+			// Ensure the tangent is orthogonal to the normal
+			T = glm::normalize(T - vertices[i].normal * glm::dot(vertices[i].normal, T));
+
+			// Compute handedness (w component)
+			glm::vec3 bitangent = glm::cross(vertices[i].normal, T);
+			float handedness = (glm::dot(bitangent, T) < 0.0f) ? -1.0f : 1.0f;
+
+			// Store tangent in vertex
+			vertices[i].tangent[0] = T.x;
+			vertices[i].tangent[1] = T.y;
+			vertices[i].tangent[2] = T.z;
+			vertices[i].tangent[3] = handedness;
+		}
 	}
 
 

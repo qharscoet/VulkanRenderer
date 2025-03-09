@@ -4,6 +4,7 @@ struct VSInput
 	[[vk::location(1)]] float3 Normal : NORMAL;
 	[[vk::location(2)]] float3 Color : COLOR0;
 	[[vk::location(3)]] float3 TexCoords : TEXCOORD0;
+	[[vk::location(4)]] float4 Tangent : TANGENT;
 };
 
 struct PSInput
@@ -13,6 +14,8 @@ struct PSInput
 	[[vk::location(1)]] float2 uv : TEXCOORD;
 	[[vk::location(2)]] float3 normal : NORMAL;
 	[[vk::location(3)]] float3 worldPos : WORLDPOSITION;
+	[[vk::location(4)]] float3 tangent : TANGENT;
+	[[vk::location(5)]] float3 binormal : BINORMAL;
 };
 
 
@@ -75,6 +78,8 @@ struct Constants
 	float4x4 model;
 	float3 eye;
 	uint light_count;
+	
+	uint normal_mode;
 };
 
 [[vk::push_constant]]
@@ -131,6 +136,8 @@ PSInput VSMain(VSInput input)
 	normalMatrix = transpose(Inverse3x3(normalMatrix));
 	
 	result.normal = mul(normalMatrix, input.Normal);
+	result.tangent = mul(pc.model, input.Tangent);
+	result.binormal = cross(result.tangent, result.normal);
 	result.worldPos = mul(pc.model, float4(input.Position.xyz, 1.0f));
 	return result;
 }
@@ -146,7 +153,7 @@ SamplerState g_sampler : register(s0);
 Texture2D g_normal : register(t1);
 
 
-float4 calcLight(PSInput input, Light l)
+float4 calcLight(PSInput input, Light l, float3 NTex)
 {
 	//Ambiant
 	float4 ambiantLight = float4(l.color * l.ambiant, 1.0f);
@@ -159,7 +166,7 @@ float4 calcLight(PSInput input, Light l)
 		light_vec = normalize(l.position - input.worldPos.xyz);
 	
 	
-	float3 norm = normalize(input.normal);
+	float3 norm = pc.normal_mode == 1 ? normalize(NTex) : normalize(input.position);
 	
 	//Diffuse
 	float diffuse = max(dot(light_vec, norm), 0.0f);
@@ -195,12 +202,19 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float4 texColor = g_texture.Sample(g_sampler, input.uv) * float4(input.color, 0);
 	float4 output = 0;
 	
+	float3 NTex = g_normal.Sample(g_sampler, input.uv) * 2.0f - 1.0f;
+	
+	 // Transform normal from tangent space to world space
+	NTex = normalize(input.tangent * NTex.x +
+                        input.binormal * NTex.y +
+                        input.normal * NTex.z);
+	
 	for (int i = 0; i < pc.light_count ; i++)
 	{
-		output += texColor * calcLight(input, light[i]);
+		output += texColor * calcLight(input, light[i], NTex);
 	}
 	
-	output += g_normal.Sample(g_sampler, input.uv);
+	//output += g_normal.Sample(g_sampler, input.uv);
 	
 	return output;
 }

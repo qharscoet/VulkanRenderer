@@ -147,6 +147,7 @@ size_t get_accessor_elem_size(const tinygltf::Accessor& accessor)
 	case TINYGLTF_TYPE_SCALAR: elem_count = 1; break;
 	case TINYGLTF_TYPE_VEC2: elem_count = 2; break;
 	case TINYGLTF_TYPE_VEC3: elem_count = 3; break;
+	case TINYGLTF_TYPE_VEC4: elem_count = 4; break;
 	}
 
 	return elem_size * elem_count;
@@ -232,6 +233,7 @@ int loadGltf(const char* path, Mesh* out_mesh)
 			const std::optional<AttributeInfo> texCoords_info = get_accessor_start_addr(model, 0, "TEXCOORD_0");
 			const std::optional<AttributeInfo> color_info = get_accessor_start_addr(model, 0, "COLOR_0");
 			const std::optional<AttributeInfo> normal_info = get_accessor_start_addr(model, 0, "NORMAL");
+			const std::optional<AttributeInfo> tangent_info = get_accessor_start_addr(model, 0, "TANGENT");
 			
 			if (!pos_info.has_value())
 				return -1;
@@ -254,6 +256,9 @@ int loadGltf(const char* path, Mesh* out_mesh)
 
 				if (normal_info.has_value())
 					memcpy(v.normals, normal_info->start_addr + i * normal_info->stride, normal_info->elem_size);
+
+				if (tangent_info.has_value())
+					memcpy(v.tangent, tangent_info->start_addr + i * tangent_info->stride, tangent_info->elem_size);
 
 				if (texCoords_info.has_value())
 					memcpy(v.texCoord, texCoords_info->start_addr + i * texCoords_info->stride, texCoords_info->elem_size);

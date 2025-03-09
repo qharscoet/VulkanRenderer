@@ -23,6 +23,7 @@ struct MeshVertex
 	float normals[3];
 	float color[3];
 	float texCoord[2];
+	float tangent[4];
 };
 
 struct Mesh {
