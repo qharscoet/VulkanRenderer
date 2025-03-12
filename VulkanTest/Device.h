@@ -76,11 +76,13 @@ struct MeshPacket {
 	std::vector<GpuImage> textures;
 
 
-	struct Transform {
-		float translation[3];
-		float rotation[3];
-		float scale[3];
-	} transform;
+	//struct Transform {
+	//	float translation[3];
+	//	float rotation[3];
+	//	float scale[3];
+	//} transform;
+
+	glm::mat4 transform;
 
 	struct PushConstantsData {
 		glm::mat4 model;

@@ -9,6 +9,9 @@
 
 #include <glm/gtc/type_ptr.hpp>
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/matrix_decompose.hpp>
+
 /* TODOs:
 	- Separate UBO from other descriptor sets, or include it in the hashing ?
 	- Barriers using subpasses
@@ -188,7 +191,7 @@ static const float identityMatrix[16] =
 	0.f, 0.f, 1.f, 0.f,
 	0.f, 0.f, 0.f, 1.f };
 
-void EditTransform(float* cameraView, float* cameraProjection, float* matrixTranslation, float* matrixRotation, float* matrixScale, bool editTransformDecomposition)
+void EditTransform(float* cameraView, float* cameraProjection, float* matrix, bool editTransformDecomposition)
 {
 	static ImGuizmo::MODE mCurrentGizmoMode(ImGuizmo::WORLD);
 	static bool useSnap = false;
@@ -198,7 +201,7 @@ void EditTransform(float* cameraView, float* cameraProjection, float* matrixTran
 	static bool boundSizing = false;
 	static bool boundSizingSnap = false;
 
-	float matrix[16];
+	
 
 	if (editTransformDecomposition)
 	{
@@ -217,10 +220,13 @@ void EditTransform(float* cameraView, float* cameraProjection, float* matrixTran
 		if (ImGui::RadioButton("Scale", mCurrentGizmoOperation == ImGuizmo::SCALE))
 			mCurrentGizmoOperation = ImGuizmo::SCALE;
 
+
+		float matrixTranslation[3], matrixRotation[3], matrixScale[3];
+		ImGuizmo::DecomposeMatrixToComponents(matrix, matrixTranslation, matrixRotation, matrixScale);
+
 		ImGui::InputFloat3("Tr", matrixTranslation);
 		ImGui::InputFloat3("Rt", matrixRotation);
 		ImGui::InputFloat3("Sc", matrixScale);
-
 
 		ImGuizmo::RecomposeMatrixFromComponents(matrixTranslation, matrixRotation, matrixScale, matrix);
 
@@ -287,7 +293,6 @@ void EditTransform(float* cameraView, float* cameraProjection, float* matrixTran
 
 	//ImGuizmo::ViewManipulate(cameraView, camDistance, ImVec2(viewManipulateRight - 128, viewManipulateTop), ImVec2(128, 128), 0x10101010);
 
-	ImGuizmo::DecomposeMatrixToComponents(matrix, matrixTranslation, matrixRotation, matrixScale);
 	if (false)//useWindow)
 	{
 		ImGui::End();
@@ -310,16 +315,28 @@ void Renderer::drawImgui()
 		{
 			MeshPacket& p = packets[i];
 
+			glm::vec3 scale;
+			glm::quat rotationQuat;
+			glm::vec3 translation;
+			glm::vec3 skew;
+			glm::vec4 perspective;
+			glm::decompose(p.transform, scale, rotationQuat, translation, skew, perspective);
+
+			glm::vec3 eulerRotationDegrees = glm::degrees(glm::eulerAngles(rotationQuat));
+
 			char label[32];
 			sprintf(label, "Object %d", i);
 			if (ImGui::TreeNode(p.name.empty() ? label : p.name.c_str()))
 			{
-				ImGui::SliderFloat3("Translate", p.transform.translation, -5.0f, 5.0f);
-				ImGui::SliderFloat3("Rot", p.transform.rotation, 0.0f, 1.0f);
-				ImGui::SliderFloat3("Scale", p.transform.scale, 0.0f, 4.0f);
+				ImGui::SliderFloat3("Translate", &translation[0], -5.0f, 5.0f);
+				ImGui::SliderFloat3("Rot", &eulerRotationDegrees[0], 0.0f, 180.0f);
+				ImGui::SliderFloat3("Scale",&scale[0], 0.0f, 4.0f);
 
 				ImGui::TreePop();
 			}
+
+			rotationQuat = glm::quat(glm::radians(eulerRotationDegrees));
+			p.transform = glm::recompose(scale, rotationQuat, translation, skew, perspective);
 		}
 	}
 
@@ -349,8 +366,8 @@ void Renderer::drawImgui()
 				ImGui::Checkbox("Light rotate", &l.light_autorotate);
 
 				ImGui::SliderFloat3(l.type == LightType::Directional ? "Direction" :"Translate", l.position, -5.0f, 5.0f);
-				if(l.type == LightType::Spotlight)
-					ImGui::SliderFloat3("Rot", p.transform.rotation, 0.0f, 1.0f);
+				/*if(l.type == LightType::Spotlight)
+					ImGui::SliderFloat3("Rot", p.transform.rotation, 0.0f, 1.0f);*/
 				//ImGui::SliderFloat3("Scale", p.transform.scale, 0.0f, 4.0f);
 
 				ImGui::SliderFloat("Ambiant Strength", &l.ambiant, 0.f, 1.f);
@@ -374,7 +391,8 @@ void Renderer::drawImgui()
 
 				ImGui::ColorEdit3("Color", l.color);
 
-				memcpy(p.transform.translation, l.position,  3 * sizeof(float));
+				p.transform = glm::translate(glm::mat4(1.0), glm::make_vec3(&l.position[0]));
+				//memcpy(p.transform.translation, l.position,  3 * sizeof(float));
 
 
 				ImGui::TreePop();
@@ -410,15 +428,9 @@ void Renderer::drawImgui()
 
 			MeshPacket& packet = packets[matId];
 
-			auto t = packets[matId].transform;
-
-			float* translate = packet.transform.translation;
-			float* rotation = packet.transform.rotation;
-			float* scale = packet.transform.scale;
-
-	
+			float* matrix = &packets[matId].transform[0][0];
 		
-			EditTransform(&ubo.view[0][0], &m[0][0], translate, rotation, scale, lastUsing == matId);
+			EditTransform(&ubo.view[0][0], &m[0][0], matrix, lastUsing == matId);
 			if (ImGuizmo::IsUsing())
 			{
 				lastUsing = matId;
@@ -862,11 +874,7 @@ MeshPacket Renderer::createPacket(std::filesystem::path path, std::string textur
 
 	out_packet = m_device.createPacket(out_mesh, tex.pixels.empty() ? nullptr:&tex);
 
-	out_packet.transform = {
-		.translation = {0.0f, 0.0f, 0.0f},
-		.rotation = {0.0f, 0.0f, 0.0f},
-		.scale = {1.0f, 1.0f, 1.0f}
-	};
+	out_packet.transform = glm::mat4(1.0f);
 
 	out_packet.name = path.filename().replace_extension("").string();
 
@@ -903,11 +911,7 @@ void Renderer::loadScene(std::filesystem::path path)
 		{
 			MeshPacket packet = m_device.createPacket(*mesh, nullptr);
 
-			packet.transform = {
-				.translation = {0.0f, 0.0f, 0.0f},
-				.rotation = {0.0f, 0.0f, 0.0f},
-				.scale = {1.0f, 1.0f, 1.0f}
-			};
+			packet.transform = glm::mat4(1.0);
 
 			packet.name = node.name;
 
@@ -1009,12 +1013,21 @@ void Renderer::updateLightData()
 	size_t offset = 0;
 	for (auto& l : lights)
 	{
+		glm::vec3 scale;
+		glm::quat rotation;
+		glm::vec3 translation;
+		glm::vec3 skew;
+		glm::vec4 perspective;
+		glm::decompose(l.cube.transform, scale, rotation, translation, skew, perspective);
+
 		if (l.light_autorotate)
 		{
 			l.position[0] = 2.0f * cos(angle);
 			l.position[2] = 2.0f * sin(angle);
+			translation.x = l.position[0];
+			translation.z = l.position[2];
 
-			memcpy(l.cube.transform.translation, l.position, 3 * sizeof(float));
+			//memcpy(l.cube.transform.translation, l.position, 3 * sizeof(float));
 
 		}
 		if (l.type == LightType::Spotlight)
@@ -1030,25 +1043,11 @@ void Renderer::updateLightData()
 
 			//// Create quaternion rotation
 			glm::quat rotationQuat = glm::angleAxis(angle, glm::normalize(rotationAxis));
-
-			//// Convert quaternion to Euler angles (in radians)
-			glm::vec3 eulerRotation = glm::eulerAngles(rotationQuat);
-			//glm::vec3 eulerRotationDegrees = glm::degrees(eulerRotation);
-			glm::vec3 eulerRotationFinal = eulerRotation / glm::radians(90.f);
-			memcpy(l.cube.transform.rotation, &eulerRotationFinal[0], 3 * sizeof(float));
-
-			//auto matrix = glm::lookAt(glm::make_vec3(l.position), glm::vec3(0.0f, 0.0f, 0.0f), up);
-
-			//float yaw = glm::degrees(atan2(matrix[0][2], matrix[2][2]));
-			//float pitch = glm::degrees(asin(-matrix[1][2]));
-			//float roll = glm::degrees(atan2(matrix[1][0], matrix[1][1]));
-
-			//l.cube.transform.rotation[0] = pitch/90.f;
-			//l.cube.transform.rotation[1] = yaw/90.f;
-			//l.cube.transform.rotation[2] = roll/90.f;
+			rotation = rotationQuat;
 
 		}
 
+		l.cube.transform = glm::recompose(scale, rotation, translation, skew, perspective);
 
 		memcpy(&data.pos, l.position, 3 * sizeof(float));
 		memcpy(&data.color, l.color, 3*sizeof(float));

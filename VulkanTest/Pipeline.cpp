@@ -667,10 +667,9 @@ MeshPacket Device::createCubePacket(const float pos[3], float size)
 	out_packet.sampler = defaultSampler;
 	out_packet.name = "Cube";
 
-	memcpy(out_packet.transform.translation, pos, 3 * sizeof(float));
-	out_packet.transform.scale[0] = size;
-	out_packet.transform.scale[1] = size;
-	out_packet.transform.scale[2] = size;
+
+	out_packet.transform = glm::translate(glm::mat4(1.0f), glm::vec3(pos[0], pos[1], pos[2]));
+	out_packet.transform = glm::scale(out_packet.transform, glm::vec3(size, size, size));
 
 	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
 	out_packet.materialData.baseColor = 0;
@@ -692,10 +691,8 @@ MeshPacket Device::createConePacket(const float pos[3], float size)
 	out_packet.sampler = defaultSampler;
 	out_packet.name = "Cube";
 
-	memcpy(out_packet.transform.translation, pos, 3 * sizeof(float));
-	out_packet.transform.scale[0] = size;
-	out_packet.transform.scale[1] = size;
-	out_packet.transform.scale[2] = size;
+	out_packet.transform = glm::translate(glm::mat4(1.0f), glm::vec3(pos[0], pos[1], pos[2]));
+	out_packet.transform = glm::scale(out_packet.transform, glm::vec3(size, size, size));
 
 	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
 	out_packet.materialData.baseColor = 0;
@@ -939,17 +936,7 @@ void Device::drawPacket(const MeshPacket& packet)
 
 
 	{
-		const float* translate = packet.transform.translation;
-		const float* rotation = packet.transform.rotation;
-		const float* scale = packet.transform.scale;
-
-		glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(translate[0], translate[1], translate[2]));
-		model = glm::rotate(model, rotation[0] * glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-		model = glm::rotate(model, rotation[1] * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-		model = glm::rotate(model, rotation[2] * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		model = glm::scale(model, glm::vec3(scale[0], scale[1], scale[2]));
-
-		vkCmdPushConstants(commandBuffer, currentRenderPass->pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MeshPacket::PushConstantsData), &model);
+		vkCmdPushConstants(commandBuffer, currentRenderPass->pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MeshPacket::PushConstantsData), &packet.transform);
 	}
 
 	{
