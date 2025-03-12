@@ -351,6 +351,7 @@ private:
 	bool usesMsaa;
 
 	GpuImage defaultTexture;
+	GpuImage defaultNormalMap;
 	VkSampler defaultSampler;
 
 
@@ -582,7 +583,7 @@ public:
 	Pipeline createComputePipeline(PipelineDesc desc);
 	RenderPass createRenderPassAndPipeline(RenderPassDesc renderPassDesc, PipelineDesc pipelineDesc);
 	void setRenderPass(RenderPass& renderPass);
-	MeshPacket createPacket(Mesh& mesh, Texture* tex);
+	MeshPacket createPacket(const Mesh& mesh, Texture* tex);
 	MeshPacket createCubePacket(const float pos[3], float scale);
 	MeshPacket createConePacket(const float pos[3], float scale);
 	void drawPacket(const MeshPacket& packet);

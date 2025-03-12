@@ -887,6 +887,48 @@ MeshPacket Renderer::createPacket(std::filesystem::path path, std::string textur
 	return out_packet;
 }
 
+void Renderer::loadScene(std::filesystem::path path)
+{
+	if (path.extension() != ".gltf")
+		return;
+
+
+	Scene out_scene;
+
+	loadGltf(path.string().c_str(), &out_scene);
+
+	for (const Node& node : out_scene.nodes)
+	{
+		if (const Mesh* mesh = std::get_if<Mesh>(&node.data))
+		{
+			MeshPacket packet = m_device.createPacket(*mesh, nullptr);
+
+			packet.transform = {
+				.translation = {0.0f, 0.0f, 0.0f},
+				.rotation = {0.0f, 0.0f, 0.0f},
+				.scale = {1.0f, 1.0f, 1.0f}
+			};
+
+			packet.name = node.name;
+
+			m_device.SetBufferName(packet.vertexBuffer.buffer, (packet.name + "/VertexBuffer").c_str());
+			m_device.SetBufferName(packet.indexBuffer.buffer, (packet.name + "/IndexBuffer").c_str());
+
+			for (int i = 0; i < packet.textures.size(); i++)
+			{
+				if (mesh->textures.size() > i)
+				{
+					const GpuImage& image = packet.textures[i];
+					const Texture& t = mesh->textures[i];
+					m_device.SetImageName(image.image, (packet.name + "/" + t.name).c_str());
+				}
+			}
+
+			addPacket(packet);
+		}
+	}
+
+}
 
 void Renderer::destroyPacket(MeshPacket packet)
 {

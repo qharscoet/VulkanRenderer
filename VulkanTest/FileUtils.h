@@ -5,6 +5,10 @@
 #include <variant>
 
 
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 
 struct Texture {
@@ -53,7 +57,7 @@ struct Node {
 	std::string name;
 	std::variant<Mesh, Camera> data;
 	std::vector<Node*> children;
-	//glm::mat4 transform; // transform
+	glm::mat4 matrix; // transform
 };
 
 struct Scene {
@@ -67,3 +71,4 @@ void freeTexturePixels(Texture* tex);
 
 void loadObj(const char* path, Mesh* out_mesh);
 int loadGltf(const char* path, Mesh* out_mesh);
+int loadGltf(const char* path, Scene* out_scene);

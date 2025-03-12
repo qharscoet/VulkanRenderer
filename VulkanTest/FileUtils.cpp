@@ -16,6 +16,13 @@
 // #define TINYGLTF_NOEXCEPTION // optional. disable exception handling.
 #include <tiny_gltf.h>
 
+
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 std::vector<char> readFile(const std::string& filename) {
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
@@ -57,6 +64,62 @@ void freeTexturePixels(Texture* tex)
 	//stbi_image_free(tex->pixels);
 	//tex->pixels = nullptr;
 }
+
+//TODO : get rid of glm here
+void ComputeTangents(std::vector<MeshVertex>& vertices, const std::vector<uint32_t>& indices) {
+	// Temporary containers to store tangents
+	std::vector<glm::vec3> tangents(vertices.size(), glm::vec3(0.0f));
+
+	// Iterate over each triangle
+	for (size_t i = 0; i < indices.size(); i += 3) {
+		// Get triangle indices
+		uint32_t i0 = indices[i];
+		uint32_t i1 = indices[i + 1];
+		uint32_t i2 = indices[i + 2];
+
+		// Get triangle vertices
+		MeshVertex& v0 = vertices[i0];
+		MeshVertex& v1 = vertices[i1];
+		MeshVertex& v2 = vertices[i2];
+
+		// Compute edge vectors
+		glm::vec3 edge1 = glm::make_vec3(&v1.pos[0]) - glm::make_vec3(&v0.pos[0]);
+		glm::vec3 edge2 = glm::make_vec3(&v2.pos[0]) - glm::make_vec3(&v0.pos[0]);
+
+		// Compute delta UVs
+		glm::vec2 deltaUV1 = glm::make_vec2(&v1.texCoord[0]) - glm::make_vec2(&v0.texCoord[0]);
+		glm::vec2 deltaUV2 = glm::make_vec2(&v2.texCoord[0]) - glm::make_vec2(&v0.texCoord[0]);
+
+		// Compute tangent
+		float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+		glm::vec3 tangent = f * (deltaUV2.y * edge1 - deltaUV1.y * edge2);
+
+		// Accumulate tangents
+		tangents[i0] += tangent;
+		tangents[i1] += tangent;
+		tangents[i2] += tangent;
+	}
+
+	// Normalize and store tangents
+	for (size_t i = 0; i < vertices.size(); ++i) {
+		glm::vec3 T = glm::normalize(tangents[i]);
+		glm::vec3 norm = glm::make_vec3(&vertices[i].normals[0]);
+
+		// Ensure the tangent is orthogonal to the normal
+		T = glm::normalize(T - norm * glm::dot(norm, T));
+
+		// Compute handedness (w component)
+		glm::vec3 bitangent = glm::cross(norm, T);
+		float handedness = (glm::dot(bitangent, T) < 0.0f) ? -1.0f : 1.0f;
+
+		// Store tangent in vertex
+		vertices[i].tangent[0] = T.x;
+		vertices[i].tangent[1] = T.y;
+		vertices[i].tangent[2] = T.z;
+		vertices[i].tangent[3] = handedness;
+	}
+}
+
 
 void loadObj(const char* path, Mesh* out_mesh)
 {
@@ -128,6 +191,8 @@ void loadObj(const char* path, Mesh* out_mesh)
 		}
 
 	}
+
+	ComputeTangents(out_mesh->vertices, out_mesh->indices);
 }
 
 size_t get_accessor_elem_size(const tinygltf::Accessor& accessor)
@@ -191,6 +256,121 @@ const std::optional<AttributeInfo> get_accessor_start_addr(const tinygltf::Model
 	return AttributeInfo{ data, elem_size, accessor.count, stride, maxRange};
 }
 
+void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, Mesh* out_mesh)
+{
+	const tinygltf::Mesh& m = model.meshes[mesh_idx];
+	bool has_tangent = false;
+
+	{
+		/*int vertices_accessor_idx = m.primitives[0].attributes.at("POSITION");
+		const tinygltf::Accessor& vertices_accessor = model.accessors[vertices_accessor_idx];
+		const tinygltf::BufferView& vertices_bufferView = model.bufferViews[accessor.bufferView];
+		auto vertices_data = model.buffers[vertices_bufferView.buffer].data.data() + vertices_bufferView.byteOffset + vertices_accessor.byteOffset;
+
+		size_t elem_size = get_accessor_elem_size(vertices_accessor);
+		size_t stride = vertices_bufferView.byteStride > 0 ? vertices_bufferView.byteStride : elem_size;
+		*/
+
+		const std::optional<AttributeInfo> pos_info = get_accessor_start_addr(model, mesh_idx, "POSITION");
+		const std::optional<AttributeInfo> texCoords_info = get_accessor_start_addr(model, mesh_idx, "TEXCOORD_0");
+		const std::optional<AttributeInfo> color_info = get_accessor_start_addr(model, mesh_idx, "COLOR_0");
+		const std::optional<AttributeInfo> normal_info = get_accessor_start_addr(model, mesh_idx, "NORMAL");
+		const std::optional<AttributeInfo> tangent_info = get_accessor_start_addr(model, mesh_idx, "TANGENT");
+
+		if (!pos_info.has_value())
+			return;
+
+		AttributeInfo positions = *pos_info;
+
+		for (int i = 0; i < positions.count; i++)
+		{
+			MeshVertex v = {};
+
+			memcpy(v.pos, positions.start_addr + i * positions.stride, positions.elem_size);
+
+			if (positions.maxRange > 0)
+			{
+				const float factor = 1.0f / positions.maxRange;
+				v.pos[0] *= factor;
+				v.pos[1] *= factor;
+				v.pos[2] *= factor;
+			}
+
+			if (normal_info.has_value())
+				memcpy(v.normals, normal_info->start_addr + i * normal_info->stride, normal_info->elem_size);
+
+			if (tangent_info.has_value())
+			{
+				has_tangent = true; //Used below to know if need to auto compute
+				memcpy(v.tangent, tangent_info->start_addr + i * tangent_info->stride, tangent_info->elem_size);
+			}
+
+			if (texCoords_info.has_value())
+				memcpy(v.texCoord, texCoords_info->start_addr + i * texCoords_info->stride, texCoords_info->elem_size);
+
+			if (color_info.has_value())
+				memcpy(v.color, color_info->start_addr + i * color_info->stride, color_info->elem_size);
+			else
+			{
+				v.color[0] = 1.0f;
+				v.color[1] = 1.0f;
+				v.color[2] = 1.0f;
+			}
+
+			out_mesh->vertices.push_back(v);
+		}
+	}
+
+	{
+		int indices_accessor_idx = m.primitives[0].indices;
+		const tinygltf::Accessor& accessor = model.accessors[indices_accessor_idx];
+		const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
+		auto data = model.buffers[bufferView.buffer].data.data() + bufferView.byteOffset + accessor.byteOffset;
+
+		size_t elem_size = get_accessor_elem_size(accessor);
+		size_t stride = bufferView.byteStride > 0 ? bufferView.byteStride : elem_size;
+		for (int i = 0; i < accessor.count; i++)
+		{
+			//TODO: read the format correctly;
+			uint16_t* addr = (uint16_t*)(data + i * stride);
+			out_mesh->indices.push_back(*addr);
+		}
+
+	}
+
+	if (!has_tangent)
+	{
+		ComputeTangents(out_mesh->vertices, out_mesh->indices);
+	}
+
+	//TODO: change this to load only the textures needed by this mesh
+	for (const tinygltf::Texture& tex : model.textures)
+	{
+		const tinygltf::Image& img = model.images[tex.source];
+
+		Texture t;
+		t.height = img.height;
+		t.width = img.width;
+		t.channels = img.component;
+		t.size = img.width * img.height * img.component;
+		t.pixels = img.image;
+		t.name = img.name;
+
+		out_mesh->textures.push_back(t);
+
+	}
+
+	const tinygltf::Material& material = model.materials[m.primitives[0].material];
+
+	out_mesh->material = {
+		.baseColor = material.pbrMetallicRoughness.baseColorTexture.index,
+		.mettalicRoughness = material.pbrMetallicRoughness.metallicRoughnessTexture.index,
+		.normal = material.normalTexture.index,
+		.emissive = material.emissiveTexture.index,
+		.occlusion = material.occlusionTexture.index,
+	};
+}
+
 int loadGltf(const char* path, Mesh* out_mesh)
 {
 
@@ -217,108 +397,147 @@ int loadGltf(const char* path, Mesh* out_mesh)
 
 	if (model.meshes.size() > 0)
 	{
-		const tinygltf::Mesh& m = model.meshes[0];
-		
-		{
-			/*int vertices_accessor_idx = m.primitives[0].attributes.at("POSITION");
-			const tinygltf::Accessor& vertices_accessor = model.accessors[vertices_accessor_idx];
-			const tinygltf::BufferView& vertices_bufferView = model.bufferViews[accessor.bufferView];
-			auto vertices_data = model.buffers[vertices_bufferView.buffer].data.data() + vertices_bufferView.byteOffset + vertices_accessor.byteOffset;
-	
-			size_t elem_size = get_accessor_elem_size(vertices_accessor);
-			size_t stride = vertices_bufferView.byteStride > 0 ? vertices_bufferView.byteStride : elem_size;
-			*/
+		loadGltfMesh(model, 0, out_mesh);
 
-			const std::optional<AttributeInfo> pos_info = get_accessor_start_addr(model, 0, "POSITION");
-			const std::optional<AttributeInfo> texCoords_info = get_accessor_start_addr(model, 0, "TEXCOORD_0");
-			const std::optional<AttributeInfo> color_info = get_accessor_start_addr(model, 0, "COLOR_0");
-			const std::optional<AttributeInfo> normal_info = get_accessor_start_addr(model, 0, "NORMAL");
-			const std::optional<AttributeInfo> tangent_info = get_accessor_start_addr(model, 0, "TANGENT");
-			
-			if (!pos_info.has_value())
-				return -1;
+	}
 
-			AttributeInfo positions = *pos_info;
+	return 0;
+}
 
-			for (int i = 0; i < positions.count; i++)
-			{
-				MeshVertex v = {};
+int loadGltf(const char* path, Scene* out_scene)
+{
+	tinygltf::Model model;
+	tinygltf::TinyGLTF loader;
+	std::string err;
+	std::string warn;
+	bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, path);
+	//bool ret = loader.LoadBinaryFromFile(&model, &err, &warn, argv[1]); // for binary glTF(.glb)
+	if (!warn.empty()) {
+		printf("Warn: %s\n", warn.c_str());
+	}
+	if (!err.empty()) {
+		printf("Err: %s\n", err.c_str());
+	}
+	if (!ret) {
+		printf("Failed to parse glTF\n");
+		return -1;
+	}
+	if (model.scenes.size() == 0) {
+		printf("This glTF file has no scenes\n");
+		return -1;
+	}
 
-				memcpy(v.pos, positions.start_addr + i * positions.stride, positions.elem_size);
+	// Helper function to process nodes recursively
+	std::function<Node(int, glm::mat4)> processNode = [&](int node_idx, glm::mat4 parent_transform) -> Node {
+		const tinygltf::Node& gltf_node = model.nodes[node_idx];
+		Node node;
 
-				if (positions.maxRange > 0)
-				{
-					const float factor = 1.0f / positions.maxRange;
-					v.pos[0] *= factor;
-					v.pos[1] *= factor;
-					v.pos[2] *= factor;
+		// Set node name
+		node.name = gltf_node.name;
+
+		// Calculate node's transformation matrix
+		glm::mat4 local_transform = glm::mat4(1.0f);
+
+		// Handle matrix if specified directly
+		if (!gltf_node.matrix.empty()) {
+			// glTF matrices are column-major, convert to glm format
+			for (int i = 0; i < 4; i++) {
+				for (int j = 0; j < 4; j++) {
+					local_transform[i][j] = static_cast<float>(gltf_node.matrix[i + j * 4]);
 				}
+			}
+		}
+		else {
+			// Handle TRS (Translation, Rotation, Scale) components
+			// Translation
+			if (!gltf_node.translation.empty()) {
+				local_transform = glm::translate(
+					local_transform,
+					glm::vec3(
+						static_cast<float>(gltf_node.translation[0]),
+						static_cast<float>(gltf_node.translation[1]),
+						static_cast<float>(gltf_node.translation[2])
+					)
+				);
+			}
 
-				if (normal_info.has_value())
-					memcpy(v.normals, normal_info->start_addr + i * normal_info->stride, normal_info->elem_size);
+			// Rotation (quaternion)
+			if (!gltf_node.rotation.empty()) {
+				glm::quat q(
+					static_cast<float>(gltf_node.rotation[3]), // w
+					static_cast<float>(gltf_node.rotation[0]), // x
+					static_cast<float>(gltf_node.rotation[1]), // y
+					static_cast<float>(gltf_node.rotation[2])  // z
+				);
+				local_transform = local_transform * glm::mat4_cast(q);
+			}
 
-				if (tangent_info.has_value())
-					memcpy(v.tangent, tangent_info->start_addr + i * tangent_info->stride, tangent_info->elem_size);
-
-				if (texCoords_info.has_value())
-					memcpy(v.texCoord, texCoords_info->start_addr + i * texCoords_info->stride, texCoords_info->elem_size);
-				
-				if (color_info.has_value())
-					memcpy(v.color, color_info->start_addr + i * color_info->stride, color_info->elem_size);
-				else
-				{
-					v.color[0] = 1.0f;
-					v.color[1] = 1.0f;
-					v.color[2] = 1.0f;
-				}
-
-				out_mesh->vertices.push_back(v);
+			// Scale
+			if (!gltf_node.scale.empty()) {
+				local_transform = glm::scale(
+					local_transform,
+					glm::vec3(
+						static_cast<float>(gltf_node.scale[0]),
+						static_cast<float>(gltf_node.scale[1]),
+						static_cast<float>(gltf_node.scale[2])
+					)
+				);
 			}
 		}
 
-		{
-			int indices_accessor_idx = m.primitives[0].indices;
-			const tinygltf::Accessor& accessor = model.accessors[indices_accessor_idx];
-			const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
-			auto data = model.buffers[bufferView.buffer].data.data() + bufferView.byteOffset + accessor.byteOffset;
+		// Apply parent transform
+		node.matrix = parent_transform * local_transform;
 
-			size_t elem_size = get_accessor_elem_size(accessor);
-			size_t stride = bufferView.byteStride > 0 ? bufferView.byteStride : elem_size;
-			for (int i = 0; i < accessor.count; i++)
-			{
-				//TODO: read the format correctly;
-				uint16_t* addr = (uint16_t*)(data + i * stride);
-				out_mesh->indices.push_back(*addr);
+		// Process camera if present
+		if (gltf_node.camera >= 0) {
+			const tinygltf::Camera& gltf_camera = model.cameras[gltf_node.camera];
+			Camera camera;
+
+			if (gltf_camera.type == "perspective") {
+				camera.fov = static_cast<float>(gltf_camera.perspective.yfov) * (180.0f / 3.14159f); // Convert to degrees
+				camera.aspect = static_cast<float>(gltf_camera.perspective.aspectRatio);
+				camera.znear = static_cast<float>(gltf_camera.perspective.znear);
+				camera.zfar = static_cast<float>(gltf_camera.perspective.zfar);
+			}
+			else {
+				// Default values for orthographic or if no specific type
+				camera.fov = 45.0f;
+				camera.aspect = 1.0f;
+				camera.znear = 0.1f;
+				camera.zfar = 100.0f;
 			}
 
+			node.data = camera;
+		}
+		// Process mesh if present
+		else if (gltf_node.mesh >= 0) {
+			const tinygltf::Mesh& gltf_mesh = model.meshes[gltf_node.mesh];
+			Mesh mesh;
+
+			loadGltfMesh(model, gltf_node.mesh, &mesh);
+			// Here you would populate your Mesh structure with data from gltf_mesh
+			// This depends on your Mesh structure definition, which wasn't provided
+			// Example assuming a simple Mesh structure:
+			// mesh.name = gltf_mesh.name;
+			// Process primitives, materials, etc.
+
+			node.data = mesh;
 		}
 
-		for (const tinygltf::Texture& tex : model.textures)
-		{
-			tinygltf::Image& img = model.images[tex.source];
-
-			Texture t;
-			t.height = img.height;
-			t.width = img.width;
-			t.channels = img.component;
-			t.size = img.width * img.height * img.component ;
-			t.pixels = img.image;
-			t.name = img.name;
-
-			out_mesh->textures.push_back(t);
-			
+		// Process children
+		for (const auto& child_idx : gltf_node.children) {
+			Node child_node = processNode(child_idx, node.matrix);
+			node.children.push_back(new Node(child_node));
 		}
 
-		const tinygltf::Material& material = model.materials[m.primitives[0].material];
-
-		out_mesh->material = {
-			.baseColor = material.pbrMetallicRoughness.baseColorTexture.index,
-			.mettalicRoughness = material.pbrMetallicRoughness.metallicRoughnessTexture.index,
-			.normal = material.normalTexture.index,
-			.emissive = material.emissiveTexture.index,
-			.occlusion = material.occlusionTexture.index,
+		return node;
 		};
 
+	// Process root nodes
+	tinygltf::Scene& s = model.scenes[0];
+	for (const auto& node_idx : s.nodes) {
+		Node root_node = processNode(node_idx, glm::mat4(1.0f));
+		out_scene->nodes.push_back(root_node);
 	}
 
 	return 0;

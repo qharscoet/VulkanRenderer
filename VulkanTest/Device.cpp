@@ -1321,6 +1321,7 @@ void Device::cleanupSwapChain() {
 void Device::cleanupVulkan() {
 
 	destroyImage(defaultTexture);
+	destroyImage(defaultNormalMap);
 	cleanupSwapChain();
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -1428,6 +1429,9 @@ void Device::destroyBuffer(Buffer buffer) {
 
 void Device::destroyImage(GpuImage image) {
 	if (image.image == defaultTexture.image)
+		return;
+
+	if (image.image == defaultNormalMap.image)
 		return;
 
 	vkDestroyImage(device, image.image, nullptr);
@@ -1593,6 +1597,25 @@ void Device::createDefaultTexture()
 
 	defaultTexture = createTexture(tex);
 	defaultSampler = createTextureSampler(defaultTexture.mipLevels);
+
+	// Fill the pixels array with default normal data, (0.5, 0.5, 1, 1);
+	for (int i = 0; i < pixels.size(); i += 4)
+	{
+		pixels[i] = 185;
+		pixels[i + 1] = 185;
+		pixels[i + 2] = 255;
+		pixels[i + 3] = 255;
+	}
+
+	tex = {
+		.height = 128,
+		.width = 128,
+		.channels = 4,
+		.pixels = pixels,
+		.size = pixels.size() * sizeof(unsigned char)
+	};
+
+	defaultNormalMap = createTexture(tex);
 }
 
 void Device::createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa, bool sampled)

@@ -136,6 +136,7 @@ public:
 
 
 	MeshPacket createPacket(std::filesystem::path path, std::string texture_path = "");
+	void loadScene(std::filesystem::path path);
 	void addPacket(const MeshPacket& packet);
 	void drawPacket(const MeshPacket& packet);
 	void destroyPacket(MeshPacket packet);

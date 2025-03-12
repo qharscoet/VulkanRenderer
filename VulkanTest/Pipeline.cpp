@@ -620,7 +620,7 @@ void Device::setRenderPass(RenderPass& renderPass)
 }
 
 
-MeshPacket Device::createPacket(Mesh& mesh, Texture* tex)
+MeshPacket Device::createPacket(const Mesh& mesh, Texture* tex)
 {
 	MeshPacket out_packet;
 	out_packet.vertexBuffer = this->createVertexBuffer(mesh.vertices.size() * sizeof(mesh.vertices[0]), (void*)mesh.vertices.data());
@@ -642,11 +642,12 @@ MeshPacket Device::createPacket(Mesh& mesh, Texture* tex)
 		out_packet.textures.push_back(createTexture(texture));
 	}
 
-	if (out_packet.textures.empty())
+	if (out_packet.materialData.baseColor < 0)
 	{
 		out_packet.textures.push_back(defaultTexture);
-		out_packet.materialData.baseColor = 0;
+		out_packet.materialData.baseColor = out_packet.textures.size() -1;
 	}
+
 
 	out_packet.sampler = this->createTextureSampler(out_packet.textures[0].mipLevels);
 	return out_packet;
@@ -906,7 +907,7 @@ void Device::drawPacket(const MeshPacket& packet)
 	std::vector<BindingDesc>& bindings = currentRenderPass->pipeline.bindings[0];
 
 	const GpuImage& baseColor = packet.textures[packet.materialData.baseColor];
-	const GpuImage& normal = packet.materialData.normal >= 0 ? packet.textures[packet.materialData.normal] : defaultTexture;
+	const GpuImage& normal = packet.materialData.normal >= 0 ? packet.textures[packet.materialData.normal] : defaultNormalMap;
 
 	std::hash<VkImageView> img_hasher;
 	std::hash<VkSampler> sampler_hasher;
