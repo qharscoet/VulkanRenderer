@@ -391,7 +391,7 @@ void Renderer::drawImgui()
 
 				ImGui::ColorEdit3("Color", l.color);
 
-				p.transform = glm::translate(glm::mat4(1.0), glm::make_vec3(&l.position[0]));
+				//p.transform = glm::translate(glm::mat4(1.0), glm::make_vec3(&l.position[0]));
 				//memcpy(p.transform.translation, l.position,  3 * sizeof(float));
 
 
@@ -907,28 +907,31 @@ void Renderer::loadScene(std::filesystem::path path)
 
 	for (const Node& node : out_scene.nodes)
 	{
-		if (const Mesh* mesh = std::get_if<Mesh>(&node.data))
+		if (const std::vector<Mesh>* primitives = std::get_if<std::vector<Mesh>>(&node.data))
 		{
-			MeshPacket packet = m_device.createPacket(*mesh, nullptr);
-
-			packet.transform = glm::mat4(1.0);
-
-			packet.name = node.name;
-
-			m_device.SetBufferName(packet.vertexBuffer.buffer, (packet.name + "/VertexBuffer").c_str());
-			m_device.SetBufferName(packet.indexBuffer.buffer, (packet.name + "/IndexBuffer").c_str());
-
-			for (int i = 0; i < packet.textures.size(); i++)
+			for (const Mesh& mesh : *primitives)
 			{
-				if (mesh->textures.size() > i)
-				{
-					const GpuImage& image = packet.textures[i];
-					const Texture& t = mesh->textures[i];
-					m_device.SetImageName(image.image, (packet.name + "/" + t.name).c_str());
-				}
-			}
+				MeshPacket packet = m_device.createPacket(mesh, nullptr);
 
-			addPacket(packet);
+				packet.transform = glm::transpose(node.matrix); // node matrix from gltf is row major
+
+				packet.name = node.name;
+
+				m_device.SetBufferName(packet.vertexBuffer.buffer, (packet.name + "/VertexBuffer").c_str());
+				m_device.SetBufferName(packet.indexBuffer.buffer, (packet.name + "/IndexBuffer").c_str());
+
+				for (int i = 0; i < packet.textures.size(); i++)
+				{
+					if (mesh.textures.size() > i)
+					{
+						const GpuImage& image = packet.textures[i];
+						const Texture& t = mesh.textures[i];
+						m_device.SetImageName(image.image, (packet.name + "/" + t.name).c_str());
+					}
+				}
+
+				addPacket(packet);
+			}
 		}
 	}
 

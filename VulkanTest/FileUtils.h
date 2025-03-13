@@ -55,7 +55,7 @@ struct Camera
 
 struct Node {
 	std::string name;
-	std::variant<Mesh, Camera> data;
+	std::variant<std::vector<Mesh>, Camera> data;
 	std::vector<Node*> children;
 	glm::mat4 matrix; // transform
 };

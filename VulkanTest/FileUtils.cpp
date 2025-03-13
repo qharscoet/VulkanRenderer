@@ -226,14 +226,14 @@ struct AttributeInfo {
 	const size_t stride;
 	const double maxRange;
 };
-const std::optional<AttributeInfo> get_accessor_start_addr(const tinygltf::Model& model, size_t mesh_idx, std::string attr)
+const std::optional<AttributeInfo> get_accessor_start_addr(const tinygltf::Model& model, size_t mesh_idx, size_t primitive_idx, std::string attr)
 {
 	const tinygltf::Mesh& m = model.meshes[mesh_idx];
 
-	if (!m.primitives[0].attributes.contains(attr))
+	if (!m.primitives[primitive_idx].attributes.contains(attr))
 		return {};
 
-	int accessor_idx = m.primitives[0].attributes.at(attr);
+	int accessor_idx = m.primitives[primitive_idx].attributes.at(attr);
 	const tinygltf::Accessor& accessor = model.accessors[accessor_idx];
 	const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
 	const uint8_t* data = model.buffers[bufferView.buffer].data.data() + bufferView.byteOffset + accessor.byteOffset;
@@ -256,7 +256,7 @@ const std::optional<AttributeInfo> get_accessor_start_addr(const tinygltf::Model
 	return AttributeInfo{ data, elem_size, accessor.count, stride, maxRange};
 }
 
-void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, Mesh* out_mesh)
+void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, size_t primitive_idx, Mesh* out_mesh)
 {
 	const tinygltf::Mesh& m = model.meshes[mesh_idx];
 	bool has_tangent = false;
@@ -271,11 +271,11 @@ void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, Mesh* out_mesh)
 		size_t stride = vertices_bufferView.byteStride > 0 ? vertices_bufferView.byteStride : elem_size;
 		*/
 
-		const std::optional<AttributeInfo> pos_info = get_accessor_start_addr(model, mesh_idx, "POSITION");
-		const std::optional<AttributeInfo> texCoords_info = get_accessor_start_addr(model, mesh_idx, "TEXCOORD_0");
-		const std::optional<AttributeInfo> color_info = get_accessor_start_addr(model, mesh_idx, "COLOR_0");
-		const std::optional<AttributeInfo> normal_info = get_accessor_start_addr(model, mesh_idx, "NORMAL");
-		const std::optional<AttributeInfo> tangent_info = get_accessor_start_addr(model, mesh_idx, "TANGENT");
+		const std::optional<AttributeInfo> pos_info = get_accessor_start_addr(model, mesh_idx, primitive_idx, "POSITION");
+		const std::optional<AttributeInfo> texCoords_info = get_accessor_start_addr(model, mesh_idx, primitive_idx, "TEXCOORD_0");
+		const std::optional<AttributeInfo> color_info = get_accessor_start_addr(model, mesh_idx, primitive_idx, "COLOR_0");
+		const std::optional<AttributeInfo> normal_info = get_accessor_start_addr(model, mesh_idx, primitive_idx, "NORMAL");
+		const std::optional<AttributeInfo> tangent_info = get_accessor_start_addr(model, mesh_idx, primitive_idx, "TANGENT");
 
 		if (!pos_info.has_value())
 			return;
@@ -288,13 +288,13 @@ void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, Mesh* out_mesh)
 
 			memcpy(v.pos, positions.start_addr + i * positions.stride, positions.elem_size);
 
-			if (positions.maxRange > 0)
+		/*	if (positions.maxRange > 0)
 			{
 				const float factor = 1.0f / positions.maxRange;
 				v.pos[0] *= factor;
 				v.pos[1] *= factor;
 				v.pos[2] *= factor;
-			}
+			}*/
 
 			if (normal_info.has_value())
 				memcpy(v.normals, normal_info->start_addr + i * normal_info->stride, normal_info->elem_size);
@@ -322,7 +322,7 @@ void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, Mesh* out_mesh)
 	}
 
 	{
-		int indices_accessor_idx = m.primitives[0].indices;
+		int indices_accessor_idx = m.primitives[primitive_idx].indices;
 		const tinygltf::Accessor& accessor = model.accessors[indices_accessor_idx];
 		const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
 		auto data = model.buffers[bufferView.buffer].data.data() + bufferView.byteOffset + accessor.byteOffset;
@@ -343,9 +343,11 @@ void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, Mesh* out_mesh)
 		ComputeTangents(out_mesh->vertices, out_mesh->indices);
 	}
 
-	//TODO: change this to load only the textures needed by this mesh
-	for (const tinygltf::Texture& tex : model.textures)
-	{
+	auto load_texture = [&model](Mesh* out_mesh, int tex_idx) {
+		if (tex_idx < 0)
+			return;
+
+		const tinygltf::Texture& tex = model.textures[tex_idx];
 		const tinygltf::Image& img = model.images[tex.source];
 
 		Texture t;
@@ -357,18 +359,24 @@ void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, Mesh* out_mesh)
 		t.name = img.name;
 
 		out_mesh->textures.push_back(t);
+	};
 
-	}
+	const tinygltf::Material& material = model.materials[m.primitives[primitive_idx].material];
 
-	const tinygltf::Material& material = model.materials[m.primitives[0].material];
 
-	out_mesh->material = {
+	load_texture(out_mesh, material.pbrMetallicRoughness.baseColorTexture.index);
+	out_mesh->material.baseColor = out_mesh->textures.size() -1;
+
+	load_texture(out_mesh, material.normalTexture.index);
+	out_mesh->material.normal = out_mesh->textures.size() - 1;
+
+	/*out_mesh->material = {
 		.baseColor = material.pbrMetallicRoughness.baseColorTexture.index,
 		.mettalicRoughness = material.pbrMetallicRoughness.metallicRoughnessTexture.index,
 		.normal = material.normalTexture.index,
 		.emissive = material.emissiveTexture.index,
 		.occlusion = material.occlusionTexture.index,
-	};
+	};*/
 }
 
 int loadGltf(const char* path, Mesh* out_mesh)
@@ -397,7 +405,7 @@ int loadGltf(const char* path, Mesh* out_mesh)
 
 	if (model.meshes.size() > 0)
 	{
-		loadGltfMesh(model, 0, out_mesh);
+		loadGltfMesh(model, 0, 0, out_mesh);
 
 	}
 
@@ -512,16 +520,19 @@ int loadGltf(const char* path, Scene* out_scene)
 		// Process mesh if present
 		else if (gltf_node.mesh >= 0) {
 			const tinygltf::Mesh& gltf_mesh = model.meshes[gltf_node.mesh];
-			Mesh mesh;
+			
+			std::vector<Mesh> primitives; //TODO : rename properly to remove Mesh/Primitives ambiguity
+			primitives.reserve(gltf_mesh.primitives.size());
+			
+			for (int primitive_idx = 0; primitive_idx < gltf_mesh.primitives.size(); primitive_idx++)
+			{
+				Mesh mesh;
+				loadGltfMesh(model, gltf_node.mesh, primitive_idx, &mesh);
 
-			loadGltfMesh(model, gltf_node.mesh, &mesh);
-			// Here you would populate your Mesh structure with data from gltf_mesh
-			// This depends on your Mesh structure definition, which wasn't provided
-			// Example assuming a simple Mesh structure:
-			// mesh.name = gltf_mesh.name;
-			// Process primitives, materials, etc.
+				primitives.push_back(std::move(mesh));
+			}
 
-			node.data = mesh;
+			node.data = std::move(primitives);
 		}
 
 		// Process children
