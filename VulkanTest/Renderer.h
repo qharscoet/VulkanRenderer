@@ -140,6 +140,7 @@ public:
 	void addPacket(const MeshPacket& packet);
 	void drawPacket(const MeshPacket& packet);
 	void destroyPacket(MeshPacket packet);
+	void destroyAllPackets();
 
 
 	void addLight(const float pos[3]);

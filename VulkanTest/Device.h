@@ -396,9 +396,9 @@ private:
 	void cleanupImGui();
 	void refreshImGui();
 
-	PFN_vkCmdBeginDebugUtilsLabelEXT CmdBeginDebugUtilsLabel;
-	PFN_vkCmdEndDebugUtilsLabelEXT CmdEndDebugUtilsLabel;
-	PFN_vkSetDebugUtilsObjectNameEXT SetDebugUtilsObjectName;
+	PFN_vkCmdBeginDebugUtilsLabelEXT CmdBeginDebugUtilsLabel = nullptr;
+	PFN_vkCmdEndDebugUtilsLabelEXT CmdEndDebugUtilsLabel = nullptr;
+	PFN_vkSetDebugUtilsObjectNameEXT SetDebugUtilsObjectName = nullptr;
 
 	void PushCmdLabel(VkCommandBuffer commandBuffer, VkDebugUtilsLabelEXT* markerInfo) {
 		if(CmdBeginDebugUtilsLabel)

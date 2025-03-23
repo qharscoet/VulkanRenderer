@@ -178,7 +178,6 @@ void Renderer::draw()
 		currentDrawPassPtr = nextRenderPassPtr.value();
 		nextRenderPassPtr.reset();
 	}
-
 }
 
 static bool normal_mode = false;
@@ -949,6 +948,16 @@ void Renderer::destroyPacket(MeshPacket packet)
 	{
 		m_device.destroyImage(tex);
 	}
+}
+
+void Renderer::destroyAllPackets()
+{
+	for (auto& packet : packets)
+	{
+		destroyPacket(packet);
+	}
+
+	packets.clear();
 }
 
 void Renderer::addPacket(const MeshPacket& packet)

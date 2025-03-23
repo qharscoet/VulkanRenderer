@@ -121,6 +121,7 @@ private:
 	GLFWwindow* window = nullptr;
 
 	Renderer m_renderer;
+	std::filesystem::path next_scene_path;
 
 
 	const std::vector<MeshVertex> vertices = {
@@ -196,6 +197,34 @@ private:
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 			ImGui::Separator();
 
+
+			static const std::filesystem::path basepath{ "E:\\glTF-Sample-Assets\\Models\\" };
+			static std::filesystem::path current_path = "Sponza";
+
+			if (ImGui::BeginCombo("Select Scene", current_path.string().c_str()))
+			{
+				for (auto const& dir_entry : std::filesystem::directory_iterator{ basepath })
+				{
+					if (!dir_entry.is_directory())
+						continue;
+
+					const auto filename = dir_entry.path().filename();
+					const bool is_selected = (current_path == filename);
+					if (ImGui::Selectable(filename.string().c_str(), is_selected))
+					{
+						current_path = filename;
+
+						next_scene_path = (basepath / current_path / "glTF" / (current_path.string() +  ".gltf"));
+					}
+
+					// Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+					if (is_selected)
+						ImGui::SetItemDefaultFocus();
+				
+				}
+				ImGui::EndCombo();
+			}
+
 			m_renderer.drawImgui();
 
 			ImGui::End();
@@ -250,6 +279,14 @@ private:
 			m_renderer.updateCamera(camera);
 
 			m_renderer.draw();
+
+			if (!next_scene_path.empty())
+			{
+				m_renderer.waitIdle();
+				m_renderer.destroyAllPackets();
+				m_renderer.loadScene(next_scene_path);
+				next_scene_path.clear();
+			}
 		}
 
 		m_renderer.waitIdle();
