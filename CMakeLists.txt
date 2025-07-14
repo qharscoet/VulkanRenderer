@@ -9,11 +9,11 @@ if (POLICY CMP0141)
   set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
 endif()
 
-project ("VulkanTest")
+project ("VulkanRenderer")
 
 # Incluez les sous-projets.
-add_subdirectory ("VulkanTest")
+add_subdirectory ("VulkanRenderer")
 add_subdirectory ("shaders")
 
 
-add_dependencies(VulkanTest Shaders)
+add_dependencies(VulkanRenderer Shaders)
