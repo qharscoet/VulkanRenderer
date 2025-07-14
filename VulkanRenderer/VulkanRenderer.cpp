@@ -168,7 +168,7 @@ private:
 
 	void loadPackets()
 	{
-		static const std::string gltfAssetsPath = "E:\\glTF-Sample-Assets\\Models\\";
+		static const std::string gltfAssetsPath = "./glTF-Sample-Assets/Models/";
 		//m_renderer.addPacket(m_renderer.createPacket("assets/viking_room.obj", "assets/viking_room.png"));
 		//m_renderer.addPacket(m_renderer.createPacket(gltfAssetsPath  + "CompareNormal/glTF/CompareNormal.gltf"));
 		m_renderer.loadScene(gltfAssetsPath + "Sponza/glTF/Sponza.gltf");
