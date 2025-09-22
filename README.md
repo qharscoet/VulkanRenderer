@@ -12,6 +12,7 @@ WHAT WORKS
 - Basic Vulkan setup
 - Multiple render pass creation
 - Compute should be working
+- Both GLSL and HLSL compatiblity
 - Add mesh from OBJ and basic GTLF (not full compatibility yet)
 - Basic lights (Directional/Point/Spotlight)
 - Basic Phong lighting
