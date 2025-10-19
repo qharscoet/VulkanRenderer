@@ -343,7 +343,7 @@ void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, size_t primitiv
 		ComputeTangents(out_mesh->vertices, out_mesh->indices);
 	}
 
-	auto load_texture = [&model](Mesh* out_mesh, int tex_idx) {
+	auto load_texture = [&model](Mesh* out_mesh, int tex_idx, bool is_srgb = true) {
 		if (tex_idx < 0)
 			return;
 
@@ -357,6 +357,7 @@ void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, size_t primitiv
 		t.size = img.width * img.height * img.component;
 		t.pixels = img.image;
 		t.name = img.name;
+		t.is_srgb = is_srgb;
 
 		out_mesh->textures.push_back(t);
 	};
@@ -367,7 +368,7 @@ void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, size_t primitiv
 	load_texture(out_mesh, material.pbrMetallicRoughness.baseColorTexture.index);
 	out_mesh->material.baseColor = out_mesh->textures.size() -1;
 
-	load_texture(out_mesh, material.normalTexture.index);
+	load_texture(out_mesh, material.normalTexture.index, false);
 	out_mesh->material.normal = out_mesh->textures.size() - 1;
 
 	/*out_mesh->material = {

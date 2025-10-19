@@ -489,7 +489,11 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	out_pipeline.descriptorSetLayouts = setLayouts;
 	out_pipeline.renderPass = renderPass;
 	out_pipeline.pipelineLayout = out_pipelineLayout;
-	out_pipeline.descriptorPool = createDescriptorPool(desc.bindings[0].data(), desc.bindings[0].size()); //TODO: reconsider this
+
+	if (desc.bindings.size() > 0)
+		out_pipeline.descriptorPool = createDescriptorPool(desc.bindings[0].data(), desc.bindings[0].size()); //TODO: reconsider this
+	else
+		out_pipeline.descriptorPool = createDescriptorPool(nullptr, 0); //TODO: reconsider this
 
 	out_pipeline.descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
 	out_pipeline.bindings = std::move(desc.bindings);

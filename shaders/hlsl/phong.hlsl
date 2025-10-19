@@ -15,7 +15,7 @@ struct PSInput
 	[[vk::location(2)]] float3 normal : NORMAL;
 	[[vk::location(3)]] float3 worldPos : WORLDPOSITION;
 	[[vk::location(4)]] float3 tangent : TANGENT;
-	[[vk::location(5)]] float3 binormal : BINORMAL;
+	[[vk::location(5)]] float sign : BINORMAL;
 };
 
 
@@ -80,6 +80,7 @@ struct Constants
 	uint light_count;
 	
 	uint normal_mode;
+	uint debug_mode;
 };
 
 [[vk::push_constant]]
@@ -135,9 +136,9 @@ PSInput VSMain(VSInput input)
     // Compute the inverse transpose of the normal matrix
 	normalMatrix = transpose(Inverse3x3(normalMatrix));
 	
-	result.normal = mul(normalMatrix, input.Normal);
-	result.tangent = mul(pc.model, input.Tangent);
-	result.binormal = cross(result.tangent, result.normal);
+	result.normal = normalize(mul(normalMatrix, input.Normal));
+	result.tangent = normalize(mul(normalMatrix, input.Tangent.xyz));
+	result.sign = input.Tangent.w;//normalize(cross(result.tangent, result.normal));
 	result.worldPos = mul(pc.model, float4(input.Position.xyz, 1.0f));
 	return result;
 }
@@ -166,11 +167,11 @@ float4 calcLight(PSInput input, Light l, float3 NTex)
 		light_vec = normalize(l.position - input.worldPos.xyz);
 	
 	
-	float3 norm = pc.normal_mode == 1 ? normalize(NTex) : normalize(input.position);
+	float3 norm = pc.normal_mode == 1 ? normalize(NTex) : normalize(input.normal);
 	
 	//Diffuse
 	float diffuse = max(dot(light_vec, norm), 0.0f);
-	float4 diffuseLight = float4(l.color * (diffuse * mat_diffuse), 1.0f);
+	float4 diffuseLight = float4(l.color * (diffuse /* * mat_diffuse*/), 1.0f);
 	
 	//Specular
 	float3 view_vec = normalize(pc.eye - input.worldPos.xyz);
@@ -199,22 +200,51 @@ float4 calcLight(PSInput input, Light l, float3 NTex)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	float4 texColor = g_texture.Sample(g_sampler, input.uv) * float4(input.color, 0);
+	float4 texColor = g_texture.Sample(g_sampler, input.uv) * float4(input.color, 1.0f);
 	float4 output = 0;
 	
 	float3 NTex = g_normal.Sample(g_sampler, input.uv) * 2.0f - 1.0f;
 	
 	 // Transform normal from tangent space to world space
-	NTex = normalize(input.tangent * NTex.x +
-                        input.binormal * NTex.y +
-                        input.normal * NTex.z);
+	//NTex = normalize(input.tangent * NTex.x +
+	//                       input.binormal * NTex.y +
+	//                       input.normal * NTex.z);
 	
-	for (int i = 0; i < pc.light_count ; i++)
+	
+	//float3x3 TBN = float3x3(input.tangent, input.binormal, input.normal);
+
+	//NTex = normalize(mul(TBN, NTex));
+	
+	float3 vN = normalize(input.normal);
+	float3 vT = normalize(input.tangent);
+	float3 vNt = normalize(NTex);
+	
+	float3 vB = input.sign * cross(vN, vT);
+	float3 vNout = normalize(vNt.x * vT + vNt.y * vB + vNt.z * vN);
+	
+	for (int i = 0; i < pc.light_count; i++)
 	{
-		output += texColor * calcLight(input, light[i], NTex);
+		output += texColor * calcLight(input, light[i], vNout);
 	}
 	
 	//output += g_normal.Sample(g_sampler, input.uv);
 	
-	return output;
+	float4 final_output = output;
+	
+	switch (pc.debug_mode)
+	{
+		case 0 : final_output = output; break;
+		case 1 : final_output = float4(vN * 0.5 + 0.5, 0); break;
+		case 2 : final_output = float4(vT * 0.5 + 0.5, 0); break;
+		case 3 : final_output = float4(vB * 0.5 + 0.5, 0); break;
+		case 4 : final_output = float4(vNt * 0.5 + 0.5, 0); break;
+		case 5 : final_output = float4(vNout * 0.5 + 0.5, 0); break;
+		default:break;
+	}
+	//return float4(vT * 0.5 + 0.5, 0);
+	//return output;
+	//return float4(input.binormal.x * 0.5 + 0.5 , 0,0,0);
+	//return float4(vNout * 0.5 + 0.5, 0);
+	
+	return final_output;
 }

@@ -17,6 +17,7 @@ struct Texture {
 	int channels;
 	std::vector<unsigned char> pixels;
 	size_t size;
+	bool is_srgb = true;
 
 	std::string name;
 };

@@ -631,6 +631,7 @@ void Device::createDefaultRenderPass() {
 		.hasDepth = true,
 		.useMsaa = this->usesMsaa,
 		.doClear = false,
+		.writeSwapChain = true,
 	};
 	defaultRenderPass = createRenderPass(desc);
 }
@@ -1555,7 +1556,7 @@ GpuImage Device::createTexture(Texture tex)
 		.width = tex.width,
 		.height = tex.height,
 		.mipLevels = mipLevels,
-		.format = VK_FORMAT_R8G8B8A8_SRGB,
+		.format = tex.is_srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM,
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
 		//TRANSFERS_SRC is for generating mips
 		.usage_flags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT| VK_IMAGE_USAGE_TRANSFER_SRC_BIT , 

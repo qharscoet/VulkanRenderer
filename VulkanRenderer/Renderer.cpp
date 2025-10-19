@@ -181,6 +181,7 @@ void Renderer::draw()
 }
 
 static bool normal_mode = false;
+static int debug_mode = 0;
 static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::TRANSLATE);
 static int lastUsing = 0;
 
@@ -310,7 +311,8 @@ void Renderer::drawImgui()
 	if (ImGui::CollapsingHeader("Object List"))
 	{
 		ImGui::Checkbox("Use Normal Map", &normal_mode);
-		for (int i = 0; i < packets.size(); i++)
+		ImGui::Combo("Debug Mode", &debug_mode, "None\0Normal\0Tangent\0Binormal\0Normal Map\0Shaded Normal\0");
+			for (int i = 0; i < packets.size(); i++)
 		{
 			MeshPacket& p = packets[i];
 
@@ -448,6 +450,7 @@ void Renderer::drawRenderPass() {
 	m_device.pushConstants(&count, sizeof(MeshPacket::PushConstantsData) + 3 * sizeof(float), sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
 
 	m_device.pushConstants(&normal_mode, sizeof(MeshPacket::PushConstantsData) + 4 * sizeof(float), sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
+	m_device.pushConstants(&debug_mode, sizeof(MeshPacket::PushConstantsData) + 5 * sizeof(float), sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
 	for (const auto& packet : packets)
 	{
 		drawPacket(packet);
@@ -509,7 +512,7 @@ void Renderer::initPipeline()
 		.pushConstantsRanges = {
 			{
 				.offset = 0,
-				.size = sizeof(MeshPacket::PushConstantsData) + sizeof(float) * 5,
+				.size = sizeof(MeshPacket::PushConstantsData) + sizeof(float) * 6,
 				.stageFlags = (StageFlags)(e_Vertex | e_Pixel)
 			},
 			//{
@@ -1036,8 +1039,6 @@ void Renderer::updateLightData()
 		{
 			l.position[0] = 2.0f * cos(angle);
 			l.position[2] = 2.0f * sin(angle);
-			translation.x = l.position[0];
-			translation.z = l.position[2];
 
 			//memcpy(l.cube.transform.translation, l.position, 3 * sizeof(float));
 
@@ -1059,6 +1060,9 @@ void Renderer::updateLightData()
 
 		}
 
+		translation.x = l.position[0];
+		translation.y = l.position[1];
+		translation.z = l.position[2];
 		l.cube.transform = glm::recompose(scale, rotation, translation, skew, perspective);
 
 		memcpy(&data.pos, l.position, 3 * sizeof(float));

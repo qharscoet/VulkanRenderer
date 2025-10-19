@@ -25,4 +25,10 @@ if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET VulkanRenderer PROPERTY CXX_STANDARD 20)
 endif()
 
+if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    if(MSVC)
+        target_link_options(VulkanRenderer PUBLIC /entry:mainCRTStartup /subsystem:windows)
+    endif(MSVC)
+endif(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+
 # TODO: Ajoutez des tests et installez des cibles si nécessaire.
