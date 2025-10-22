@@ -76,11 +76,13 @@ cbuffer material_data : register(b1, space1)
 struct Constants
 {
 	float4x4 model;
+	
 	float3 eye;
 	uint light_count;
 	
 	uint normal_mode;
 	uint debug_mode;
+	uint blinn;
 };
 
 [[vk::push_constant]]
@@ -175,10 +177,20 @@ float4 calcLight(PSInput input, Light l, float3 NTex)
 	
 	//Specular
 	float3 view_vec = normalize(pc.eye - input.worldPos.xyz);
-	float3 reflect_vec = reflect(-light_vec, norm);
-	float specular = pow(max(dot(view_vec, reflect_vec), 0.0f), mat_shininess * 128.0f);
-	float4 specularLight = float4(l.color * specular * l.specularStrength, 1.0f);
 	
+	float specular = 0.0f;
+	if (pc.blinn)
+	{
+		float3 halfwayDir = normalize(light_vec + view_vec);
+		specular = pow(max(dot(norm, halfwayDir), 0.0), 32.0);
+	} else
+	{
+		float3 reflect_vec = reflect(-light_vec, norm);
+		float specular = pow(max(dot(view_vec, reflect_vec), 0.0f), mat_shininess * 128.0f);
+	
+	}
+	
+	float4 specularLight = float4(l.color * specular * l.specularStrength, 1.0f);
 	float attenuation = 1.0f;
 	
 	if(l.type == POINTLIGHT)

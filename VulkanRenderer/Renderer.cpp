@@ -180,7 +180,8 @@ void Renderer::draw()
 	}
 }
 
-static bool normal_mode = false;
+static uint32_t normal_mode = false;
+static uint32_t use_blinn = false;
 static int debug_mode = 0;
 static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::TRANSLATE);
 static int lastUsing = 0;
@@ -310,7 +311,8 @@ void Renderer::drawImgui()
 
 	if (ImGui::CollapsingHeader("Object List"))
 	{
-		ImGui::Checkbox("Use Normal Map", &normal_mode);
+		ImGui::Checkbox("Use Normal Map", (bool*)&normal_mode);
+		ImGui::Checkbox("Use Blinn-Phong", (bool*)&use_blinn);
 		ImGui::Combo("Debug Mode", &debug_mode, "None\0Normal\0Tangent\0Binormal\0Normal Map\0Shaded Normal\0");
 			for (int i = 0; i < packets.size(); i++)
 		{
@@ -449,8 +451,9 @@ void Renderer::drawRenderPass() {
 	uint32_t count = lights.size();
 	m_device.pushConstants(&count, sizeof(MeshPacket::PushConstantsData) + 3 * sizeof(float), sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
 
-	m_device.pushConstants(&normal_mode, sizeof(MeshPacket::PushConstantsData) + 4 * sizeof(float), sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
-	m_device.pushConstants(&debug_mode, sizeof(MeshPacket::PushConstantsData) + 5 * sizeof(float), sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
+	m_device.pushConstants(&normal_mode, sizeof(MeshPacket::PushConstantsData) + 4 * sizeof(float), sizeof(uint32_t), (StageFlags)(e_Pixel | e_Vertex));
+	m_device.pushConstants(&debug_mode, sizeof(MeshPacket::PushConstantsData) + 5 * sizeof(float), sizeof(uint32_t), (StageFlags)(e_Pixel | e_Vertex));
+	m_device.pushConstants(&use_blinn, sizeof(MeshPacket::PushConstantsData) + 6 * sizeof(float), sizeof(uint32_t), (StageFlags)(e_Pixel | e_Vertex));
 	for (const auto& packet : packets)
 	{
 		drawPacket(packet);
@@ -512,7 +515,7 @@ void Renderer::initPipeline()
 		.pushConstantsRanges = {
 			{
 				.offset = 0,
-				.size = sizeof(MeshPacket::PushConstantsData) + sizeof(float) * 6,
+				.size = sizeof(MeshPacket::PushConstantsData) + sizeof(float) * 7,
 				.stageFlags = (StageFlags)(e_Vertex | e_Pixel)
 			},
 			//{
