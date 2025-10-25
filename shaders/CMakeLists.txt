@@ -65,14 +65,14 @@ foreach(SLANG ${SLANG_SOURCE_FILES})
   if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 	add_custom_command(
 		OUTPUT ${SPIRV_VS} ${SPIRV_PS}
-		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_3 -emit-spirv-directly -fvk-use-entrypoint-name -entry VSMain -o ${SPIRV_VS}
-		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_3 -emit-spirv-directly -fvk-use-entrypoint-name -entry PSMain -o ${SPIRV_PS}
+		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_4 -emit-spirv-directly -g -fvk-use-entrypoint-name -entry VSMain -o ${SPIRV_VS}
+		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_4 -emit-spirv-directly -g -fvk-use-entrypoint-name -entry PSMain -o ${SPIRV_PS}
 		DEPENDS ${SLANG})
   else()
 	add_custom_command(
 		OUTPUT ${SPIRV_VS} ${SPIRV_PS}
-		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_3 -fvk-use-entrypoint-name -entry VSMain -o ${SPIRV_VS}
-		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_3 -fvk-use-entrypoint-name -entry PSMain -o ${SPIRV_PS}
+		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_4 -fvk-use-entrypoint-name -entry VSMain -o ${SPIRV_VS}
+		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_4 -fvk-use-entrypoint-name -entry PSMain -o ${SPIRV_PS}
 		DEPENDS ${SLANG})
   endif()
 

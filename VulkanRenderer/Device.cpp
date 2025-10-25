@@ -11,7 +11,7 @@
 #include <limits>
 #include <array>
 #include <variant>
-
+#include <map>
 
 
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -392,7 +392,7 @@ VkSampleCountFlagBits Device::getMaxUsableSampleCount(VkPhysicalDevice physicalD
 	return VK_SAMPLE_COUNT_1_BIT;
 }
 
-bool Device::isDeviceSuitable(VkPhysicalDevice device) {
+uint32_t Device::rateDeviceSuitability(VkPhysicalDevice device) {
 	QueueFamilyIndices indices = findQueueFamilies(device);
 	bool extensionsSupported = checkDeviceExtensionSupport(device);
 
@@ -404,9 +404,16 @@ bool Device::isDeviceSuitable(VkPhysicalDevice device) {
 
 	VkPhysicalDeviceFeatures supportedFeatures;
 	vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
+	VkPhysicalDeviceProperties deviceProperties;
+	vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+	std::cout << "Detected GPU: " << deviceProperties.deviceName << std::endl;
+
+	bool isGoodGPU =  deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+	bool isSuitable = indices.isComplete() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy;
 
 
-	return indices.isComplete() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy;
+	return isSuitable ? (isGoodGPU ? 1000 : 100) + deviceProperties.limits.maxImageDimension2D : 0;
 }
 
 void Device::pickPhysicalDevice() {
@@ -421,15 +428,18 @@ void Device::pickPhysicalDevice() {
 	std::vector<VkPhysicalDevice> devices(deviceCount);
 	vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
 
+
+	std::map<uint32_t, VkPhysicalDevice> candidates;
 	for (const auto& device : devices) {
-		if (isDeviceSuitable(device)) {
-			physicalDevice = device;
-			msaaSamples = getMaxUsableSampleCount(physicalDevice);
-			break;
-		}
+		uint32_t score = rateDeviceSuitability(device);
+		candidates.insert(std::make_pair(score, device));
 	}
 
-	if (physicalDevice == VK_NULL_HANDLE) {
+	if (candidates.rbegin()->first > 0) {
+		physicalDevice = candidates.rbegin()->second;
+		msaaSamples = getMaxUsableSampleCount(physicalDevice);
+	}
+	else {
 		throw std::runtime_error("Failed to find a suitabel GPU, damned !");
 	}
 

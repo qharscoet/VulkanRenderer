@@ -421,7 +421,7 @@ private:
 
 	VkSampleCountFlagBits getMaxUsableSampleCount(VkPhysicalDevice physicalDevice);
 
-	bool isDeviceSuitable(VkPhysicalDevice device);
+	uint32_t rateDeviceSuitability(VkPhysicalDevice device);
 	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 
 	void cleanupSwapChain();
