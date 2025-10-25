@@ -351,7 +351,7 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	VkPipelineMultisampleStateCreateInfo multisampling{};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.sampleShadingEnable = VK_FALSE;
-	multisampling.rasterizationSamples = desc.useMsaa ? msaaSamples : VK_SAMPLE_COUNT_1_BIT;
+	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 	multisampling.minSampleShading = 1.0f; // Optional
 	multisampling.pSampleMask = nullptr; // Optional
 	multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
@@ -454,7 +454,6 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	}
 
 	//VkRenderPass renderPass = desc.useDefaultRenderPass? defaultRenderPass: createRenderPass(desc.colorAttachment, desc.hasDepth, desc.useMsaa);
-	VkRenderPass renderPass = desc.renderPass;
 
 	// FINALLY ! 
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
@@ -472,7 +471,7 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	pipelineInfo.pDynamicState = &dynamicState;
 
 	pipelineInfo.layout = out_pipelineLayout;
-	pipelineInfo.renderPass = renderPass;
+	pipelineInfo.renderPass = desc.renderPass;
 	pipelineInfo.subpass = 0;
 
 	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
@@ -482,12 +481,21 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 		throw std::runtime_error("failed to create graphics pipeline!");
 	}
 
+	if (desc.renderPassMsaa != VK_NULL_HANDLE) {
+		multisampling.rasterizationSamples = msaaSamples;
+		pipelineInfo.renderPass = desc.renderPassMsaa;
+		if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &out_pipeline.graphicsPipelineMsaa) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create graphics pipeline!");
+		}
+	}
+
 	vkDestroyShaderModule(device, fragShaderModule, nullptr);
 	vkDestroyShaderModule(device, vertShaderModule, nullptr);
 
 
 	out_pipeline.descriptorSetLayouts = setLayouts;
-	out_pipeline.renderPass = renderPass;
+	out_pipeline.renderPass = desc.renderPass;
+	out_pipeline.renderPassMsaa = desc.renderPassMsaa;
 	out_pipeline.pipelineLayout = out_pipelineLayout;
 
 	if (desc.bindings.size() > 0)
@@ -561,10 +569,14 @@ Pipeline Device::createComputePipeline(PipelineDesc desc)
 
 RenderPass Device::createRenderPassAndPipeline(RenderPassDesc renderPassDesc, PipelineDesc pipelineDesc)
 {
+	renderPassDesc.useMsaa = false;
 	VkRenderPass renderpass = createRenderPass(renderPassDesc);
+	renderPassDesc.useMsaa = true;
+	VkRenderPass renderpassMsaa = renderPassDesc.writeSwapChain ? createRenderPass(renderPassDesc) : VK_NULL_HANDLE;
 
 	pipelineDesc.renderPass = renderpass;
-	pipelineDesc.useMsaa = renderPassDesc.useMsaa;
+	pipelineDesc.renderPassMsaa = renderpassMsaa;
+	//pipelineDesc.useMsaa = renderPassDesc.useMsaa;
 	pipelineDesc.hasDepth = renderPassDesc.hasDepth;
 	pipelineDesc.attachmentCount = std::max(renderPassDesc.framebufferDesc.images.size(), (size_t)1);
 	Pipeline pipeline = createPipeline(pipelineDesc);
@@ -607,6 +619,7 @@ RenderPass Device::createRenderPassAndPipeline(RenderPassDesc renderPassDesc, Pi
 
 	return {
 		.renderPass = renderpass,
+		.renderPassMsaa = renderpassMsaa,
 		.colorAttachement_count = pipelineDesc.attachmentCount,
 		.hasDepth = renderPassDesc.hasDepth,
 		.pipeline = pipeline,
@@ -969,6 +982,7 @@ void Device::destroyPipeline(Pipeline pipeline)
 	}
 
 	vkDestroyPipeline(device, pipeline.graphicsPipeline, nullptr);
+	vkDestroyPipeline(device, pipeline.graphicsPipelineMsaa, nullptr);
 	vkDestroyPipelineLayout(device, pipeline.pipelineLayout, nullptr);
 	if(pipeline.descriptorPool)
 		vkDestroyDescriptorPool(device, pipeline.descriptorPool, nullptr);
@@ -978,6 +992,9 @@ void Device::destroyPipeline(Pipeline pipeline)
 void Device::destroyRenderPass(RenderPass renderPass)
 {
 	vkDestroyRenderPass(device, renderPass.renderPass, nullptr);
+	if (renderPass.renderPassMsaa != VK_NULL_HANDLE)
+		vkDestroyRenderPass(device, renderPass.renderPassMsaa, nullptr);
+
 	destroyPipeline(renderPass.pipeline);
 }
 
@@ -987,7 +1004,7 @@ void Device::recordRenderPass(VkCommandBuffer commandBuffer, RenderPass& renderP
 	currentRenderPass = &renderPass;
 	VkRenderPassBeginInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassInfo.renderPass = renderPass.renderPass;
+	renderPassInfo.renderPass = this->usesMsaa? renderPass.renderPassMsaa:  renderPass.renderPass;
 	renderPassInfo.framebuffer = renderPass.framebuffer != VK_NULL_HANDLE ? renderPass.framebuffer : swapChainFramebuffers[current_framebuffer_idx];
 	renderPassInfo.renderArea.offset = { 0, 0 };
 	renderPassInfo.renderArea.extent = renderPass.framebuffer != VK_NULL_HANDLE ?  renderPass.extent : swapChainExtent;
@@ -1008,7 +1025,7 @@ void Device::recordRenderPass(VkCommandBuffer commandBuffer, RenderPass& renderP
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderPass.pipeline.graphicsPipeline);
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->usesMsaa?renderPass.pipeline.graphicsPipelineMsaa:renderPass.pipeline.graphicsPipeline);
 
 
 	renderPass.draw();
@@ -1034,8 +1051,6 @@ void Device::recordRenderPass(RenderPass& renderPass)
 
 void Device::recordImGui()
 {
-	ImGui::Render();
-
 	if (skipDraw)
 		return;
 

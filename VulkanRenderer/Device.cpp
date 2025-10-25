@@ -1212,6 +1212,10 @@ void Device::beginDraw()
 	scissor.offset = { 0, 0 };
 	scissor.extent = swapChainExtent;
 	vkCmdSetScissor(commandBuffers[current_frame], 0, 1, &scissor);
+
+
+	ImGui::Render();
+
 }
 
 void Device::endDraw()
@@ -1263,6 +1267,11 @@ void Device::endDraw()
 	presentInfo.pImageIndices = &current_framebuffer_idx;
 	VkResult result = vkQueuePresentKHR(presentQueue, &presentInfo);
 
+	if(nextUsesMsaa.has_value()) {
+		usesMsaa = nextUsesMsaa.value();
+		nextUsesMsaa.reset();
+	}
+
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
 		framebufferResized = false;
 		recreateSwapChain();
@@ -1272,6 +1281,7 @@ void Device::endDraw()
 	}
 
 	current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
+
 }
 
 void Device::dispatchCompute(const Pipeline& computePipeline)

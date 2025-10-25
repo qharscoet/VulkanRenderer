@@ -82,15 +82,9 @@ private:
 	const uint32_t HEIGHT = 600;
 
 	DeviceOptions device_options;
-
-	RenderPass renderPass;
-	RenderPass renderPassMsaa;
 	RenderPass drawParticlesPass;
 
 	std::vector<RenderPass> renderPasses;
-
-	RenderPass* currentDrawPassPtr;
-	std::optional<RenderPass*> nextRenderPassPtr;
 
 
 	Pipeline computePipeline;

@@ -107,7 +107,7 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
 }
 
 DeviceOptions device_options = {
-	.usesMsaa = true,
+	.usesMsaa = false,
 };
 
 
@@ -300,14 +300,14 @@ public:
 
 		loadPackets();
 		float sun[3] = { 0.0, -1.0f, 0.0f };
-		m_renderer.addDirectionalLight(sun);
+		//m_renderer.addDirectionalLight(sun);
 
 		const float lightPos[2][3] = { 
 			{3.0f, 3.0f, 3.0f},
 			{0.0f, 2.0f, 0.0f} 
 		};
 		m_renderer.addLight(lightPos[0]);
-		m_renderer.addSpotlight(lightPos[1]);
+		//m_renderer.addSpotlight(lightPos[1]);
 
 
 

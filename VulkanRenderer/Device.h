@@ -351,6 +351,7 @@ private:
 
 	VkRenderPass defaultRenderPass;
 	bool usesMsaa;
+	std::optional<bool> nextUsesMsaa;
 
 	GpuImage defaultTexture;
 	GpuImage defaultNormalMap;
@@ -482,7 +483,8 @@ public:
 	void setUsesMsaa(bool usesMsaa) {
 		if (usesMsaa != this->usesMsaa)
 		{
-			this->usesMsaa = usesMsaa;
+			//this->usesMsaa = usesMsaa;
+			this->nextUsesMsaa = usesMsaa;
 			this->framebufferResized = true; //This will trigger swapchain recreation
 		}
 

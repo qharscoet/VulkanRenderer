@@ -104,16 +104,19 @@ void Renderer::init(GLFWwindow* window, DeviceOptions options)
 	device_options = options;
 	m_device.init(window, options);
 
+	light_data_gpu = m_device.createUniformBuffer(10 * sizeof(LightData));
+
 	initPipeline();
+	initDrawLightsRenderPass();
+
+
 	//initComputePipeline();
 	//initTestPipeline();
 	//initTestPipeline2();
 
 	//initParticlesBuffers();
 
-	initDrawLightsRenderPass();
 
-	currentDrawPassPtr = device_options.usesMsaa ? &renderPassMsaa : &renderPass;
 	lastTime = glfwGetTime();
 }
 
@@ -132,9 +135,6 @@ void Renderer::cleanup()
 
 
 	//cleanupParticles();
-
-	m_device.destroyRenderPass(renderPass);
-	m_device.destroyRenderPass(renderPassMsaa);
 	//m_device.destroyPipeline(computePipeline);
 	//m_device.destroyRenderPass(drawParticlesPass);
 
@@ -161,7 +161,6 @@ void Renderer::draw()
 	m_device.beginDraw();
 
 
-	m_device.recordRenderPass(*currentDrawPassPtr);
 	//m_device.recordRenderPass(drawParticlesPass);
 	for (auto& renderPass : renderPasses)
 	{
@@ -173,11 +172,6 @@ void Renderer::draw()
 
 
 	m_device.endDraw();
-
-	if (nextRenderPassPtr.has_value()) {
-		currentDrawPassPtr = nextRenderPassPtr.value();
-		nextRenderPassPtr.reset();
-	}
 }
 
 static uint32_t normal_mode = false;
@@ -305,7 +299,6 @@ void Renderer::drawImgui()
 {
 	if (ImGui::Checkbox("MSAA", &device_options.usesMsaa)) {
 		m_device.setUsesMsaa(device_options.usesMsaa);
-		nextRenderPassPtr = device_options.usesMsaa ? &renderPassMsaa : &renderPass;
 	}
 
 
@@ -539,16 +532,10 @@ void Renderer::initPipeline()
 		},
 	};
 
-	light_data_gpu = m_device.createUniformBuffer(10 * sizeof(LightData));
 	material_data = m_device.createUniformBuffer(sizeof(MaterialData));
 	memcpy(material_data.mapped_memory, &materials[EMERALD], sizeof(MaterialData));
 
-	renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
-
-	renderPassDesc.useMsaa = true;
-	renderPassMsaa = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
-
-	m_device.setRenderPass(device_options.usesMsaa ? renderPassMsaa : renderPass);
+	renderPasses.push_back(m_device.createRenderPassAndPipeline(renderPassDesc, desc));
 }
 
 void Renderer::drawLightsRenderPass()
@@ -766,9 +753,7 @@ void Renderer::initTestPipeline()
 		}
 	};
 
-	renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
-
-	renderPasses.push_back(renderPass);
+	renderPasses.push_back(m_device.createRenderPassAndPipeline(renderPassDesc, desc));
 
 }
 
@@ -806,7 +791,8 @@ void Renderer::initTestPipeline2()
 		.colorAttachement_count = 1,
 		.hasDepth = true,
 		.useMsaa = device_options.usesMsaa,
-		.doClear = false,
+		.doClear = true,
+		.writeSwapChain = true,
 		.drawFunction = [&]() { drawTest2(m_device); },
 		.debugInfo = {
 			.name = "Test Render Pass 2",
@@ -814,9 +800,8 @@ void Renderer::initTestPipeline2()
 		}
 	};
 
-	renderPass = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 
-	renderPasses.push_back(renderPass);
+	renderPasses.push_back(m_device.createRenderPassAndPipeline(renderPassDesc, desc));
 
 }
 

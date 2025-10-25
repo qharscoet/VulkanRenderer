@@ -64,8 +64,8 @@ struct PipelineDesc {
 	bool isWireframe;
 
 	VkRenderPass renderPass;
+	VkRenderPass renderPassMsaa;
 	bool hasDepth;
-	bool useMsaa;
 	uint32_t attachmentCount;
 };
 
@@ -135,6 +135,7 @@ struct RenderPassDesc
 
 struct Pipeline {
 	VkRenderPass renderPass;
+	VkRenderPass renderPassMsaa;
 	std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
 	std::vector<VkDescriptorSet> descriptorSets;
 	std::unordered_map<size_t, VkDescriptorSet> descriptorSetsMap;
@@ -142,10 +143,12 @@ struct Pipeline {
 	VkDescriptorPool descriptorPool;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
+	VkPipeline graphicsPipelineMsaa;
 };
 
 struct RenderPass {
 	VkRenderPass renderPass;
+	VkRenderPass renderPassMsaa;
 	uint32_t colorAttachement_count;
 	bool hasDepth;
 
