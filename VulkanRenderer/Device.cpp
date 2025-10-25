@@ -999,10 +999,17 @@ void Device::recordComputeCommandBuffer(VkCommandBuffer commandBuffer, const Pip
 }
 void Device::createSyncObjects() {
 	imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-	renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 	computeInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 	computeFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 	inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+
+
+	/* Submit semaphores need to be indexed by swapchain image idx
+		https://docs.vulkan.org/guide/latest/swapchain_semaphore_reuse.html
+	*/
+	uint32_t imageCount = 0;
+	vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
+	renderFinishedSemaphores.resize(imageCount);
 
 	VkSemaphoreCreateInfo semaphoreInfo{};
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1014,13 +1021,18 @@ void Device::createSyncObjects() {
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 
 		if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS ||
-			vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS ||
 			vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create semaphores!");
 		}
 
 		if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &computeFinishedSemaphores[i]) != VK_SUCCESS ||
 			vkCreateFence(device, &fenceInfo, nullptr, &computeInFlightFences[i]) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create semaphores!");
+		}
+	}
+
+	for (int i = 0; i < imageCount; i++) {
+		if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create semaphores!");
 		}
 	}
@@ -1255,7 +1267,7 @@ void Device::endDraw()
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &commandBuffers[current_frame];
 
-	VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[current_frame] };
+	VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[current_framebuffer_idx] };
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = signalSemaphores;
 
