@@ -222,7 +222,7 @@ void Device::createInstance() {
 	appInfo.applicationVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
 	appInfo.pEngineName = "No Engine Yet";
 	appInfo.engineVersion = VK_MAKE_API_VERSION(0, 0, 0, 1);
-	appInfo.apiVersion = VK_API_VERSION_1_0;
+	appInfo.apiVersion = VK_API_VERSION_1_3;
 
 
 	if (!checkGlfwExtensions()) {

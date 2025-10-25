@@ -557,7 +557,7 @@ void Renderer::initDrawLightsRenderPass()
 
 	PipelineDesc desc = {
 		.type = PipelineType::Graphics,
-		.vertexShader = "basic.vert.spv",
+		.vertexShader = "basic.slang.vs.spv",
 		.pixelShader = "basic.ps.spv",
 
 		.bindingDescription = &bindingDescription,

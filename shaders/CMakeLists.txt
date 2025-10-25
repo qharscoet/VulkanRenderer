@@ -21,7 +21,7 @@ endforeach(GLSL)
 
 find_program(HLSL_VALIDATOR dxc HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK}/Bin/ $ENV{VULKAN_SDK}/Bin32/)
 file(GLOB_RECURSE HLSL_SOURCE_FILES
-    "${PROJECT_SOURCE_DIR}/shaders/*.hlsl"
+    "${PROJECT_SOURCE_DIR}/shaders/hlsl/*.hlsl"
     )
 
 foreach(HLSL ${HLSL_SOURCE_FILES})
@@ -47,6 +47,39 @@ foreach(HLSL ${HLSL_SOURCE_FILES})
 
   list(APPEND SPIRV_BINARY_FILES ${SPIRV_VS} ${SPIRV_PS})
  endforeach(HLSL)
+
+
+
+ find_program(SLANG_VALIDATOR slangc HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK}/Bin/ $ENV{VULKAN_SDK}/Bin32/)
+ file(GLOB_RECURSE SLANG_SOURCE_FILES
+    "${PROJECT_SOURCE_DIR}/shaders/slang/*.slang"
+    )
+
+foreach(SLANG ${SLANG_SOURCE_FILES})
+  get_filename_component(FILE_NAME  ${SLANG} NAME_WE)
+  message(STATUS ${FILE_NAME})
+  set(SPIRV_VS "${PROJECT_SOURCE_DIR}/shaders/spv/${FILE_NAME}.slang.vs.spv")
+  set(SPIRV_PS "${PROJECT_SOURCE_DIR}/shaders/spv/${FILE_NAME}.slang.ps.spv")
+  message(STATUS "BUILDING SLANG SHADER")
+  message(STATUS ${SLANG})
+  if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+	add_custom_command(
+		OUTPUT ${SPIRV_VS} ${SPIRV_PS}
+		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_3 -emit-spirv-directly -fvk-use-entrypoint-name -entry VSMain -o ${SPIRV_VS}
+		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_3 -emit-spirv-directly -fvk-use-entrypoint-name -entry PSMain -o ${SPIRV_PS}
+		DEPENDS ${SLANG})
+  else()
+	add_custom_command(
+		OUTPUT ${SPIRV_VS} ${SPIRV_PS}
+		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_3 -fvk-use-entrypoint-name -entry VSMain -o ${SPIRV_VS}
+		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_3 -fvk-use-entrypoint-name -entry PSMain -o ${SPIRV_PS}
+		DEPENDS ${SLANG})
+  endif()
+
+  list(APPEND SPIRV_BINARY_FILES ${SPIRV_VS} ${SPIRV_PS})
+ 
+endforeach(SLANG)
+
 
 add_custom_target(
     Shaders 
