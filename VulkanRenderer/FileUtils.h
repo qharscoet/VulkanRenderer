@@ -42,6 +42,12 @@ struct Mesh {
 		int normal;
 		int emissive;
 		int occlusion;
+
+		struct PBRFactors {
+			float baseColorFactor[4];
+			float metallicFactor;
+			float roughnessFactor;
+		} pbrFactors;
 	} material;
 };
 

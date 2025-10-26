@@ -171,7 +171,7 @@ private:
 		static const std::string gltfAssetsPath = "./glTF-Sample-Assets/Models/";
 		//m_renderer.addPacket(m_renderer.createPacket("assets/viking_room.obj", "assets/viking_room.png"));
 		//m_renderer.addPacket(m_renderer.createPacket(gltfAssetsPath  + "CompareNormal/glTF/CompareNormal.gltf"));
-		m_renderer.loadScene(gltfAssetsPath + "Sponza/glTF/Sponza.gltf");
+		m_renderer.loadScene(gltfAssetsPath + "CompareMetallic/glTF/CompareMetallic.gltf");
 	}
 
 
@@ -300,7 +300,7 @@ public:
 
 		loadPackets();
 		float sun[3] = { 0.0, -1.0f, 0.0f };
-		//m_renderer.addDirectionalLight(sun);
+		m_renderer.addDirectionalLight(sun);
 
 		const float lightPos[2][3] = { 
 			{3.0f, 3.0f, 3.0f},

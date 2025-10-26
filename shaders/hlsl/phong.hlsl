@@ -156,7 +156,7 @@ SamplerState g_sampler : register(s0);
 Texture2D g_normal : register(t1);
 
 
-float4 calcLight(PSInput input, Light l, float3 NTex)
+float4 calcLight(PSInput input, Light l, float3 norm)
 {
 	//Ambiant
 	float4 ambiantLight = float4(l.color * l.ambiant, 1.0f);
@@ -168,8 +168,6 @@ float4 calcLight(PSInput input, Light l, float3 NTex)
 	else	
 		light_vec = normalize(l.position - input.worldPos.xyz);
 	
-	
-	float3 norm = pc.normal_mode == 1 ? normalize(NTex) : normalize(input.normal);
 	
 	//Diffuse
 	float diffuse = max(dot(light_vec, norm), 0.0f);
@@ -234,9 +232,11 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 vB = input.sign * cross(vN, vT);
 	float3 vNout = normalize(vNt.x * vT + vNt.y * vB + vNt.z * vN);
 	
+	float3 norm = pc.normal_mode == 1 ? normalize(vNout) : normalize(input.normal);
+	
 	for (int i = 0; i < pc.light_count; i++)
 	{
-		output += texColor * calcLight(input, light[i], vNout);
+		output += texColor * calcLight(input, light[i], norm);
 	}
 	
 	//output += g_normal.Sample(g_sampler, input.uv);

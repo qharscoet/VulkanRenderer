@@ -1354,6 +1354,7 @@ void Device::cleanupSwapChain() {
 void Device::cleanupVulkan() {
 
 	destroyImage(defaultTexture);
+	destroyImage(defaultTextureBlack);
 	destroyImage(defaultNormalMap);
 	cleanupSwapChain();
 
@@ -1462,6 +1463,9 @@ void Device::destroyBuffer(Buffer buffer) {
 
 void Device::destroyImage(GpuImage image) {
 	if (image.image == defaultTexture.image)
+		return;
+
+	if(image.image == defaultTextureBlack.image)
 		return;
 
 	if (image.image == defaultNormalMap.image)
@@ -1631,11 +1635,24 @@ void Device::createDefaultTexture()
 	defaultTexture = createTexture(tex);
 	defaultSampler = createTextureSampler(defaultTexture.mipLevels);
 
-	// Fill the pixels array with default normal data, (0.5, 0.5, 1, 1);
+	memset(&pixels[0], 0, pixels.size());
+	tex = {
+		.height = 128,
+		.width = 128,
+		.channels = 4,
+		.pixels = pixels,
+		.size = pixels.size() * sizeof(unsigned char),
+		.is_srgb = false
+	};
+
+	defaultTextureBlack = createTexture(tex);
+
+
+	// Fill the pixels array with default normal data, (0.0, 1.0, 0.0, 1);
 	for (int i = 0; i < pixels.size(); i += 4)
 	{
-		pixels[i] = 185;
-		pixels[i + 1] = 185;
+		pixels[i] = 127;
+		pixels[i + 1] = 127;
 		pixels[i + 2] = 255;
 		pixels[i + 3] = 255;
 	}
@@ -1645,7 +1662,8 @@ void Device::createDefaultTexture()
 		.width = 128,
 		.channels = 4,
 		.pixels = pixels,
-		.size = pixels.size() * sizeof(unsigned char)
+		.size = pixels.size() * sizeof(unsigned char),
+		.is_srgb = false
 	};
 
 	defaultNormalMap = createTexture(tex);

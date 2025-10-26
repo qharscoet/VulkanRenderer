@@ -102,6 +102,7 @@ private:
 	void drawRenderPass();
 	void drawParticles();
 	void drawLightsRenderPass();
+	void drawRenderPassPBR();
 
 	double lastTime;
 	double lastFrameTime;
@@ -110,6 +111,8 @@ private:
 	void initComputePipeline();
 	void initTestPipeline();
 	void initTestPipeline2();
+
+	void initPipelinePBR();
 
 	void initDrawLightsRenderPass();
 

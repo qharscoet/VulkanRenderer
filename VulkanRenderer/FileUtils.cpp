@@ -343,9 +343,12 @@ void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, size_t primitiv
 		ComputeTangents(out_mesh->vertices, out_mesh->indices);
 	}
 
-	auto load_texture = [&model](Mesh* out_mesh, int tex_idx, bool is_srgb = true) {
+	auto load_texture = [&model](Mesh* out_mesh, int tex_idx, int& save_index, bool is_srgb = true) {
 		if (tex_idx < 0)
+		{
+			save_index = -1;
 			return;
+		}
 
 		const tinygltf::Texture& tex = model.textures[tex_idx];
 		const tinygltf::Image& img = model.images[tex.source];
@@ -360,16 +363,24 @@ void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, size_t primitiv
 		t.is_srgb = is_srgb;
 
 		out_mesh->textures.push_back(t);
+		save_index = out_mesh->textures.size() - 1;
 	};
 
 	const tinygltf::Material& material = model.materials[m.primitives[primitive_idx].material];
 
 
-	load_texture(out_mesh, material.pbrMetallicRoughness.baseColorTexture.index);
-	out_mesh->material.baseColor = out_mesh->textures.size() -1;
+	load_texture(out_mesh, material.pbrMetallicRoughness.baseColorTexture.index, out_mesh->material.baseColor);
+	load_texture(out_mesh, material.pbrMetallicRoughness.metallicRoughnessTexture.index, out_mesh->material.mettalicRoughness, false);
+	load_texture(out_mesh, material.normalTexture.index, out_mesh->material.normal, false);
+	load_texture(out_mesh, material.occlusionTexture.index, out_mesh->material.occlusion, false);
+	load_texture(out_mesh, material.emissiveTexture.index, out_mesh->material.emissive, false);
 
-	load_texture(out_mesh, material.normalTexture.index, false);
-	out_mesh->material.normal = out_mesh->textures.size() - 1;
+	for (int i = 0; i < 4; i++)
+	{
+		out_mesh->material.pbrFactors.baseColorFactor[i] = material.pbrMetallicRoughness.baseColorFactor[i];
+	}
+	out_mesh->material.pbrFactors.metallicFactor = material.pbrMetallicRoughness.metallicFactor;
+	out_mesh->material.pbrFactors.roughnessFactor = material.pbrMetallicRoughness.roughnessFactor;
 
 	/*out_mesh->material = {
 		.baseColor = material.pbrMetallicRoughness.baseColorTexture.index,
@@ -492,7 +503,9 @@ int loadGltf(const char* path, Scene* out_scene)
 					)
 				);
 			}
+			local_transform = glm::transpose(local_transform);
 		}
+
 
 		// Apply parent transform
 		node.matrix = parent_transform * local_transform;

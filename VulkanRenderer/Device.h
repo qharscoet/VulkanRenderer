@@ -94,6 +94,12 @@ struct MeshPacket {
 		int normal;
 		int emissive;
 		int occlusion;
+
+		struct PBRFactors {
+			float baseColorFactor[4];
+			float metallicFactor;
+			float roughnessFactor;
+		} pbrFactors;
 	} materialData;
 
 	std::string name;
@@ -354,6 +360,7 @@ private:
 	std::optional<bool> nextUsesMsaa;
 
 	GpuImage defaultTexture;
+	GpuImage defaultTextureBlack;
 	GpuImage defaultNormalMap;
 	VkSampler defaultSampler;
 
@@ -556,6 +563,10 @@ public:
 	void createDepthTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa);
 	void destroyImage(GpuImage image);
 
+	const GpuImage& getDefaultTexture() { return defaultTexture; };
+	const GpuImage& getDefaultTextureBlack() { return defaultTextureBlack; };
+	const GpuImage& getDefaultNormalMap() { return defaultNormalMap; };
+
 	void destroySampler(VkSampler sampler) {
 		vkDestroySampler(device, sampler, nullptr);
 	}
@@ -565,6 +576,7 @@ public:
 	void updateUniformBuffer(void* data, size_t size);
 	void updateComputeUniformBuffer(void* data, size_t size);
 	Dimensions getExtent() { return swapChainExtent;};
+	const Buffer& getCurrentUniformBuffer() { return uniformBuffers[current_frame]; };
 
 	VkDescriptorBufferInfo& getDescriptorBufferInfo(const Buffer& buffer);
 	VkDescriptorImageInfo& getDescriptorImageInfo(const GpuImage& image, VkSampler sampler);
@@ -597,10 +609,10 @@ public:
 	void bindVertexBuffer(Buffer& buffer);
 	/*Deprecated*/void bindTexture(const GpuImage& image, VkSampler sampler);
 	/*Deprecated*/void bindBuffer(const Buffer& buiffer, uint32_t set, uint32_t binding);
-	void bindRessources(uint32_t set, std::vector<const Buffer*> buffers, std::vector<const GpuImage*> images);
+	void bindRessources(uint32_t set, std::vector<const Buffer*> buffers, std::vector<const GpuImage*> images, const VkSampler sampler = VK_NULL_HANDLE);
 	void transitionImage(BarrierDesc desc);
 	void drawCommand(uint32_t vertex_count);
-	void pushConstants(void* data, uint32_t offset, uint32_t size, StageFlags = e_Vertex, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE);
+	void pushConstants(const void* data, uint32_t offset, uint32_t size, StageFlags = e_Vertex, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE);
 
 	void recordRenderPass(RenderPass& renderPass);
 	void recordImGui();

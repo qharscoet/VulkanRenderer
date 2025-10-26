@@ -107,6 +107,7 @@ void Renderer::init(GLFWwindow* window, DeviceOptions options)
 	light_data_gpu = m_device.createUniformBuffer(10 * sizeof(LightData));
 
 	initPipeline();
+	initPipelinePBR();
 	initDrawLightsRenderPass();
 
 
@@ -151,6 +152,13 @@ void Renderer::newImGuiFrame()
 	ImGuizmo::BeginFrame();
 }
 
+
+
+static uint32_t normal_mode = true;
+static uint32_t use_blinn = true;
+static uint32_t use_pbr = false;
+static int debug_mode = 0;
+
 void Renderer::draw()
 {
 	updateUniformBuffer();
@@ -160,12 +168,13 @@ void Renderer::draw()
 	//m_device.dispatchCompute(computePipeline);
 	m_device.beginDraw();
 
-
+	m_device.recordRenderPass(use_pbr ? renderPasses[1] : renderPasses[0]);
+	m_device.recordRenderPass(renderPasses[2]);
 	//m_device.recordRenderPass(drawParticlesPass);
-	for (auto& renderPass : renderPasses)
-	{
-		m_device.recordRenderPass(renderPass);
-	}
+	//for (auto& renderPass : renderPasses)
+	//{
+	//	m_device.recordRenderPass(renderPass);
+	//}
 
 	m_device.recordImGui();
 
@@ -174,9 +183,6 @@ void Renderer::draw()
 	m_device.endDraw();
 }
 
-static uint32_t normal_mode = false;
-static uint32_t use_blinn = false;
-static int debug_mode = 0;
 static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::TRANSLATE);
 static int lastUsing = 0;
 
@@ -301,12 +307,13 @@ void Renderer::drawImgui()
 		m_device.setUsesMsaa(device_options.usesMsaa);
 	}
 
+	ImGui::Checkbox("Use Normal Map", (bool*)&normal_mode);
+	ImGui::Checkbox("Use Blinn-Phong", (bool*)&use_blinn);
+	ImGui::Checkbox("Use PBR", (bool*)&use_pbr);
+	ImGui::Combo("Debug Mode", &debug_mode, "None\0Normal\0Tangent\0Binormal\0Normal Map\0Shaded Normal\0");
 
 	if (ImGui::CollapsingHeader("Object List"))
 	{
-		ImGui::Checkbox("Use Normal Map", (bool*)&normal_mode);
-		ImGui::Checkbox("Use Blinn-Phong", (bool*)&use_blinn);
-		ImGui::Combo("Debug Mode", &debug_mode, "None\0Normal\0Tangent\0Binormal\0Normal Map\0Shaded Normal\0");
 			for (int i = 0; i < packets.size(); i++)
 		{
 			MeshPacket& p = packets[i];
@@ -449,6 +456,9 @@ void Renderer::drawRenderPass() {
 	m_device.pushConstants(&use_blinn, sizeof(MeshPacket::PushConstantsData) + 6 * sizeof(float), sizeof(uint32_t), (StageFlags)(e_Pixel | e_Vertex));
 	for (const auto& packet : packets)
 	{
+		const GpuImage& baseColor = packet.textures[packet.materialData.baseColor];
+		const GpuImage& normal = packet.materialData.normal >= 0 ? packet.textures[packet.materialData.normal] : m_device.getDefaultNormalMap();
+		m_device.bindRessources(0, {&m_device.getCurrentUniformBuffer()}, {&baseColor , &normal}, packet.sampler);
 		drawPacket(packet);
 	}
 }
@@ -542,10 +552,15 @@ void Renderer::drawLightsRenderPass()
 {
 	for (const auto& l : lights)
 	{
+		const MeshPacket& packet = l.cube;
 		if (l.cube.vertexBuffer.buffer != VK_NULL_HANDLE)
 		{
+			const GpuImage& baseColor = packet.textures[packet.materialData.baseColor];
+			const GpuImage& normal = packet.materialData.normal >= 0 ? packet.textures[packet.materialData.normal] : m_device.getDefaultNormalMap();
+			m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { &baseColor , &normal }, packet.sampler);
+
 			m_device.pushConstants((void*)&l.color[0], sizeof(MeshPacket::PushConstantsData), 3 * sizeof(float), (StageFlags)(e_Vertex | e_Pixel));
-			m_device.drawPacket(l.cube);
+			m_device.drawPacket(packet);
 		}
 	}
 }
@@ -610,6 +625,122 @@ void Renderer::initDrawLightsRenderPass()
 	renderPasses.push_back(m_device.createRenderPassAndPipeline(renderPassDesc, desc));
 }
 
+
+
+void Renderer::drawRenderPassPBR() {
+	m_device.bindRessources(1, { &light_data_gpu}, {});
+	uint32_t count = lights.size();
+
+	size_t start_offset = sizeof(MeshPacket::PushConstantsData);
+
+	m_device.pushConstants(cameraInfo.position, start_offset, 3 * sizeof(float), (StageFlags)(e_Vertex | e_Pixel));
+	m_device.pushConstants(&count, start_offset + 3 * sizeof(float), sizeof(float), (StageFlags)(e_Vertex | e_Pixel));
+	m_device.pushConstants(&normal_mode, start_offset + 4 * sizeof(float), sizeof(uint32_t), (StageFlags)(e_Vertex | e_Pixel));
+	m_device.pushConstants(&debug_mode, start_offset + 5 * sizeof(float), sizeof(uint32_t), (StageFlags)(e_Vertex | e_Pixel));
+
+	start_offset += 6 * sizeof(float) + 2*sizeof(float); // 2 is padding
+	for (const auto& packet : packets)
+	{
+		const GpuImage& baseColor = packet.textures[packet.materialData.baseColor];
+		const GpuImage& normal = packet.materialData.normal >= 0 ? packet.textures[packet.materialData.normal] : m_device.getDefaultNormalMap();
+		const GpuImage& mettalicRoughness = packet.materialData.mettalicRoughness >= 0 ? packet.textures[packet.materialData.mettalicRoughness] : m_device.getDefaultTextureBlack();
+		const GpuImage& occlusion = packet.materialData.occlusion >= 0 ? packet.textures[packet.materialData.occlusion] : m_device.getDefaultTextureBlack();
+		const GpuImage& emissive = packet.materialData.emissive >= 0 ? packet.textures[packet.materialData.emissive] : m_device.getDefaultTextureBlack();
+		m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { &baseColor , &normal, &mettalicRoughness, &occlusion, &emissive }, packet.sampler);
+
+		m_device.pushConstants(&packet.materialData.pbrFactors, start_offset, sizeof(Mesh::Material::PBRFactors), (StageFlags)(e_Vertex | e_Pixel));
+		drawPacket(packet);
+	}
+}
+
+void Renderer::initPipelinePBR()
+{
+	auto attributeDescriptions = Vertex::getAttributeDescriptions();
+	auto bindingDescription = Vertex::getBindingDescription();
+
+	PipelineDesc desc = {
+		.type = PipelineType::Graphics,
+		.vertexShader = "pbr.slang.vs.spv",
+		.pixelShader = "pbr.slang.ps.spv",
+
+		.bindingDescription = &bindingDescription,
+		.attributeDescriptions = attributeDescriptions.data(),
+		.attributeDescriptionsCount = attributeDescriptions.size(),
+
+		.blendMode = BlendMode::Opaque,
+		.topology = PrimitiveToplogy::TriangleList,
+		.bindings = {
+			{
+				// View & proj Matrices
+				{
+					.slot = 0,
+					.type = BindingType::UBO,
+					.stageFlags = e_Vertex,
+				},
+				//Base Color
+				{
+					.slot = 1,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				},
+				// Normal
+				{
+					.slot = 2,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				},
+				// MetallicRoughness
+				{
+					.slot = 3,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				},
+				// Occlusion
+				{
+					.slot = 4,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				},
+				// Emissive
+				{
+					.slot = 5,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				}
+			},
+			{
+				//Light Data
+				{
+					.slot = 0,
+					.type = BindingType::UBO,
+					.stageFlags = e_Pixel,
+				},
+			}
+		},
+		.pushConstantsRanges = {
+			{
+				.offset = 0,
+				.size = sizeof(MeshPacket::PushConstantsData) + sizeof(float) * 6 + sizeof(Mesh::Material::PBRFactors) + 8 /*padding*/,
+				.stageFlags = (StageFlags)(e_Vertex | e_Pixel)
+			}
+		}
+	};
+
+	RenderPassDesc renderPassDesc = {
+		.colorAttachement_count = 1,
+		.hasDepth = true,
+		.useMsaa = false,
+		.doClear = true,
+		.writeSwapChain = true,
+		.drawFunction = [&]() { drawRenderPassPBR(); },
+		.debugInfo = {
+				.name = "Main Render Pass",
+				.color = DebugColor::Blue,
+		},
+	};
+
+	renderPasses.push_back(m_device.createRenderPassAndPipeline(renderPassDesc, desc));
+}
 
 
 void Renderer::drawParticles()

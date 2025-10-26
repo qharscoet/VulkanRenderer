@@ -822,7 +822,7 @@ void Device::bindBuffer(const Buffer& buffer, uint32_t set, uint32_t binding)
 
 }
 
-void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, std::vector<const GpuImage*> images)
+void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, std::vector<const GpuImage*> images, const VkSampler sampler)
 {
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 
@@ -837,6 +837,7 @@ void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, st
 
 	auto imageIt = images.begin();
 	auto bufferIt = buffers.begin();
+	VkSampler selectedSampler = sampler != VK_NULL_HANDLE ? sampler : defaultSampler;
 
 	for (const auto& binding : bindings)
 	{
@@ -852,8 +853,9 @@ void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, st
 			hash_combine(hash, img_hasher((*imageIt++)->view));
 			break;
 		}
-
 	}
+
+	hash_combine(hash, sampler_hasher(selectedSampler));
 
 	if (currentRenderPass->pipeline.descriptorSetsMap.contains(hash))
 	{
@@ -867,7 +869,7 @@ void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, st
 		std::vector<VkDescriptorBufferInfo> descriptorBufferInfos;
 		descriptorImageInfos.reserve(images.size());
 		descriptorBufferInfos.reserve(images.size());
-		std::transform(images.begin(), images.end(), std::back_inserter(descriptorImageInfos), [&](const GpuImage* img) { return getDescriptorImageInfo(*img, defaultSampler); });
+		std::transform(images.begin(), images.end(), std::back_inserter(descriptorImageInfos), [&](const GpuImage* img) { return getDescriptorImageInfo(*img, selectedSampler); });
 		std::transform(buffers.begin(), buffers.end(), std::back_inserter(descriptorBufferInfos), [&](const Buffer* buff) { return getDescriptorBufferInfo(*buff); });
 
 		//auto descriptorImageInfos = images | std::views::transform([&](const GpuImage* img) { return getDescriptorImageInfo(*img, defaultSampler); });
@@ -901,7 +903,7 @@ void Device::drawCommand(uint32_t vertex_count)
 	vkCmdDraw(commandBuffer, vertex_count, 1, 0, 0);
 }
 
-void Device::pushConstants(void* data, uint32_t offset, uint32_t size, StageFlags stageFlags, VkPipelineLayout pipelineLayout)
+void Device::pushConstants(const void* data, uint32_t offset, uint32_t size, StageFlags stageFlags, VkPipelineLayout pipelineLayout)
 {
 
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
@@ -915,42 +917,6 @@ void Device::drawPacket(const MeshPacket& packet)
 {
 
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
-
-	VkDescriptorPool descriptorPool = currentRenderPass->pipeline.descriptorPool;
-	VkDescriptorSetLayout descriptorSetLayout = currentRenderPass->pipeline.descriptorSetLayouts[0];
-	std::vector<BindingDesc>& bindings = currentRenderPass->pipeline.bindings[0];
-
-	const GpuImage& baseColor = packet.textures[packet.materialData.baseColor];
-	const GpuImage& normal = packet.materialData.normal >= 0 ? packet.textures[packet.materialData.normal] : defaultNormalMap;
-
-	std::hash<VkImageView> img_hasher;
-	std::hash<VkSampler> sampler_hasher;
-	std::hash<VkBuffer> buffer_hasher;
-	size_t hash = 0;
-	hash_combine(hash, buffer_hasher(uniformBuffers[current_frame].buffer));
-	hash_combine(hash, img_hasher(baseColor.view));
-	hash_combine(hash, img_hasher(normal.view));
-	hash_combine(hash, sampler_hasher(packet.sampler));
-
-	if (currentRenderPass->pipeline.descriptorSetsMap.contains(hash))
-	{
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &currentRenderPass->pipeline.descriptorSetsMap[hash], 0, nullptr);
-	}
-	else {
-		VkDescriptorSet descriptorSet;
-		createDescriptorSets(descriptorSetLayout, descriptorPool, &descriptorSet, 1);
-
-		std::vector<VkDescriptorImageInfo> images = {
-			getDescriptorImageInfo(packet.textures[packet.materialData.baseColor], packet.sampler),
-			getDescriptorImageInfo(normal, packet.sampler),
-		};
-		std::vector<VkDescriptorBufferInfo> buffers = { getDescriptorBufferInfo(uniformBuffers[current_frame])};
-		updateDescriptorSet(bindings, images, buffers, descriptorSet);
-		currentRenderPass->pipeline.descriptorSetsMap[hash] = descriptorSet;
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
-	}
-
-
 
 	{
 		vkCmdPushConstants(commandBuffer, currentRenderPass->pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MeshPacket::PushConstantsData), &packet.transform);
