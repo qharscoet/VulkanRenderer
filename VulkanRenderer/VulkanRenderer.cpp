@@ -174,6 +174,27 @@ private:
 		m_renderer.loadScene(gltfAssetsPath + "CompareMetallic/glTF/CompareMetallic.gltf");
 	}
 
+	void loadSpheres()
+	{
+		const float pos[3] = { -2.5f, -2.5f, 0.f };
+
+		const int grid_count = 5;
+		int sphere_count = 0;
+
+		for (int i = 0; i < grid_count; i++) {
+			for (int j = 0; j < grid_count; j++) {
+				float sphere_pos[3] = {
+					pos[0] + i,
+					pos[1] + j,
+					pos[2]
+				};
+				MeshPacket& packet = m_renderer.addSphere(sphere_pos, 0.5f);
+				packet.name = "Sphere_" + std::to_string(sphere_count++);
+				packet.materialData.pbrFactors.metallicFactor = i * 0.2f;
+				packet.materialData.pbrFactors.roughnessFactor = j * 0.2f;
+			}
+		}
+	}
 
 	void drawImGui()
 	{
@@ -298,9 +319,10 @@ public:
 		initWindow();
 		m_renderer.init(window, device_options);
 
-		loadPackets();
+		//loadPackets();
+		loadSpheres();
 		float sun[3] = { 0.0, -1.0f, 0.0f };
-		m_renderer.addDirectionalLight(sun);
+		//m_renderer.addDirectionalLight(sun);
 
 		const float lightPos[2][3] = { 
 			{3.0f, 3.0f, 3.0f},

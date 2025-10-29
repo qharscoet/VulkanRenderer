@@ -643,7 +643,7 @@ void Renderer::drawRenderPassPBR() {
 	{
 		const GpuImage& baseColor = packet.textures[packet.materialData.baseColor];
 		const GpuImage& normal = packet.materialData.normal >= 0 ? packet.textures[packet.materialData.normal] : m_device.getDefaultNormalMap();
-		const GpuImage& mettalicRoughness = packet.materialData.mettalicRoughness >= 0 ? packet.textures[packet.materialData.mettalicRoughness] : m_device.getDefaultTextureBlack();
+		const GpuImage& mettalicRoughness = packet.materialData.mettalicRoughness >= 0 ? packet.textures[packet.materialData.mettalicRoughness] : m_device.getDefaultTexture();
 		const GpuImage& occlusion = packet.materialData.occlusion >= 0 ? packet.textures[packet.materialData.occlusion] : m_device.getDefaultTextureBlack();
 		const GpuImage& emissive = packet.materialData.emissive >= 0 ? packet.textures[packet.materialData.emissive] : m_device.getDefaultTextureBlack();
 		m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { &baseColor , &normal, &mettalicRoughness, &occlusion, &emissive }, packet.sampler);
@@ -1214,6 +1214,11 @@ void Renderer::updateCamera(const CameraInfo& cameraInfo)
 	this->cameraInfo = cameraInfo;
 }
 
+MeshPacket& Renderer::addSphere(const float pos[3], float size)
+{
+	addPacket(m_device.createSpherePacket(pos, size));
+	return packets.back();
+}
 
 void Renderer::addLight(const float pos[3])
 {

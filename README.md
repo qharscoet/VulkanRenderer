@@ -12,10 +12,11 @@ WHAT WORKS
 - Basic Vulkan setup
 - Multiple render pass creation
 - Compute should be working
-- Both GLSL and HLSL compatiblity
+- SPIR-V shader loading, allowing GLSL, HLSL or Slang
 - Add mesh from OBJ and basic GTLF (not full compatibility yet)
 - Basic lights (Directional/Point/Spotlight)
 - Basic Phong lighting
+- Basic PBR lighting
 - Normal maps
 
 
@@ -24,8 +25,9 @@ TODO :
 
 - Better lighting (more advanced models, PBR...)
 - Improve GLTF compatibility
+- Refactor Pipeline management to be less tied to the Device and vulkan specific code to allow future multiple backend support
+- Make a proper asset manager and material system.
 - Anything than come to my mind while doing the above
-
 
 External librairies used:
 ---------------------
@@ -36,9 +38,4 @@ External librairies used:
 - stb_image : https://github.com/nothings/stb
 - tinyobjloader : https://github.com/tinyobjloader/tinyobjloader
 - Dear imgui : https://github.com/ocornut/imgui
-
-
-Here is a very short video showing the state of the project.
-
-https://github.com/user-attachments/assets/ac780368-67de-431b-92db-b31efdcc3b03
 

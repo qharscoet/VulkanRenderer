@@ -89,16 +89,16 @@ struct MeshPacket {
 	};
 
 	struct MaterialData {
-		int baseColor;
-		int mettalicRoughness;
-		int normal;
-		int emissive;
-		int occlusion;
+		int baseColor = -1;
+		int mettalicRoughness = -1;
+		int normal = -1;
+		int emissive = -1;
+		int occlusion = -1;
 
 		struct PBRFactors {
-			float baseColorFactor[4];
-			float metallicFactor;
-			float roughnessFactor;
+			float baseColorFactor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+			float metallicFactor = 1.0f;
+			float roughnessFactor = 1.0f;
 		} pbrFactors;
 	} materialData;
 
@@ -230,6 +230,51 @@ struct Vertex {
 		};
 	}
 
+	static std::vector<Vertex> generateSphereVertices() {
+		const unsigned int X_SEGMENTS = 64;
+		const unsigned int Y_SEGMENTS = 64;
+		const float PI = 3.14159265359f;
+		std::vector<Vertex> vertices;
+		for (unsigned int x = 0; x <= X_SEGMENTS; ++x) {
+			for (unsigned int y = 0; y <= Y_SEGMENTS; ++y) {
+				float xSegment = (float)x / (float)X_SEGMENTS;
+				float ySegment = (float)y / (float)Y_SEGMENTS;
+				float xPos = std::cos(xSegment * 2.0f * PI) * std::sin(ySegment * PI);
+				float yPos = std::cos(ySegment * PI);
+				float zPos = std::sin(xSegment * 2.0f * PI) * std::sin(ySegment * PI);
+
+				Vertex vertex;
+				vertex.pos = glm::vec3(xPos, yPos, zPos);
+				vertex.normal = glm::vec3(xPos, yPos, zPos);
+				vertex.texCoord = glm::vec2(xSegment, ySegment);
+				vertex.color = glm::vec3(1.0f, 1.0f, 1.0f);
+				vertex.tangent = glm::vec4(0.0f); // Will be computed later
+				vertices.push_back(vertex);
+			}
+		}
+		return vertices;
+	}
+
+
+	static std::vector<uint32_t> generateSphereIndices() {
+		const unsigned int X_SEGMENTS = 64;
+		const unsigned int Y_SEGMENTS = 64;
+		std::vector<uint32_t> indices;
+		for (unsigned int y = 0; y < Y_SEGMENTS; ++y) {
+			for (unsigned int x = 0; x < X_SEGMENTS; ++x) {
+
+				indices.push_back(y * (X_SEGMENTS + 1) + x);
+				indices.push_back((y + 1) * (X_SEGMENTS + 1) + x);
+
+				indices.push_back((y + 1) * (X_SEGMENTS + 1) + x + 1);
+				indices.push_back(y * (X_SEGMENTS + 1) + x);
+				indices.push_back((y + 1) * (X_SEGMENTS + 1) + x + 1);
+				indices.push_back(y * (X_SEGMENTS + 1) + x + 1);
+			}
+		}
+
+		return indices;
+	}
 
 	static void ComputeTangents(std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices) {
 		// Temporary containers to store tangents
@@ -602,6 +647,7 @@ public:
 	MeshPacket createPacket(const Mesh& mesh, Texture* tex);
 	MeshPacket createCubePacket(const float pos[3], float scale);
 	MeshPacket createConePacket(const float pos[3], float scale);
+	MeshPacket createSpherePacket(const float pos[3], float scale);
 	void drawPacket(const MeshPacket& packet);
 	void destroyPipeline(Pipeline pipeline);
 	void destroyRenderPass(RenderPass renderPass);

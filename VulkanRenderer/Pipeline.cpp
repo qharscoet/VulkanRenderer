@@ -717,6 +717,46 @@ MeshPacket Device::createConePacket(const float pos[3], float size)
 	return out_packet;
 }
 
+MeshPacket Device::createSpherePacket(const float pos[3], float size)
+{
+	MeshPacket out_packet;
+
+	static Buffer vertexBuffer;
+	static Buffer indexBuffer;
+
+	if(vertexBuffer.buffer == VK_NULL_HANDLE)
+	{
+		auto vertices = Vertex::generateSphereVertices();
+		auto indices = Vertex::generateSphereIndices();
+		Vertex::ComputeTangents(vertices, indices);
+		vertexBuffer = this->createVertexBuffer(vertices.size() * sizeof(vertices[0]), (void*)vertices.data());
+		indexBuffer = this->createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
+	}
+
+
+	out_packet.vertexBuffer = vertexBuffer;
+	out_packet.indexBuffer = indexBuffer;
+	out_packet.textures.push_back(defaultTexture);
+	out_packet.sampler = defaultSampler;
+	out_packet.name = "Sphere";
+
+
+	out_packet.transform = glm::translate(glm::mat4(1.0f), glm::vec3(pos[0], pos[1], pos[2]));
+	out_packet.transform = glm::scale(out_packet.transform, glm::vec3(size, size, size));
+
+	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
+	out_packet.materialData.baseColor = 0;
+	out_packet.materialData.pbrFactors.baseColorFactor[0] = 1.0f;
+	out_packet.materialData.pbrFactors.baseColorFactor[1] = 1.0f;
+	out_packet.materialData.pbrFactors.baseColorFactor[2] = 1.0f;
+	out_packet.materialData.pbrFactors.baseColorFactor[3] = 1.0f;
+	out_packet.materialData.pbrFactors.metallicFactor = 1.0f;
+	out_packet.materialData.pbrFactors.roughnessFactor = 1.0f;
+	
+
+	return out_packet;
+}
+
 void Device::bindVertexBuffer(Buffer& buffer)
 {
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];

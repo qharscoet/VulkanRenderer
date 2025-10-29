@@ -139,6 +139,7 @@ public:
 	void destroyPacket(MeshPacket packet);
 	void destroyAllPackets();
 
+	MeshPacket& addSphere(const float pos[3], float scale);
 
 	void addLight(const float pos[3]);
 	void addDirectionalLight(const float direction[3]);
