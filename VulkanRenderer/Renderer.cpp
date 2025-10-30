@@ -12,6 +12,8 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 
+#include "ResourceManager.h"
+
 /* TODOs:
 	- Separate UBO from other descriptor sets, or include it in the hashing ?
 	- Barriers using subpasses
@@ -111,6 +113,7 @@ void Renderer::init(GLFWwindow* window, DeviceOptions options)
 	initDrawLightsRenderPass();
 
 
+
 	//initComputePipeline();
 	//initTestPipeline();
 	//initTestPipeline2();
@@ -124,10 +127,7 @@ void Renderer::init(GLFWwindow* window, DeviceOptions options)
 void Renderer::cleanup()
 {
 
-	for (auto& packet : packets)
-	{
-		destroyPacket(packet);
-	}
+	destroyAllPackets();
 
 	for (auto& pass : renderPasses)
 	{
@@ -553,7 +553,7 @@ void Renderer::drawLightsRenderPass()
 	for (const auto& l : lights)
 	{
 		const MeshPacket& packet = l.cube;
-		if (l.cube.vertexBuffer.buffer != VK_NULL_HANDLE)
+		if (l.cube.vertexBuffer != nullptr)
 		{
 			const GpuImage& baseColor = packet.textures[packet.materialData.baseColor];
 			const GpuImage& normal = packet.materialData.normal >= 0 ? packet.textures[packet.materialData.normal] : m_device.getDefaultNormalMap();
@@ -993,15 +993,15 @@ MeshPacket Renderer::createPacket(std::filesystem::path path, std::string textur
 		//	tex = out_mesh.textures[0];
 	}
 
-	out_packet = m_device.createPacket(out_mesh, tex.pixels.empty() ? nullptr:&tex);
+	out_packet = createPacket(out_mesh, tex.pixels.empty() ? nullptr:&tex);
 
 	out_packet.transform = glm::mat4(1.0f);
 
 	out_packet.name = path.filename().replace_extension("").string();
 
 	//m_device.SetImageName(out_packet.texture.image, (out_packet.name + "/BaseColor").c_str());
-	m_device.SetBufferName(out_packet.vertexBuffer.buffer, (out_packet.name + "/VertexBuffer").c_str());
-	m_device.SetBufferName(out_packet.indexBuffer.buffer, (out_packet.name + "/IndexBuffer").c_str());
+	m_device.SetBufferName(out_packet.vertexBuffer->buffer, (out_packet.name + "/VertexBuffer").c_str());
+	m_device.SetBufferName(out_packet.indexBuffer->buffer, (out_packet.name + "/IndexBuffer").c_str());
 
 	for (int i = 0; i < out_packet.textures.size();  i++)
 	{
@@ -1032,14 +1032,14 @@ void Renderer::loadScene(std::filesystem::path path)
 		{
 			for (const Mesh& mesh : *primitives)
 			{
-				MeshPacket packet = m_device.createPacket(mesh, nullptr);
+				MeshPacket packet = createPacket(mesh, nullptr);
 
 				packet.transform = glm::transpose(node.matrix); // node matrix from gltf is row major
 
 				packet.name = node.name;
 
-				m_device.SetBufferName(packet.vertexBuffer.buffer, (packet.name + "/VertexBuffer").c_str());
-				m_device.SetBufferName(packet.indexBuffer.buffer, (packet.name + "/IndexBuffer").c_str());
+				m_device.SetBufferName(packet.vertexBuffer->buffer, (packet.name + "/VertexBuffer").c_str());
+				m_device.SetBufferName(packet.indexBuffer->buffer, (packet.name + "/IndexBuffer").c_str());
 
 				for (int i = 0; i < packet.textures.size(); i++)
 				{
@@ -1060,8 +1060,8 @@ void Renderer::loadScene(std::filesystem::path path)
 
 void Renderer::destroyPacket(MeshPacket packet)
 {
-	m_device.destroyBuffer(packet.vertexBuffer);
-	m_device.destroyBuffer(packet.indexBuffer);
+	//m_device.destroyBuffer(packet.vertexBuffer);
+	//m_device.destroyBuffer(packet.indexBuffer);
 
 	//m_device.destroyImage(packet.texture);
 	m_device.destroySampler(packet.sampler);
@@ -1214,9 +1214,10 @@ void Renderer::updateCamera(const CameraInfo& cameraInfo)
 	this->cameraInfo = cameraInfo;
 }
 
+
 MeshPacket& Renderer::addSphere(const float pos[3], float size)
 {
-	addPacket(m_device.createSpherePacket(pos, size));
+	addPacket(createSpherePacket(pos, size));
 	return packets.back();
 }
 
@@ -1230,7 +1231,7 @@ void Renderer::addLight(const float pos[3])
 	light.params.pointLight.linear = 0.14f;
 	light.params.pointLight.quadratic = 0.07f;
 
-	light.cube = m_device.createCubePacket(pos, 0.2f);
+	light.cube = createCubePacket(pos, 0.2f);
 
 	lights.push_back(light);
 }
@@ -1259,6 +1260,125 @@ void Renderer::addSpotlight(const float pos[3])
 
 	light.params.spotLight.cutOff = glm::cos(glm::radians(12.5f));
 
-	light.cube = m_device.createConePacket(pos, 0.5f);
+	light.cube = createConePacket(pos, 0.5f);
 	lights.push_back(light);
+}
+
+
+MeshPacket Renderer::createPacket(const Mesh& mesh, Texture* tex)
+{
+	MeshPacket out_packet;
+	out_packet.vertexBuffer = m_resourceManager.createVertexBuffer(mesh.vertices.size() * sizeof(mesh.vertices[0]), (void*)mesh.vertices.data());
+	out_packet.indexBuffer = m_resourceManager.createIndexBuffer(mesh.indices.size() * sizeof(mesh.indices[0]), (void*)mesh.indices.data());
+
+
+	memcpy(&out_packet.materialData, &mesh.material, sizeof(mesh.material));
+
+	if (tex != nullptr)
+	{
+		out_packet.textures.push_back(m_device.createTexture(*tex));
+		out_packet.materialData.baseColor = 0;
+	}
+
+	for (const auto& texture : mesh.textures)
+	{
+		out_packet.textures.push_back(m_device.createTexture(texture));
+	}
+
+	if (out_packet.materialData.baseColor < 0)
+	{
+		out_packet.textures.push_back(m_device.getDefaultTexture());
+		out_packet.materialData.baseColor = out_packet.textures.size() - 1;
+	}
+
+
+	out_packet.sampler = m_device.createTextureSampler(out_packet.textures[0].mipLevels);
+	return out_packet;
+}
+
+MeshPacket Renderer::createCubePacket(const float pos[3], float size)
+{
+	MeshPacket out_packet;
+
+	auto vertices = Vertex::getCubeVertices();
+	auto indices = Vertex::getCubeIndices();
+	out_packet.vertexBuffer = m_resourceManager.createVertexBuffer(vertices.size() * sizeof(vertices[0]), (void*)vertices.data());
+	out_packet.indexBuffer = m_resourceManager.createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
+
+
+	out_packet.textures.push_back(m_device.getDefaultTexture());
+	out_packet.sampler = defaultSampler;
+	out_packet.name = "Cube";
+
+
+	out_packet.transform = glm::translate(glm::mat4(1.0f), glm::vec3(pos[0], pos[1], pos[2]));
+	out_packet.transform = glm::scale(out_packet.transform, glm::vec3(size, size, size));
+
+	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
+	out_packet.materialData.baseColor = 0;
+
+	return out_packet;
+}
+
+MeshPacket Renderer::createConePacket(const float pos[3], float size)
+{
+	MeshPacket out_packet;
+
+	auto vertices = Vertex::getConeVertices();
+	auto indices = Vertex::getConeIndices();
+	out_packet.vertexBuffer = m_resourceManager.createVertexBuffer(vertices.size() * sizeof(vertices[0]), (void*)vertices.data());
+	out_packet.indexBuffer = m_resourceManager.createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
+
+
+	out_packet.textures.push_back(m_device.getDefaultTexture());
+	out_packet.sampler = defaultSampler;
+	out_packet.name = "Cube";
+
+	out_packet.transform = glm::translate(glm::mat4(1.0f), glm::vec3(pos[0], pos[1], pos[2]));
+	out_packet.transform = glm::scale(out_packet.transform, glm::vec3(size, size, size));
+
+	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
+	out_packet.materialData.baseColor = 0;
+
+	return out_packet;
+}
+
+MeshPacket Renderer::createSpherePacket(const float pos[3], float size)
+{
+	MeshPacket out_packet;
+
+	static BufferHandle vertexBuffer;
+	static BufferHandle indexBuffer;
+
+	if (vertexBuffer == nullptr)
+	{
+		auto vertices = Vertex::generateSphereVertices();
+		auto indices = Vertex::generateSphereIndices();
+		Vertex::ComputeTangents(vertices, indices);
+		vertexBuffer = m_resourceManager.createVertexBuffer(vertices.size() * sizeof(vertices[0]), (void*)vertices.data());
+		indexBuffer = m_resourceManager.createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
+	}
+
+
+	out_packet.vertexBuffer = vertexBuffer;
+	out_packet.indexBuffer = indexBuffer;
+	out_packet.textures.push_back(m_device.getDefaultTexture());
+	out_packet.sampler = defaultSampler;
+	out_packet.name = "Sphere";
+
+
+	out_packet.transform = glm::translate(glm::mat4(1.0f), glm::vec3(pos[0], pos[1], pos[2]));
+	out_packet.transform = glm::scale(out_packet.transform, glm::vec3(size, size, size));
+
+	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
+	out_packet.materialData.baseColor = 0;
+	out_packet.materialData.pbrFactors.baseColorFactor[0] = 1.0f;
+	out_packet.materialData.pbrFactors.baseColorFactor[1] = 1.0f;
+	out_packet.materialData.pbrFactors.baseColorFactor[2] = 1.0f;
+	out_packet.materialData.pbrFactors.baseColorFactor[3] = 1.0f;
+	out_packet.materialData.pbrFactors.metallicFactor = 1.0f;
+	out_packet.materialData.pbrFactors.roughnessFactor = 1.0f;
+
+
+	return out_packet;
 }

@@ -637,126 +637,6 @@ void Device::setRenderPass(RenderPass& renderPass)
 }
 
 
-MeshPacket Device::createPacket(const Mesh& mesh, Texture* tex)
-{
-	MeshPacket out_packet;
-	out_packet.vertexBuffer = this->createVertexBuffer(mesh.vertices.size() * sizeof(mesh.vertices[0]), (void*)mesh.vertices.data());
-	out_packet.indexBuffer = this->createIndexBuffer(mesh.indices.size() * sizeof(mesh.indices[0]), (void*)mesh.indices.data());
-
-
-	//out_packet.texture = tex != nullptr ? this->createTexture(*tex) : defaultTexture;
-
-	memcpy(&out_packet.materialData, &mesh.material, sizeof(mesh.material));
-
-	if (tex != nullptr)
-	{
-		out_packet.textures.push_back(createTexture(*tex));
-		out_packet.materialData.baseColor = 0;
-	}
-
-	for (const auto& texture : mesh.textures)
-	{
-		out_packet.textures.push_back(createTexture(texture));
-	}
-
-	if (out_packet.materialData.baseColor < 0)
-	{
-		out_packet.textures.push_back(defaultTexture);
-		out_packet.materialData.baseColor = out_packet.textures.size() -1;
-	}
-
-
-	out_packet.sampler = this->createTextureSampler(out_packet.textures[0].mipLevels);
-	return out_packet;
-}
-
-MeshPacket Device::createCubePacket(const float pos[3], float size)
-{
-	MeshPacket out_packet;
-
-	auto vertices = Vertex::getCubeVertices();
-	auto indices = Vertex::getCubeIndices();
-	out_packet.vertexBuffer = this->createVertexBuffer(vertices.size() * sizeof(vertices[0]), (void*)vertices.data());
-	out_packet.indexBuffer = this->createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
-
-
-	out_packet.textures.push_back(defaultTexture);
-	out_packet.sampler = defaultSampler;
-	out_packet.name = "Cube";
-
-
-	out_packet.transform = glm::translate(glm::mat4(1.0f), glm::vec3(pos[0], pos[1], pos[2]));
-	out_packet.transform = glm::scale(out_packet.transform, glm::vec3(size, size, size));
-
-	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
-	out_packet.materialData.baseColor = 0;
-
-	return out_packet;
-}
-
-MeshPacket Device::createConePacket(const float pos[3], float size)
-{
-	MeshPacket out_packet;
-
-	auto vertices = Vertex::getConeVertices();
-	auto indices = Vertex::getConeIndices();
-	out_packet.vertexBuffer = this->createVertexBuffer(vertices.size() * sizeof(vertices[0]), (void*)vertices.data());
-	out_packet.indexBuffer = this->createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
-
-
-	out_packet.textures.push_back(defaultTexture);
-	out_packet.sampler = defaultSampler;
-	out_packet.name = "Cube";
-
-	out_packet.transform = glm::translate(glm::mat4(1.0f), glm::vec3(pos[0], pos[1], pos[2]));
-	out_packet.transform = glm::scale(out_packet.transform, glm::vec3(size, size, size));
-
-	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
-	out_packet.materialData.baseColor = 0;
-
-	return out_packet;
-}
-
-MeshPacket Device::createSpherePacket(const float pos[3], float size)
-{
-	MeshPacket out_packet;
-
-	static Buffer vertexBuffer;
-	static Buffer indexBuffer;
-
-	if(vertexBuffer.buffer == VK_NULL_HANDLE)
-	{
-		auto vertices = Vertex::generateSphereVertices();
-		auto indices = Vertex::generateSphereIndices();
-		Vertex::ComputeTangents(vertices, indices);
-		vertexBuffer = this->createVertexBuffer(vertices.size() * sizeof(vertices[0]), (void*)vertices.data());
-		indexBuffer = this->createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
-	}
-
-
-	out_packet.vertexBuffer = vertexBuffer;
-	out_packet.indexBuffer = indexBuffer;
-	out_packet.textures.push_back(defaultTexture);
-	out_packet.sampler = defaultSampler;
-	out_packet.name = "Sphere";
-
-
-	out_packet.transform = glm::translate(glm::mat4(1.0f), glm::vec3(pos[0], pos[1], pos[2]));
-	out_packet.transform = glm::scale(out_packet.transform, glm::vec3(size, size, size));
-
-	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
-	out_packet.materialData.baseColor = 0;
-	out_packet.materialData.pbrFactors.baseColorFactor[0] = 1.0f;
-	out_packet.materialData.pbrFactors.baseColorFactor[1] = 1.0f;
-	out_packet.materialData.pbrFactors.baseColorFactor[2] = 1.0f;
-	out_packet.materialData.pbrFactors.baseColorFactor[3] = 1.0f;
-	out_packet.materialData.pbrFactors.metallicFactor = 1.0f;
-	out_packet.materialData.pbrFactors.roughnessFactor = 1.0f;
-	
-
-	return out_packet;
-}
-
 void Device::bindVertexBuffer(Buffer& buffer)
 {
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
@@ -963,20 +843,20 @@ void Device::drawPacket(const MeshPacket& packet)
 	}
 
 	{
-		VkBuffer vertexBuffers[] = { packet.vertexBuffer.buffer };
+		VkBuffer vertexBuffers[] = { packet.vertexBuffer->buffer };
 		VkDeviceSize offsets[] = { 0 };
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-		if (packet.indexBuffer.buffer != 0)
-			vkCmdBindIndexBuffer(commandBuffer, packet.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+		if (packet.indexBuffer->buffer != 0)
+			vkCmdBindIndexBuffer(commandBuffer, packet.indexBuffer->buffer, 0, VK_INDEX_TYPE_UINT32);
 
 	}
 
 	//Actual draw !
-	if (packet.indexBuffer.buffer != 0)
-		vkCmdDrawIndexed(commandBuffer, packet.indexBuffer.count, 1, 0, 0, 0);
+	if (packet.indexBuffer->buffer != 0)
+		vkCmdDrawIndexed(commandBuffer, packet.indexBuffer->count, 1, 0, 0, 0);
 	else
-		vkCmdDraw(commandBuffer, packet.vertexBuffer.count, 1, 0, 0);
+		vkCmdDraw(commandBuffer, packet.vertexBuffer->count, 1, 0, 0);
 }
 
 

@@ -14,9 +14,11 @@
 #include <vector>
 #include <array>
 #include <variant>
+#include <memory>
 
 #include "Pipeline.h"
 #include "FileUtils.h"
+
 
 typedef VkExtent2D Dimensions;
 
@@ -65,10 +67,11 @@ struct GpuImage {
 };
 
 
+using BufferHandle = std::shared_ptr<Buffer>;
 
 struct MeshPacket {
-	Buffer vertexBuffer;
-	Buffer indexBuffer;
+	BufferHandle vertexBuffer;
+	BufferHandle indexBuffer;
 
 	//GpuImage texture;
 	VkSampler sampler;
@@ -601,7 +604,7 @@ public:
 	Buffer createVertexBuffer(size_t size, void* src_data = nullptr);
 	Buffer createIndexBuffer(size_t size, void* src_data = nullptr);
 	Buffer createUniformBuffer(size_t size, void* src_data = nullptr);
-	void destroyBuffer(Buffer buffer);
+	void destroyBuffer(Buffer& buffer);
 
 	GpuImage createTexture(Texture tex);
 	void  createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa, bool sampled = false);
@@ -644,10 +647,6 @@ public:
 	Pipeline createComputePipeline(PipelineDesc desc);
 	RenderPass createRenderPassAndPipeline(RenderPassDesc renderPassDesc, PipelineDesc pipelineDesc);
 	void setRenderPass(RenderPass& renderPass);
-	MeshPacket createPacket(const Mesh& mesh, Texture* tex);
-	MeshPacket createCubePacket(const float pos[3], float scale);
-	MeshPacket createConePacket(const float pos[3], float scale);
-	MeshPacket createSpherePacket(const float pos[3], float scale);
 	void drawPacket(const MeshPacket& packet);
 	void destroyPipeline(Pipeline pipeline);
 	void destroyRenderPass(RenderPass renderPass);

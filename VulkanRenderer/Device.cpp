@@ -1456,9 +1456,13 @@ Buffer Device::createUniformBuffer(size_t size, void* src_data) {
 	return ret_buffer;
 }
 
-void Device::destroyBuffer(Buffer buffer) {
+void Device::destroyBuffer(Buffer& buffer) {
 	vkDestroyBuffer(device, buffer.buffer, nullptr);
 	vkFreeMemory(device, buffer.memory, nullptr);
+
+	buffer.buffer = VK_NULL_HANDLE;
+	buffer.memory = VK_NULL_HANDLE;
+	buffer.mapped_memory = nullptr;
 }
 
 void Device::destroyImage(GpuImage image) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Device.h"
+#include "ResourceManager.h"
 
 #include <filesystem>
 
@@ -8,6 +9,7 @@ class Renderer {
 
 private:
 	Device m_device;
+	ResourceManager m_resourceManager{ &m_device };
 
 public:
 	void init(GLFWwindow* window, DeviceOptions options);
@@ -133,6 +135,10 @@ public:
 
 
 	MeshPacket createPacket(std::filesystem::path path, std::string texture_path = "");
+	MeshPacket createPacket(const Mesh& mesh, Texture* tex);
+	MeshPacket createCubePacket(const float pos[3], float scale);
+	MeshPacket createConePacket(const float pos[3], float scale);
+	MeshPacket createSpherePacket(const float pos[3], float scale);
 	void loadScene(std::filesystem::path path);
 	void addPacket(const MeshPacket& packet);
 	void drawPacket(const MeshPacket& packet);
@@ -144,6 +150,7 @@ public:
 	void addLight(const float pos[3]);
 	void addDirectionalLight(const float direction[3]);
 	void addSpotlight(const float position[3]);
+
 
 
 };
