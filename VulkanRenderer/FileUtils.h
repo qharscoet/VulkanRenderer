@@ -47,6 +47,7 @@ struct Mesh {
 			float baseColorFactor[4];
 			float metallicFactor;
 			float roughnessFactor;
+			float occlusionStrength;
 		} pbrFactors;
 	} material;
 };
@@ -69,6 +70,7 @@ struct Node {
 
 struct Scene {
 	std::vector<Node> nodes;
+	std::vector<Texture> textures;
 };
 
 std::vector<char> readFile(const std::string& filename);

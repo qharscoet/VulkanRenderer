@@ -343,37 +343,22 @@ void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, size_t primitiv
 		ComputeTangents(out_mesh->vertices, out_mesh->indices);
 	}
 
-	auto load_texture = [&model](Mesh* out_mesh, int tex_idx, int& save_index, bool is_srgb = true) {
-		if (tex_idx < 0)
-		{
-			save_index = -1;
-			return;
-		}
 
-		const tinygltf::Texture& tex = model.textures[tex_idx];
-		const tinygltf::Image& img = model.images[tex.source];
-
-		Texture t;
-		t.height = img.height;
-		t.width = img.width;
-		t.channels = img.component;
-		t.size = img.width * img.height * img.component;
-		t.pixels = img.image;
-		t.name = img.name;
-		t.is_srgb = is_srgb;
-
-		out_mesh->textures.push_back(t);
-		save_index = out_mesh->textures.size() - 1;
-	};
 
 	const tinygltf::Material& material = model.materials[m.primitives[primitive_idx].material];
 
 
-	load_texture(out_mesh, material.pbrMetallicRoughness.baseColorTexture.index, out_mesh->material.baseColor);
-	load_texture(out_mesh, material.pbrMetallicRoughness.metallicRoughnessTexture.index, out_mesh->material.mettalicRoughness, false);
-	load_texture(out_mesh, material.normalTexture.index, out_mesh->material.normal, false);
-	load_texture(out_mesh, material.occlusionTexture.index, out_mesh->material.occlusion, false);
-	load_texture(out_mesh, material.emissiveTexture.index, out_mesh->material.emissive, false);
+	const auto getImageIndex = [&] (int tex_idx) -> int {
+		if (tex_idx < 0)
+			return -1 ;
+		return model.textures[tex_idx].source;
+	};
+
+	out_mesh->material.baseColor = getImageIndex(material.pbrMetallicRoughness.baseColorTexture.index);
+	out_mesh->material.mettalicRoughness = getImageIndex(material.pbrMetallicRoughness.metallicRoughnessTexture.index);
+	out_mesh->material.normal = getImageIndex(material.normalTexture.index);
+	out_mesh->material.occlusion = getImageIndex(material.occlusionTexture.index);
+	out_mesh->material.emissive = getImageIndex(material.emissiveTexture.index);
 
 	for (int i = 0; i < 4; i++)
 	{
@@ -381,6 +366,7 @@ void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, size_t primitiv
 	}
 	out_mesh->material.pbrFactors.metallicFactor = material.pbrMetallicRoughness.metallicFactor;
 	out_mesh->material.pbrFactors.roughnessFactor = material.pbrMetallicRoughness.roughnessFactor;
+	out_mesh->material.pbrFactors.occlusionStrength = material.occlusionTexture.strength;
 
 	/*out_mesh->material = {
 		.baseColor = material.pbrMetallicRoughness.baseColorTexture.index,
@@ -445,6 +431,19 @@ int loadGltf(const char* path, Scene* out_scene)
 	if (model.scenes.size() == 0) {
 		printf("This glTF file has no scenes\n");
 		return -1;
+	}
+
+
+	for(auto img : model.images)
+	{
+		Texture t;
+		t.height = img.height;
+		t.width = img.width;
+		t.channels = img.component;
+		t.size = img.width * img.height * img.component;
+		t.pixels = img.image;
+		t.name = img.name;
+		out_scene->textures.push_back(t);
 	}
 
 	// Helper function to process nodes recursively
@@ -542,6 +541,15 @@ int loadGltf(const char* path, Scene* out_scene)
 			{
 				Mesh mesh;
 				loadGltfMesh(model, gltf_node.mesh, primitive_idx, &mesh);
+
+				if(mesh.material.normal >= 0)
+					out_scene->textures[mesh.material.normal].is_srgb = false;
+				if(mesh.material.mettalicRoughness >= 0)
+					out_scene->textures[mesh.material.mettalicRoughness].is_srgb = false;
+				if(mesh.material.emissive >= 0)
+					out_scene->textures[mesh.material.emissive].is_srgb = false;
+				if(mesh.material.occlusion >= 0)
+					out_scene->textures[mesh.material.occlusion].is_srgb = false;
 
 				primitives.push_back(std::move(mesh));
 			}

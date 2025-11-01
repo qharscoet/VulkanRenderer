@@ -135,7 +135,7 @@ public:
 
 
 	MeshPacket createPacket(std::filesystem::path path, std::string texture_path = "");
-	MeshPacket createPacket(const Mesh& mesh, Texture* tex);
+	MeshPacket createPacket(const Mesh& mesh, const std::vector<GpuImage>& textures);
 	MeshPacket createCubePacket(const float pos[3], float scale);
 	MeshPacket createConePacket(const float pos[3], float scale);
 	MeshPacket createSpherePacket(const float pos[3], float scale);

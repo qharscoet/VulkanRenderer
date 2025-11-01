@@ -993,7 +993,14 @@ MeshPacket Renderer::createPacket(std::filesystem::path path, std::string textur
 		//	tex = out_mesh.textures[0];
 	}
 
-	out_packet = createPacket(out_mesh, tex.pixels.empty() ? nullptr:&tex);
+
+	std::vector<GpuImage> loaded_textures;
+	if (!tex.pixels.empty())
+	{
+		loaded_textures.push_back(m_device.createTexture(tex));
+		out_mesh.material.baseColor = 0;
+	}
+	out_packet = createPacket(out_mesh, loaded_textures);
 
 	out_packet.transform = glm::mat4(1.0f);
 
@@ -1026,13 +1033,24 @@ void Renderer::loadScene(std::filesystem::path path)
 
 	loadGltf(path.string().c_str(), &out_scene);
 
-	for (const Node& node : out_scene.nodes)
+	std::vector<GpuImage> loaded_textures;
+	for(const Texture& t : out_scene.textures)
+	{
+		GpuImage image = m_device.createTexture(t);
+		loaded_textures.push_back(image);
+		m_device.SetImageName(image.image, (path.filename().string() + "/" + t.name).c_str());
+	}
+
+
+	std::function<void(const Node&)>  loadNode = [&](const Node& node) -> void
 	{
 		if (const std::vector<Mesh>* primitives = std::get_if<std::vector<Mesh>>(&node.data))
 		{
 			for (const Mesh& mesh : *primitives)
 			{
-				MeshPacket packet = createPacket(mesh, nullptr);
+
+				MeshPacket packet = createPacket(mesh, loaded_textures);
+
 
 				packet.transform = glm::transpose(node.matrix); // node matrix from gltf is row major
 
@@ -1041,18 +1059,19 @@ void Renderer::loadScene(std::filesystem::path path)
 				m_device.SetBufferName(packet.vertexBuffer->buffer, (packet.name + "/VertexBuffer").c_str());
 				m_device.SetBufferName(packet.indexBuffer->buffer, (packet.name + "/IndexBuffer").c_str());
 
-				for (int i = 0; i < packet.textures.size(); i++)
-				{
-					if (mesh.textures.size() > i)
-					{
-						const GpuImage& image = packet.textures[i];
-						const Texture& t = mesh.textures[i];
-						m_device.SetImageName(image.image, (packet.name + "/" + t.name).c_str());
+				addPacket(packet);
 					}
 				}
 
-				addPacket(packet);
+		for(auto child: node.children)
+		{
+			loadNode(*child);
 			}
+	};
+
+	for (const Node& node : out_scene.nodes)
+	{
+		loadNode(node);
 		}
 	}
 
@@ -1242,6 +1261,7 @@ void Renderer::addDirectionalLight(const float pos[3])
 	memcpy(light.position, pos, 3 * sizeof(float));
 
 	light.type = LightType::Directional;
+	light.light_autorotate = false;
 
 	//light.cube = m_device.createCubePacket(pos, 0.5f);
 
@@ -1264,8 +1284,7 @@ void Renderer::addSpotlight(const float pos[3])
 	lights.push_back(light);
 }
 
-
-MeshPacket Renderer::createPacket(const Mesh& mesh, Texture* tex)
+MeshPacket Renderer::createPacket(const Mesh& mesh, const std::vector<GpuImage>& textures)
 {
 	MeshPacket out_packet;
 	out_packet.vertexBuffer = m_resourceManager.createVertexBuffer(mesh.vertices.size() * sizeof(mesh.vertices[0]), (void*)mesh.vertices.data());
@@ -1274,21 +1293,35 @@ MeshPacket Renderer::createPacket(const Mesh& mesh, Texture* tex)
 
 	memcpy(&out_packet.materialData, &mesh.material, sizeof(mesh.material));
 
-	if (tex != nullptr)
-	{
-		out_packet.textures.push_back(m_device.createTexture(*tex));
-		out_packet.materialData.baseColor = 0;
-	}
 
-	for (const auto& texture : mesh.textures)
-	{
-		out_packet.textures.push_back(m_device.createTexture(texture));
-	}
 
-	if (out_packet.materialData.baseColor < 0)
+	if (mesh.material.baseColor >= 0)
+	{
+		out_packet.textures.push_back(textures[mesh.material.baseColor]);
+		out_packet.materialData.baseColor = out_packet.textures.size() - 1;
+	}
+	else
 	{
 		out_packet.textures.push_back(m_device.getDefaultTexture());
 		out_packet.materialData.baseColor = out_packet.textures.size() - 1;
+	}
+
+
+	if (mesh.material.normal >= 0) {
+		out_packet.textures.push_back(textures[mesh.material.normal]);
+		out_packet.materialData.normal = out_packet.textures.size() - 1;
+	}
+	if (mesh.material.mettalicRoughness >= 0) {
+		out_packet.textures.push_back(textures[mesh.material.mettalicRoughness]);
+		out_packet.materialData.mettalicRoughness = out_packet.textures.size() - 1;
+	}
+	if (mesh.material.occlusion >= 0) {
+		out_packet.textures.push_back(textures[mesh.material.occlusion]);
+		out_packet.materialData.occlusion = out_packet.textures.size() - 1;
+	}
+	if (mesh.material.emissive >= 0) {
+		out_packet.textures.push_back(textures[mesh.material.emissive]);
+		out_packet.materialData.emissive = out_packet.textures.size() - 1;
 	}
 
 
@@ -1378,6 +1411,7 @@ MeshPacket Renderer::createSpherePacket(const float pos[3], float size)
 	out_packet.materialData.pbrFactors.baseColorFactor[3] = 1.0f;
 	out_packet.materialData.pbrFactors.metallicFactor = 1.0f;
 	out_packet.materialData.pbrFactors.roughnessFactor = 1.0f;
+	out_packet.materialData.pbrFactors.occlusionStrength = 1.0f;
 
 
 	return out_packet;
