@@ -13,7 +13,7 @@ private:
 	Device* m_device;
 
 
-	std::array<Buffer, 256> m_buffers;
+	std::array<Buffer, 512> m_buffers;
 	size_t m_buffer_count = 0;
 
 public:

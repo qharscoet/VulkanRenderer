@@ -1052,7 +1052,7 @@ void Renderer::loadScene(std::filesystem::path path)
 				MeshPacket packet = createPacket(mesh, loaded_textures);
 
 
-				packet.transform = glm::transpose(node.matrix); // node matrix from gltf is row major
+				packet.transform = node.matrix;
 
 				packet.name = node.name;
 

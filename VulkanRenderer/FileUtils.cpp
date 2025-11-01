@@ -203,6 +203,7 @@ size_t get_accessor_elem_size(const tinygltf::Accessor& accessor)
 	case TINYGLTF_COMPONENT_TYPE_FLOAT: elem_size = sizeof(float); break;
 	case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: elem_size = sizeof(uint8_t); break;
 	case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: elem_size = sizeof(uint16_t); break;
+	case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT: elem_size = sizeof(uint32_t); break;
 	default: break;
 	}
 
@@ -442,7 +443,7 @@ int loadGltf(const char* path, Scene* out_scene)
 		t.channels = img.component;
 		t.size = img.width * img.height * img.component;
 		t.pixels = img.image;
-		t.name = img.name;
+		t.name = img.name.empty() ? img.uri : img.name;
 		out_scene->textures.push_back(t);
 	}
 
@@ -459,10 +460,11 @@ int loadGltf(const char* path, Scene* out_scene)
 
 		// Handle matrix if specified directly
 		if (!gltf_node.matrix.empty()) {
-			// glTF matrices are column-major, convert to glm format
+			// glTF matrices are column-major
 			for (int i = 0; i < 4; i++) {
 				for (int j = 0; j < 4; j++) {
-					local_transform[i][j] = static_cast<float>(gltf_node.matrix[i + j * 4]);
+					//local_transform[i][j] = static_cast<float>(gltf_node.matrix[i + j * 4]);
+					local_transform[i][j] = static_cast<float>(gltf_node.matrix[j + i * 4]);
 				}
 			}
 		}
@@ -502,7 +504,6 @@ int loadGltf(const char* path, Scene* out_scene)
 					)
 				);
 			}
-			local_transform = glm::transpose(local_transform);
 		}
 
 
