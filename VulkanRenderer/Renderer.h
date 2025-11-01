@@ -26,6 +26,9 @@ public:
 
 		float forward[3];
 		float up[3];
+
+		bool freecam;
+		float zoom = 1.0f;
 	};
 
 

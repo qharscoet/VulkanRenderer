@@ -1060,19 +1060,18 @@ void Renderer::loadScene(std::filesystem::path path)
 				m_device.SetBufferName(packet.indexBuffer->buffer, (packet.name + "/IndexBuffer").c_str());
 
 				addPacket(packet);
-					}
-				}
+			}
+		}
 
 		for(auto child: node.children)
 		{
 			loadNode(*child);
-			}
+		}
 	};
 
 	for (const Node& node : out_scene.nodes)
 	{
 		loadNode(node);
-		}
 	}
 
 }
@@ -1131,7 +1130,8 @@ void Renderer::updateUniformBuffer() {
 	glm::vec3 up = glm::vec3(cameraInfo.up[0], cameraInfo.up[1], cameraInfo.up[2]);
 	glm::vec3 forward = glm::vec3(cameraInfo.forward[0], cameraInfo.forward[1], cameraInfo.forward[2]);
 
-	ubo.view = glm::lookAt(pos, pos + forward, up);
+	glm::vec3 center = cameraInfo.freecam ? pos + forward : glm::vec3(0, 0, 0);
+	ubo.view = glm::lookAt(pos, center, up);
 	ubo.proj = glm::perspective(glm::radians(45.0f), dim.width / (float)dim.height, 0.1f, 20.0f);
 	ubo.proj[1][1] *= -1;
 

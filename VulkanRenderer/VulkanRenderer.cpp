@@ -74,7 +74,14 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
-	//camera.zoom -= yoffset * 0.1f;
+	camera.zoom -= yoffset * 0.1f;
+
+	if (!camera.freecam)
+	{
+		camera.position[0] = -camera.forward[0] * camera.zoom;
+		camera.position[1] = -camera.forward[1] * camera.zoom;
+		camera.position[2] = -camera.forward[2] * camera.zoom;
+}
 }
 
 
@@ -99,6 +106,13 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
 		camera.forward[1] = sin(RADIANS(camera.pitch));
 		camera.forward[2] = sin(RADIANS(camera.yaw)) * cos(RADIANS(camera.pitch));
 
+
+		if (!camera.freecam)
+		{
+			camera.position[0] = -camera.forward[0] * camera.zoom;
+			camera.position[1] = -camera.forward[1] * camera.zoom;
+			camera.position[2] = -camera.forward[2] * camera.zoom;
+		}
 
 		glfw_state.mousepress_x = xpos;
 		glfw_state.mousepress_y = ypos;
@@ -210,7 +224,8 @@ private:
 
 			ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
 
-			//ImGui::SliderFloat("Zoom", &camera.zoom, 0.0f, 10.0f);            // Edit 1 float using a slider from 0.0f to
+			ImGui::Checkbox("FreeCam", &camera.freecam);
+			ImGui::SliderFloat("Zoom", &camera.zoom, 0.0f, 10.0f);            // Edit 1 float using a slider from 0.0f to
 			//ImGui::SliderFloat3("Rot", rotation, 0.0f, 4.0f);            // Edit 1 float using a slider from 0.0f to
 			//ImGui::SliderFloat3("Translate", translate, 0.0f, 1.0f);          // Edit 1 float using a slider from 0.0f to
 			//ImGui::Checkbox("Auto Rotate", &auto_rot);

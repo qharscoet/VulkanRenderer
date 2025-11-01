@@ -42,6 +42,7 @@ struct Constants
 
     float metallicFactor;
     float roughnessFactor;
+    float occlusionStrength;
 
 };
 
@@ -160,7 +161,7 @@ float3 computeNormal(PSInput input)
     return vNout;
 }
 
-float getRadiance(Light l, PSInput input, float3 V)
+float3 getRadiance(Light l, PSInput input, float3 V)
 {
     float3 L = normalize(l.position - input.worldPos);
     if (l.type == DIRLIGHT)
@@ -184,7 +185,7 @@ float getRadiance(Light l, PSInput input, float3 V)
         attenuation *= intensity;
     }
 
-    return l.diffuse * attenuation;
+    return l.color * attenuation;
 }
 
 float3 fresnelSchlick(float HdotV, float3 F0)
@@ -223,10 +224,11 @@ float4 PSMain(PSInput input, uniform Constants pc) : SV_TARGET
 
     float4 baseColor = g_baseColor.Sample(input.uv) * pc.baseColorFactor;
     float4 metallicRoughness = g_metallicRoughness.Sample(input.uv);
-    float4 occlusion = g_occlusion.Sample(input.uv);
 
     float metallic = metallicRoughness.b * pc.metallicFactor;
     float roughness = metallicRoughness.g * pc.roughnessFactor;
+    float occlusion = 1.0 + pc.occlusionStrength * (g_occlusion.Sample(input.uv).r - 1.0f);
+    float3 emissive = g_emissive.Sample(input.uv).xyz;
 
     float3 Lo = 0.0f;
     float3 N = pc.normal_mode ? computeNormal(input) : normalize(input.normal);
@@ -240,7 +242,7 @@ float4 PSMain(PSInput input, uniform Constants pc) : SV_TARGET
             L = normalize(-l.position); // position is used as direction in dirlight
         float3 H = normalize(V + L);
 
-		float radiance = getRadiance(l, input, V);
+		float3 radiance = getRadiance(l, input, V);
 
 
 		float NdotL = max(dot(N, L), 0.0);
@@ -264,11 +266,12 @@ float4 PSMain(PSInput input, uniform Constants pc) : SV_TARGET
         float3 kD = 1.0 - kS;
         kD *= 1.0 - metallic;
 
-        Lo += (kD * (baseColor.rgb /*/ PI */) + specular ) * radiance * NdotL;
+        Lo += (kD * (baseColor.rgb / PI) + specular ) * radiance * NdotL;
     }
 
     float3 ambient = float3(0.03) * baseColor.rgb * occlusion.r;
-    float3 color = ambient + Lo;
+    float3 color = ambient + Lo + emissive;
+
 
     // HDR Tone mapping ? Reinhard operator nantoka
     //color = color / (color + float3(1.0));
