@@ -1080,8 +1080,6 @@ void Device::initVulkan() {
 	createUniformBuffers();
 	createCommandBuffer();
 	createSyncObjects();
-
-	createDefaultTexture();
 }
 
 static void check_vk_result(VkResult err)
@@ -1353,9 +1351,6 @@ void Device::cleanupSwapChain() {
 
 void Device::cleanupVulkan() {
 
-	destroyImage(defaultTexture);
-	destroyImage(defaultTextureBlack);
-	destroyImage(defaultNormalMap);
 	cleanupSwapChain();
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -1466,15 +1461,6 @@ void Device::destroyBuffer(Buffer& buffer) {
 }
 
 void Device::destroyImage(GpuImage image) {
-	if (image.image == defaultTexture.image)
-		return;
-
-	if(image.image == defaultTextureBlack.image)
-		return;
-
-	if (image.image == defaultNormalMap.image)
-		return;
-
 	vkDestroyImage(device, image.image, nullptr);
 	vkFreeMemory(device, image.memory, nullptr);
 	vkDestroyImageView(device, image.view, nullptr);
@@ -1624,54 +1610,6 @@ GpuImage Device::createTexture(Texture tex)
 	return ret_image;
 }
 
-
-void Device::createDefaultTexture()
-{
-	std::vector<unsigned char> pixels(128 * 128 * 4, 255);
-	Texture tex{
-		.height = 128,
-		.width = 128,
-		.channels = 4,
-		.pixels = pixels,
-		.size = pixels.size() * sizeof(unsigned char)
-	};
-
-	defaultTexture = createTexture(tex);
-	defaultSampler = createTextureSampler(defaultTexture.mipLevels);
-
-	memset(&pixels[0], 0, pixels.size());
-	tex = {
-		.height = 128,
-		.width = 128,
-		.channels = 4,
-		.pixels = pixels,
-		.size = pixels.size() * sizeof(unsigned char),
-		.is_srgb = false
-	};
-
-	defaultTextureBlack = createTexture(tex);
-
-
-	// Fill the pixels array with default normal data, (0.0, 1.0, 0.0, 1);
-	for (int i = 0; i < pixels.size(); i += 4)
-	{
-		pixels[i] = 127;
-		pixels[i + 1] = 127;
-		pixels[i + 2] = 255;
-		pixels[i + 3] = 255;
-	}
-
-	tex = {
-		.height = 128,
-		.width = 128,
-		.channels = 4,
-		.pixels = pixels,
-		.size = pixels.size() * sizeof(unsigned char),
-		.is_srgb = false
-	};
-
-	defaultNormalMap = createTexture(tex);
-}
 
 void Device::createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa, bool sampled)
 {

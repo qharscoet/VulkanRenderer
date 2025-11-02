@@ -757,7 +757,7 @@ void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, st
 
 	auto imageIt = images.begin();
 	auto bufferIt = buffers.begin();
-	VkSampler selectedSampler = sampler != VK_NULL_HANDLE ? sampler : defaultSampler;
+	VkSampler selectedSampler = sampler;
 
 	for (const auto& binding : bindings)
 	{

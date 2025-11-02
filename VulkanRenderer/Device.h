@@ -68,6 +68,7 @@ struct GpuImage {
 
 
 using BufferHandle = std::shared_ptr<Buffer>;
+using GpuImageHandle = std::shared_ptr<GpuImage>;
 
 struct MeshPacket {
 	BufferHandle vertexBuffer;
@@ -76,7 +77,7 @@ struct MeshPacket {
 	//GpuImage texture;
 	VkSampler sampler;
 
-	std::vector<GpuImage> textures;
+	std::vector<GpuImageHandle> textures;
 
 
 	//struct Transform {
@@ -408,11 +409,6 @@ private:
 	bool usesMsaa;
 	std::optional<bool> nextUsesMsaa;
 
-	GpuImage defaultTexture;
-	GpuImage defaultTextureBlack;
-	GpuImage defaultNormalMap;
-	VkSampler defaultSampler;
-
 
 	RenderPass* currentRenderPass;
 
@@ -503,8 +499,6 @@ private:
 	void createCommandPool();
 	void createUniformBuffers();
 	void createSyncObjects();
-
-	void createDefaultTexture();
 
 	VkSampleCountFlagBits getMsaaSamples() { return this->usesMsaa ? msaaSamples : VK_SAMPLE_COUNT_1_BIT; };
 
@@ -611,10 +605,6 @@ public:
 	void  createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa, bool sampled = false);
 	void createDepthTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa);
 	void destroyImage(GpuImage image);
-
-	const GpuImage& getDefaultTexture() { return defaultTexture; };
-	const GpuImage& getDefaultTextureBlack() { return defaultTextureBlack; };
-	const GpuImage& getDefaultNormalMap() { return defaultNormalMap; };
 
 	void destroySampler(VkSampler sampler) {
 		vkDestroySampler(device, sampler, nullptr);

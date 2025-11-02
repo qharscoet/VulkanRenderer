@@ -97,6 +97,10 @@ private:
 
 	std::vector<Buffer> particleStorageBuffers;
 
+	GpuImageHandle defaultTexture;
+	GpuImageHandle defaultTextureBlack;
+	GpuImageHandle defaultNormalMap;
+	VkSampler defaultSampler;
 
 	std::vector<MeshPacket> packets;
 	std::vector<Light> lights;
@@ -138,7 +142,7 @@ public:
 
 
 	MeshPacket createPacket(std::filesystem::path path, std::string texture_path = "");
-	MeshPacket createPacket(const Mesh& mesh, const std::vector<GpuImage>& textures);
+	MeshPacket createPacket(const Mesh& mesh, const std::vector<GpuImageHandle>& textures);
 	MeshPacket createCubePacket(const float pos[3], float scale);
 	MeshPacket createConePacket(const float pos[3], float scale);
 	MeshPacket createSpherePacket(const float pos[3], float scale);
@@ -154,6 +158,10 @@ public:
 	void addDirectionalLight(const float direction[3]);
 	void addSpotlight(const float position[3]);
 
+	const GpuImageHandle& getDefaultTexture() { return defaultTexture; };
+	const GpuImageHandle& getDefaultTextureBlack() { return defaultTextureBlack; };
+	const GpuImageHandle& getDefaultNormalMap() { return defaultNormalMap; };
 
+	void createDefaultTextures();
 
 };

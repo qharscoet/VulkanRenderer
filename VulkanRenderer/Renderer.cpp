@@ -108,6 +108,8 @@ void Renderer::init(GLFWwindow* window, DeviceOptions options)
 
 	light_data_gpu = m_device.createUniformBuffer(10 * sizeof(LightData));
 
+	createDefaultTextures();
+
 	initPipeline();
 	initPipelinePBR();
 	initDrawLightsRenderPass();
@@ -456,8 +458,8 @@ void Renderer::drawRenderPass() {
 	m_device.pushConstants(&use_blinn, sizeof(MeshPacket::PushConstantsData) + 6 * sizeof(float), sizeof(uint32_t), (StageFlags)(e_Pixel | e_Vertex));
 	for (const auto& packet : packets)
 	{
-		const GpuImage& baseColor = packet.textures[packet.materialData.baseColor];
-		const GpuImage& normal = packet.materialData.normal >= 0 ? packet.textures[packet.materialData.normal] : m_device.getDefaultNormalMap();
+		const GpuImage& baseColor = *packet.textures[packet.materialData.baseColor];
+		const GpuImage& normal = packet.materialData.normal >= 0 ? *packet.textures[packet.materialData.normal] : *getDefaultNormalMap();
 		m_device.bindRessources(0, {&m_device.getCurrentUniformBuffer()}, {&baseColor , &normal}, packet.sampler);
 		drawPacket(packet);
 	}
@@ -555,8 +557,8 @@ void Renderer::drawLightsRenderPass()
 		const MeshPacket& packet = l.cube;
 		if (l.cube.vertexBuffer != nullptr)
 		{
-			const GpuImage& baseColor = packet.textures[packet.materialData.baseColor];
-			const GpuImage& normal = packet.materialData.normal >= 0 ? packet.textures[packet.materialData.normal] : m_device.getDefaultNormalMap();
+			const GpuImage& baseColor = *packet.textures[packet.materialData.baseColor];
+			const GpuImage& normal = packet.materialData.normal >= 0 ? *packet.textures[packet.materialData.normal] : *getDefaultNormalMap();
 			m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { &baseColor , &normal }, packet.sampler);
 
 			m_device.pushConstants((void*)&l.color[0], sizeof(MeshPacket::PushConstantsData), 3 * sizeof(float), (StageFlags)(e_Vertex | e_Pixel));
@@ -641,11 +643,11 @@ void Renderer::drawRenderPassPBR() {
 	start_offset += 6 * sizeof(float) + 2*sizeof(float); // 2 is padding
 	for (const auto& packet : packets)
 	{
-		const GpuImage& baseColor = packet.textures[packet.materialData.baseColor];
-		const GpuImage& normal = packet.materialData.normal >= 0 ? packet.textures[packet.materialData.normal] : m_device.getDefaultNormalMap();
-		const GpuImage& mettalicRoughness = packet.materialData.mettalicRoughness >= 0 ? packet.textures[packet.materialData.mettalicRoughness] : m_device.getDefaultTexture();
-		const GpuImage& occlusion = packet.materialData.occlusion >= 0 ? packet.textures[packet.materialData.occlusion] : m_device.getDefaultTextureBlack();
-		const GpuImage& emissive = packet.materialData.emissive >= 0 ? packet.textures[packet.materialData.emissive] : m_device.getDefaultTextureBlack();
+		const GpuImage& baseColor = *packet.textures[packet.materialData.baseColor];
+		const GpuImage& normal = packet.materialData.normal >= 0 ? *packet.textures[packet.materialData.normal] : *getDefaultNormalMap();
+		const GpuImage& mettalicRoughness = packet.materialData.mettalicRoughness >= 0 ? *packet.textures[packet.materialData.mettalicRoughness] : *getDefaultTexture();
+		const GpuImage& occlusion = packet.materialData.occlusion >= 0 ? *packet.textures[packet.materialData.occlusion] : *getDefaultTextureBlack();
+		const GpuImage& emissive = packet.materialData.emissive >= 0 ? *packet.textures[packet.materialData.emissive] : *getDefaultTextureBlack();
 		m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { &baseColor , &normal, &mettalicRoughness, &occlusion, &emissive }, packet.sampler);
 
 		m_device.pushConstants(&packet.materialData.pbrFactors, start_offset, sizeof(Mesh::Material::PBRFactors), (StageFlags)(e_Vertex | e_Pixel));
@@ -994,10 +996,10 @@ MeshPacket Renderer::createPacket(std::filesystem::path path, std::string textur
 	}
 
 
-	std::vector<GpuImage> loaded_textures;
+	std::vector<GpuImageHandle> loaded_textures;
 	if (!tex.pixels.empty())
 	{
-		loaded_textures.push_back(m_device.createTexture(tex));
+		loaded_textures.push_back(m_resourceManager.createTexture(tex));
 		out_mesh.material.baseColor = 0;
 	}
 	out_packet = createPacket(out_mesh, loaded_textures);
@@ -1014,7 +1016,7 @@ MeshPacket Renderer::createPacket(std::filesystem::path path, std::string textur
 	{
 		if (out_mesh.textures.size() > i)
 		{
-			const GpuImage& image = out_packet.textures[i];
+			const GpuImage& image = *out_packet.textures[i];
 			const Texture& t = out_mesh.textures[i];
 			m_device.SetImageName(image.image, (out_packet.name + "/" + t.name).c_str());
 		}
@@ -1033,12 +1035,12 @@ void Renderer::loadScene(std::filesystem::path path)
 
 	loadGltf(path.string().c_str(), &out_scene);
 
-	std::vector<GpuImage> loaded_textures;
+	std::vector<GpuImageHandle> loaded_textures;
 	for(const Texture& t : out_scene.textures)
 	{
-		GpuImage image = m_device.createTexture(t);
+		GpuImageHandle image = m_resourceManager.createTexture(t);
 		loaded_textures.push_back(image);
-		m_device.SetImageName(image.image, (path.filename().string() + "/" + t.name).c_str());
+		m_device.SetImageName(image->image, (path.filename().string() + "/" + t.name).c_str());
 	}
 
 
@@ -1084,10 +1086,10 @@ void Renderer::destroyPacket(MeshPacket packet)
 	//m_device.destroyImage(packet.texture);
 	m_device.destroySampler(packet.sampler);
 
-	for (GpuImage& tex : packet.textures)
-	{
-		m_device.destroyImage(tex);
-	}
+	//for (GpuImage& tex : packet.textures)
+	//{
+	//	m_device.destroyImage(tex);
+	//}
 }
 
 void Renderer::destroyAllPackets()
@@ -1284,7 +1286,7 @@ void Renderer::addSpotlight(const float pos[3])
 	lights.push_back(light);
 }
 
-MeshPacket Renderer::createPacket(const Mesh& mesh, const std::vector<GpuImage>& textures)
+MeshPacket Renderer::createPacket(const Mesh& mesh, const std::vector<GpuImageHandle>& textures)
 {
 	MeshPacket out_packet;
 	out_packet.vertexBuffer = m_resourceManager.createVertexBuffer(mesh.vertices.size() * sizeof(mesh.vertices[0]), (void*)mesh.vertices.data());
@@ -1302,7 +1304,7 @@ MeshPacket Renderer::createPacket(const Mesh& mesh, const std::vector<GpuImage>&
 	}
 	else
 	{
-		out_packet.textures.push_back(m_device.getDefaultTexture());
+		out_packet.textures.push_back(getDefaultTexture());
 		out_packet.materialData.baseColor = out_packet.textures.size() - 1;
 	}
 
@@ -1325,7 +1327,7 @@ MeshPacket Renderer::createPacket(const Mesh& mesh, const std::vector<GpuImage>&
 	}
 
 
-	out_packet.sampler = m_device.createTextureSampler(out_packet.textures[0].mipLevels);
+	out_packet.sampler = m_device.createTextureSampler(out_packet.textures[0]->mipLevels);
 	return out_packet;
 }
 
@@ -1339,7 +1341,7 @@ MeshPacket Renderer::createCubePacket(const float pos[3], float size)
 	out_packet.indexBuffer = m_resourceManager.createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
 
 
-	out_packet.textures.push_back(m_device.getDefaultTexture());
+	out_packet.textures.push_back(getDefaultTexture());
 	out_packet.sampler = defaultSampler;
 	out_packet.name = "Cube";
 
@@ -1363,7 +1365,7 @@ MeshPacket Renderer::createConePacket(const float pos[3], float size)
 	out_packet.indexBuffer = m_resourceManager.createIndexBuffer(indices.size() * sizeof(indices[0]), (void*)indices.data());
 
 
-	out_packet.textures.push_back(m_device.getDefaultTexture());
+	out_packet.textures.push_back(getDefaultTexture());
 	out_packet.sampler = defaultSampler;
 	out_packet.name = "Cube";
 
@@ -1395,7 +1397,7 @@ MeshPacket Renderer::createSpherePacket(const float pos[3], float size)
 
 	out_packet.vertexBuffer = vertexBuffer;
 	out_packet.indexBuffer = indexBuffer;
-	out_packet.textures.push_back(m_device.getDefaultTexture());
+	out_packet.textures.push_back(getDefaultTexture());
 	out_packet.sampler = defaultSampler;
 	out_packet.name = "Sphere";
 
@@ -1415,4 +1417,52 @@ MeshPacket Renderer::createSpherePacket(const float pos[3], float size)
 
 
 	return out_packet;
+}
+
+void Renderer::createDefaultTextures()
+{
+	std::vector<unsigned char> pixels(128 * 128 * 4, 255);
+	Texture tex{
+		.height = 128,
+		.width = 128,
+		.channels = 4,
+		.pixels = pixels,
+		.size = pixels.size() * sizeof(unsigned char)
+	};
+
+	defaultTexture = m_resourceManager.createTexture(tex);
+	defaultSampler = m_device.createTextureSampler(defaultTexture->mipLevels);
+
+	memset(&pixels[0], 0, pixels.size());
+	tex = {
+		.height = 128,
+		.width = 128,
+		.channels = 4,
+		.pixels = pixels,
+		.size = pixels.size() * sizeof(unsigned char),
+		.is_srgb = false
+	};
+
+	defaultTextureBlack = m_resourceManager.createTexture(tex);
+
+
+	// Fill the pixels array with default normal data, (0.0, 1.0, 0.0, 1);
+	for (int i = 0; i < pixels.size(); i += 4)
+	{
+		pixels[i] = 127;
+		pixels[i + 1] = 127;
+		pixels[i + 2] = 255;
+		pixels[i + 3] = 255;
+	}
+
+	tex = {
+		.height = 128,
+		.width = 128,
+		.channels = 4,
+		.pixels = pixels,
+		.size = pixels.size() * sizeof(unsigned char),
+		.is_srgb = false
+	};
+
+	defaultNormalMap = m_resourceManager.createTexture(tex);
 }
