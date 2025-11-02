@@ -231,7 +231,7 @@ float4 PSMain(PSInput input, uniform Constants pc) : SV_TARGET
     float3 emissive = g_emissive.Sample(input.uv).xyz;
 
     float3 Lo = 0.0f;
-    float3 N = pc.normal_mode ? computeNormal(input) : normalize(input.normal);
+    float3 N = pc.normal_mode && !isnan(input.tangent) ? computeNormal(input) : normalize(input.normal);
     float3 V = normalize(pc.eye - input.worldPos);
 
     for (int i = 0; i < pc.light_count; i++)
@@ -270,7 +270,7 @@ float4 PSMain(PSInput input, uniform Constants pc) : SV_TARGET
     }
 
     float3 ambient = float3(0.03) * baseColor.rgb * occlusion.r;
-    float3 color = ambient + Lo + emissive;
+    float3 color = (Lo * occlusion) + emissive;
 
 
     // HDR Tone mapping ? Reinhard operator nantoka

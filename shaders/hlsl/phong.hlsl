@@ -232,7 +232,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 vB = input.sign * cross(vN, vT);
 	float3 vNout = normalize(vNt.x * vT + vNt.y * vB + vNt.z * vN);
 	
-	float3 norm = pc.normal_mode == 1 ? normalize(vNout) : normalize(input.normal);
+	float3 norm = pc.normal_mode == 1 && !isnan(input.tangent.x) ? normalize(vNout) : normalize(input.normal);
 	
 	for (int i = 0; i < pc.light_count; i++)
 	{

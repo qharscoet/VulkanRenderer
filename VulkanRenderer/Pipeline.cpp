@@ -357,12 +357,13 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
 	multisampling.alphaToOneEnable = VK_FALSE; // Optional
 
+	
 	//Depth
 	VkPipelineDepthStencilStateCreateInfo depthStencil{};
 	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 	depthStencil.depthTestEnable = VK_TRUE;
 	depthStencil.depthWriteEnable = VK_TRUE;
-	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+	depthStencil.depthCompareOp = static_cast<VkCompareOp>(desc.depthCompareOp); // VK_COMPARE_OP_LESS
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
 	depthStencil.minDepthBounds = 0.0f; // Optional
 	depthStencil.maxDepthBounds = 1.0f; // Optional
@@ -616,6 +617,7 @@ RenderPass Device::createRenderPassAndPipeline(RenderPassDesc renderPassDesc, Pi
 	memcpy(markerInfo.color, debug_colors[(int)renderPassDesc.debugInfo.color], sizeof(markerInfo.color));
 
 	SetRenderPassName(renderpass, renderPassDesc.debugInfo.name);
+	SetRenderPassName(renderpassMsaa, renderPassDesc.debugInfo.name);
 
 	return {
 		.renderPass = renderpass,
@@ -813,7 +815,7 @@ void Device::transitionImage(BarrierDesc desc)
 	};
 
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
-	transitionImageLayout(desc.image->image, VK_FORMAT_R8G8B8A8_SRGB, layoutMap[desc.oldLayout], layoutMap[desc.newLayout], desc.mipLevels, commandBuffer);
+	transitionImageLayout(desc.image->image, VK_FORMAT_R8G8B8A8_SRGB, layoutMap[desc.oldLayout], layoutMap[desc.newLayout], desc.mipLevels, 1, commandBuffer);
 }
 
 void Device::drawCommand(uint32_t vertex_count)

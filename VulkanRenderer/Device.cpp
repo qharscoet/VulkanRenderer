@@ -592,17 +592,17 @@ void Device::createSwapChain() {
 	swapChainExtent = extent;
 }
 
-VkImageView Device::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels) {
+VkImageView Device::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels, bool isCubemap) {
 	VkImageViewCreateInfo viewInfo{};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	viewInfo.image = image;
-	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.viewType = isCubemap ? VK_IMAGE_VIEW_TYPE_CUBE: VK_IMAGE_VIEW_TYPE_2D;
 	viewInfo.format = format;
 	viewInfo.subresourceRange.aspectMask = aspectFlags;
 	viewInfo.subresourceRange.baseMipLevel = 0;
 	viewInfo.subresourceRange.levelCount = mipLevels;
 	viewInfo.subresourceRange.baseArrayLayer = 0;
-	viewInfo.subresourceRange.layerCount = 1;
+	viewInfo.subresourceRange.layerCount = isCubemap ? 6 : 1;
 
 	VkImageView imageView;
 	if (vkCreateImageView(device, &viewInfo, nullptr, &imageView) != VK_SUCCESS) {
@@ -616,7 +616,7 @@ void Device::createImageViews() {
 	swapChainImageViews.resize(swapChainImages.size());
 
 	for (size_t i = 0; i < swapChainImages.size(); i++) {
-		swapChainImageViews[i] = createImageView(swapChainImages[i], swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+		swapChainImageViews[i] = createImageView(swapChainImages[i], swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1, false);
 	}
 }
 
@@ -741,7 +741,7 @@ void Device::createImage(ImageDesc desc, GpuImage& out_image) {
 	imageInfo.extent.height = static_cast<uint32_t>(desc.height);
 	imageInfo.extent.depth = 1;
 	imageInfo.mipLevels = desc.mipLevels;
-	imageInfo.arrayLayers = 1;
+	imageInfo.arrayLayers = desc.is_cubemap? 6 : 1;
 
 	imageInfo.format = desc.format;// VK_FORMAT_R8G8B8A8_SRGB;
 	imageInfo.tiling = desc.tiling;// VK_IMAGE_TILING_OPTIMAL;
@@ -749,7 +749,7 @@ void Device::createImage(ImageDesc desc, GpuImage& out_image) {
 	imageInfo.usage = desc.usage_flags;// VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	imageInfo.samples = desc.numSamples;
-	imageInfo.flags = 0; // Optional
+	imageInfo.flags = desc.is_cubemap ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT :  0; // Optional
 
 	if (vkCreateImage(device, &imageInfo, nullptr, &out_image.image) != VK_SUCCESS) {
 		throw std::runtime_error("image creation has failed bruh");
@@ -784,34 +784,40 @@ void Device::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize siz
 	endSingleTimeCommands(commandBuffer);
 }
 
-void Device::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
+void Device::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height, size_t layerSize, uint32_t layerCount) {
 	
 	MyCommandBuffer commandBuffer = getCommandBuffer();
 
-	VkBufferImageCopy region{};
-	region.bufferOffset = 0;
-	region.bufferRowLength = 0;
-	region.bufferImageHeight = 0;
+	std::vector<VkBufferImageCopy> regions;
 
-	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	region.imageSubresource.mipLevel = 0;
-	region.imageSubresource.baseArrayLayer = 0;
-	region.imageSubresource.layerCount = 1;
-
-	region.imageOffset = { 0, 0, 0 };
-	region.imageExtent = {
-		width,
-		height,
-		1
-	};
+	for (uint32_t i = 0; i < layerCount; i++) {
+		VkBufferImageCopy region = {
+			.bufferOffset = layerSize * i,
+			.bufferRowLength = 0,
+			.bufferImageHeight = 0,
+			.imageSubresource = VkImageSubresourceLayers {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.mipLevel = 0,
+				.baseArrayLayer = i,
+				.layerCount = 1
+			},
+			.imageOffset = { 0, 0, 0 },
+			.imageExtent = {
+				width,
+				height,
+				1
+			},
+		};
+		regions.push_back(region);
+	}
 
 	vkCmdCopyBufferToImage(
 		commandBuffer,
 		buffer,
 		image,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		1,
-		&region
+		regions.size(),
+		regions.data()
 	);
 }
 
@@ -1467,7 +1473,7 @@ void Device::destroyImage(GpuImage image) {
 }
 
 
-void Device::generateMipmaps(VkImage image, VkFormat format, int32_t texWidth, int32_t texHeight, uint32_t mipLevels)
+void Device::generateMipmaps(VkImage image, VkFormat format, int32_t texWidth, int32_t texHeight, uint32_t mipLevels, uint32_t layerCount)
 {
 	// Check if image format supports linear blitting
 	VkFormatProperties formatProperties;
@@ -1488,7 +1494,7 @@ void Device::generateMipmaps(VkImage image, VkFormat format, int32_t texWidth, i
 	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	barrier.subresourceRange.levelCount = 1;
 	barrier.subresourceRange.baseArrayLayer = 0;
-	barrier.subresourceRange.layerCount = 1;
+	barrier.subresourceRange.layerCount = layerCount;
 
 
 	int32_t mipWidth = texWidth;
@@ -1521,14 +1527,14 @@ void Device::generateMipmaps(VkImage image, VkFormat format, int32_t texWidth, i
 		blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		blit.srcSubresource.mipLevel = i - 1;
 		blit.srcSubresource.baseArrayLayer = 0;
-		blit.srcSubresource.layerCount = 1;
+		blit.srcSubresource.layerCount = layerCount;
 
 		blit.dstOffsets[0] = { 0,0,0 };
 		blit.dstOffsets[1] = { std::max(mipWidth / 2, 1), std::max(mipHeight / 2, 1), 1 };
 		blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		blit.dstSubresource.mipLevel = i;
 		blit.dstSubresource.baseArrayLayer = 0;
-		blit.dstSubresource.layerCount = 1;
+		blit.dstSubresource.layerCount = layerCount;
 
 		vkCmdBlitImage(commandBuffer,
 			image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -1566,6 +1572,23 @@ void Device::generateMipmaps(VkImage image, VkFormat format, int32_t texWidth, i
 		1, &barrier);
 }
 
+VkFormat getFormat(const Texture& tex) {
+
+	bool has_alpha = tex.channels == 4;
+
+	uint8_t val = (has_alpha << 1) | (tex.is_srgb);
+
+	VkFormat out_format = VK_FORMAT_UNDEFINED;
+	switch (val) {
+	case 0b00: out_format = VK_FORMAT_R8G8B8_UNORM; break;  //No alpha, linear
+	case 0b01: out_format = VK_FORMAT_R8G8B8_SRGB; break;  //No alpha, srgb
+	case 0b10: out_format = VK_FORMAT_R8G8B8A8_UNORM; break; //Alpha, linear
+	case 0b11: out_format = VK_FORMAT_R8G8B8A8_SRGB; break; //Alpha, srgb
+	}
+
+	return out_format;
+}
+
 GpuImage Device::createTexture(Texture tex) 
 {
 	GpuImage ret_image;
@@ -1582,30 +1605,34 @@ GpuImage Device::createTexture(Texture tex)
 		.width = tex.width,
 		.height = tex.height,
 		.mipLevels = mipLevels,
-		.format = tex.is_srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM,
+		.format = getFormat(tex),
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
 		//TRANSFERS_SRC is for generating mips
 		.usage_flags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT| VK_IMAGE_USAGE_TRANSFER_SRC_BIT , 
 		.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.is_cubemap = tex.is_cubemap
 	};
 
 	createImage(desc, ret_image);
 
+	uint32_t layer_count = tex.is_cubemap ? 6 : 1;
+	size_t layer_size = tex.width * tex.height * tex.channels;
+
 	setupCommandBuffer();
 	//Transition to enable copying, copying and transition to pixel shader usable
-	transitionImageLayout(ret_image.image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels);
-	copyBufferToImage(stagingBuffer.buffer, ret_image.image, static_cast<uint32_t>(tex.width), static_cast<uint32_t>(tex.height));
+	transitionImageLayout(ret_image.image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels, layer_count);
+	copyBufferToImage(stagingBuffer.buffer, ret_image.image, static_cast<uint32_t>(tex.width), static_cast<uint32_t>(tex.height), layer_size, layer_count);
 	if (mipLevels > 1)
-		generateMipmaps(ret_image.image, VK_FORMAT_R8G8B8A8_SRGB, tex.width, tex.height, mipLevels);
+		generateMipmaps(ret_image.image, VK_FORMAT_R8G8B8A8_SRGB, tex.width, tex.height, mipLevels, layer_count);
 	else 
-		transitionImageLayout(ret_image.image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mipLevels);
+		transitionImageLayout(ret_image.image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mipLevels, layer_count);
 
 	flushCommandBuffer();
 	
 	destroyBuffer(stagingBuffer);
 
-	ret_image.view = createImageView(ret_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels);
+	ret_image.view = createImageView(ret_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels, tex.is_cubemap);
 	ret_image.mipLevels = mipLevels;
 	return ret_image;
 }
@@ -1627,7 +1654,7 @@ void Device::createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_i
 	};
 
 	createImage(desc, out_image);
-	out_image.view = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+	out_image.view = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, 1, false);
 
 }
 
@@ -1645,7 +1672,7 @@ void Device::createDepthTarget(uint32_t width, uint32_t height, GpuImage& out_im
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
 	createImage(desc, out_image);
-	out_image.view = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+	out_image.view = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_DEPTH_BIT, 1, false);
 }
 
 VkSampler Device::createTextureSampler(uint32_t mipLevels) {
@@ -1772,7 +1799,7 @@ inline Device::MyCommandBuffer Device::getCommandBuffer()
 	return tmpCommandBuffer ? MyCommandBuffer(tmpCommandBuffer) : std::move(ScopedCommandBuffer(this));
 }
 
-void Device::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels, VkCommandBuffer cb) {
+void Device::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels, uint32_t layerCount, VkCommandBuffer cb) {
 	MyCommandBuffer commandBuffer = cb != VK_NULL_HANDLE?MyCommandBuffer(cb):getCommandBuffer();
 	
 	VkImageMemoryBarrier barrier{};
@@ -1788,7 +1815,7 @@ void Device::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout
 	barrier.subresourceRange.baseMipLevel = 0;
 	barrier.subresourceRange.levelCount = mipLevels;
 	barrier.subresourceRange.baseArrayLayer = 0;
-	barrier.subresourceRange.layerCount = 1;
+	barrier.subresourceRange.layerCount = layerCount ;
 
 
 	VkPipelineStageFlags sourceStage;

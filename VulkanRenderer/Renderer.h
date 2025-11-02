@@ -97,6 +97,8 @@ private:
 
 	std::vector<Buffer> particleStorageBuffers;
 
+	GpuImageHandle skyboxTexture;
+
 	GpuImageHandle defaultTexture;
 	GpuImageHandle defaultTextureBlack;
 	GpuImageHandle defaultNormalMap;
@@ -124,6 +126,7 @@ private:
 	void initPipelinePBR();
 
 	void initDrawLightsRenderPass();
+	void initSkyboxRenderPass();
 
 	void initParticlesBuffers();
 	void cleanupParticles();
@@ -146,6 +149,7 @@ public:
 	MeshPacket createCubePacket(const float pos[3], float scale);
 	MeshPacket createConePacket(const float pos[3], float scale);
 	MeshPacket createSpherePacket(const float pos[3], float scale);
+	void loadSkybox(const std::array<const char*, 6>& faces);
 	void loadScene(std::filesystem::path path);
 	void addPacket(const MeshPacket& packet);
 	void drawPacket(const MeshPacket& packet);

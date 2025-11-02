@@ -113,6 +113,7 @@ void Renderer::init(GLFWwindow* window, DeviceOptions options)
 	initPipeline();
 	initPipelinePBR();
 	initDrawLightsRenderPass();
+	initSkyboxRenderPass();
 
 
 
@@ -172,6 +173,7 @@ void Renderer::draw()
 
 	m_device.recordRenderPass(use_pbr ? renderPasses[1] : renderPasses[0]);
 	m_device.recordRenderPass(renderPasses[2]);
+	m_device.recordRenderPass(renderPasses[3]);
 	//m_device.recordRenderPass(drawParticlesPass);
 	//for (auto& renderPass : renderPasses)
 	//{
@@ -628,6 +630,51 @@ void Renderer::initDrawLightsRenderPass()
 }
 
 
+void Renderer::initSkyboxRenderPass()
+{
+	PipelineDesc desc = {
+		.type = PipelineType::Graphics,
+		.vertexShader = "skybox.vs.spv",
+		.pixelShader = "skybox.ps.spv",
+
+		.blendMode = BlendMode::Opaque,
+		.topology = PrimitiveToplogy::TriangleList,
+		.depthCompareOp = DepthCompareOp::LessEqual,
+		.bindings = {
+			{
+				{
+					.slot = 0,
+					.type = BindingType::UBO,
+					.stageFlags = e_Vertex,
+				},
+				{
+					.slot = 1,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				},
+			}
+		},
+	};
+
+	RenderPassDesc renderPassDesc = {
+		.colorAttachement_count = 1,
+		.hasDepth = true,
+		.useMsaa = device_options.usesMsaa,
+		.doClear = false,
+		.writeSwapChain = true,
+		.drawFunction = [&]() { 
+				m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { skyboxTexture.get()}, defaultSampler);
+				m_device.drawCommand(36)
+		; },
+		.debugInfo = {
+			.name = "Skybox",
+			.color = DebugColor::Cyan
+		}
+	};
+
+
+	renderPasses.push_back(m_device.createRenderPassAndPipeline(renderPassDesc, desc));
+}
 
 void Renderer::drawRenderPassPBR() {
 	m_device.bindRessources(1, { &light_data_gpu}, {});
@@ -646,7 +693,7 @@ void Renderer::drawRenderPassPBR() {
 		const GpuImage& baseColor = *packet.textures[packet.materialData.baseColor];
 		const GpuImage& normal = packet.materialData.normal >= 0 ? *packet.textures[packet.materialData.normal] : *getDefaultNormalMap();
 		const GpuImage& mettalicRoughness = packet.materialData.mettalicRoughness >= 0 ? *packet.textures[packet.materialData.mettalicRoughness] : *getDefaultTexture();
-		const GpuImage& occlusion = packet.materialData.occlusion >= 0 ? *packet.textures[packet.materialData.occlusion] : *getDefaultTextureBlack();
+		const GpuImage& occlusion = packet.materialData.occlusion >= 0 ? *packet.textures[packet.materialData.occlusion] : *getDefaultTexture();
 		const GpuImage& emissive = packet.materialData.emissive >= 0 ? *packet.textures[packet.materialData.emissive] : *getDefaultTextureBlack();
 		m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { &baseColor , &normal, &mettalicRoughness, &occlusion, &emissive }, packet.sampler);
 
@@ -1025,6 +1072,13 @@ MeshPacket Renderer::createPacket(std::filesystem::path path, std::string textur
 	return out_packet;
 }
 
+void Renderer::loadSkybox(const std::array<const char*, 6>& faces)
+{
+	const Texture cubeMap = loadCubemapTexture(faces);
+	
+	skyboxTexture = m_resourceManager.createTexture(cubeMap);
+}
+
 void Renderer::loadScene(std::filesystem::path path)
 {
 	if (path.extension() != ".gltf")
@@ -1134,7 +1188,7 @@ void Renderer::updateUniformBuffer() {
 
 	glm::vec3 center = cameraInfo.freecam ? pos + forward : glm::vec3(0, 0, 0);
 	ubo.view = glm::lookAt(pos, center, up);
-	ubo.proj = glm::perspective(glm::radians(45.0f), dim.width / (float)dim.height, 0.1f, 20.0f);
+	ubo.proj = glm::perspective(glm::radians(45.0f), dim.width / (float)dim.height, 0.1f, 50.0f);
 	ubo.proj[1][1] *= -1;
 
 

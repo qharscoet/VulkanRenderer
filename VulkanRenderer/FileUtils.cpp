@@ -55,7 +55,7 @@ Texture loadTexture(const char* path) {
 	memcpy(&pixel_data[0], pixels, imageSize);
 
 	stbi_image_free(pixels);
-	return { (uint32_t)texWidth, (uint32_t)texHeight, texChannels, pixel_data, imageSize };
+	return { (uint32_t)texWidth, (uint32_t)texHeight, texChannels, std::move(pixel_data), imageSize };
 }
 
 
@@ -63,6 +63,42 @@ void freeTexturePixels(Texture* tex)
 {
 	//stbi_image_free(tex->pixels);
 	//tex->pixels = nullptr;
+}
+
+Texture loadCubemapTexture(const std::array<const char*, 6>& face_paths)
+{
+	std::vector<unsigned char> pixels;
+	int texWidth = 0;
+	int texHeight = 0;
+	int texChannels = 0;
+	size_t faceSize = 0;
+	for (int i =  0; i < 6; i++)
+	{
+		const char* face = face_paths[i];
+		int width, height, channels;
+		stbi_uc* face_pixels = stbi_load(face, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+		if (!face_pixels)
+		{
+			throw std::runtime_error("failed to load texture image!");
+		}
+		if (pixels.empty())
+		{
+			faceSize = texWidth * texHeight * texChannels;
+			pixels.resize(faceSize * 6);
+		}
+
+		memcpy(&pixels[i * faceSize], face_pixels, faceSize);
+		stbi_image_free(face_pixels);
+	}
+	return {
+		.height = (uint32_t)texHeight,
+		.width = (uint32_t)texWidth,
+		.channels = texChannels,
+		.pixels = std::move(pixels),
+		.size = faceSize * 6,
+		.is_srgb = false,
+		.is_cubemap = true
+	};
 }
 
 //TODO : get rid of glm here

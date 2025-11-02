@@ -18,6 +18,7 @@ struct Texture {
 	std::vector<unsigned char> pixels;
 	size_t size;
 	bool is_srgb = true;
+	bool is_cubemap = false;
 
 	std::string name;
 };
@@ -76,6 +77,7 @@ struct Scene {
 std::vector<char> readFile(const std::string& filename);
 
 Texture loadTexture(const char* path);
+Texture loadCubemapTexture(const std::array<const char*, 6>& face_paths);
 void freeTexturePixels(Texture* tex);
 
 void loadObj(const char* path, Mesh* out_mesh);

@@ -14,6 +14,17 @@ enum class PrimitiveToplogy {
 	TriangleStrip,
 };
 
+enum class DepthCompareOp {
+	Never,
+	Less,
+	Equal,
+	LessEqual,
+	Greater,
+	NotEqual,
+	GreaterEqual,
+	Always
+};
+
 enum class BindingType {
 	UBO,
 	ImageSampler,
@@ -57,6 +68,7 @@ struct PipelineDesc {
 	//Descriptors params
 	BlendMode blendMode;
 	PrimitiveToplogy topology;
+	DepthCompareOp	depthCompareOp = DepthCompareOp::Less;
 	std::vector<std::vector<BindingDesc>> bindings; //vector of sets of bindings
 
 	std::vector<PushConstantsRange> pushConstantsRanges;

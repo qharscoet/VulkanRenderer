@@ -81,7 +81,7 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 		camera.position[0] = -camera.forward[0] * camera.zoom;
 		camera.position[1] = -camera.forward[1] * camera.zoom;
 		camera.position[2] = -camera.forward[2] * camera.zoom;
-}
+	}
 }
 
 
@@ -183,9 +183,27 @@ private:
 	void loadPackets()
 	{
 		static const std::string gltfAssetsPath = "./glTF-Sample-Assets/Models/";
+		static const std::string AssetsPath = "./assets/";
 		//m_renderer.addPacket(m_renderer.createPacket("assets/viking_room.obj", "assets/viking_room.png"));
 		//m_renderer.addPacket(m_renderer.createPacket(gltfAssetsPath  + "CompareNormal/glTF/CompareNormal.gltf"));
-		m_renderer.loadScene(gltfAssetsPath + "CompareMetallic/glTF/CompareMetallic.gltf");
+		//m_renderer.loadScene(gltfAssetsPath + "Sponza/glTF/Sponza.gltf");
+		//m_renderer.loadScene(gltfAssetsPath + "CarConcept/glTF/CarConcept.gltf");
+		m_renderer.loadScene(AssetsPath + "survival_guitar_backpack/scene.gltf");
+	}
+
+
+	void loadSkybox()
+	{
+		const std::array<const char*, 6> faces
+		{
+			"./assets/skybox/right.png",
+			"./assets/skybox/left.png",
+			"./assets/skybox/top.png",
+			"./assets/skybox/bottom.png",
+			"./assets/skybox/front.png",
+			"./assets/skybox/back.png"
+		};
+		m_renderer.loadSkybox(faces);
 	}
 
 	void loadSpheres()
@@ -334,16 +352,23 @@ public:
 		initWindow();
 		m_renderer.init(window, device_options);
 
-		//loadPackets();
-		loadSpheres();
+		loadSkybox();
+
+		loadPackets();
+		//loadSpheres();
 		float sun[3] = { 0.0, -1.0f, 0.0f };
 		//m_renderer.addDirectionalLight(sun);
+
+		float dir[3] = { 0.5, -0.7071068286895752,-0.4999999701976776};
+		float dir2[3] = { -0.49999985098838806, 0.70710688829422,0.5000001192092896};
+		m_renderer.addDirectionalLight(dir);
+		m_renderer.addDirectionalLight(dir2);
 
 		const float lightPos[2][3] = { 
 			{3.0f, 3.0f, 3.0f},
 			{0.0f, 2.0f, 0.0f} 
 		};
-		m_renderer.addLight(lightPos[0]);
+		//m_renderer.addLight(lightPos[0]);
 		//m_renderer.addSpotlight(lightPos[1]);
 
 

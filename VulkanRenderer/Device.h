@@ -57,6 +57,7 @@ struct ImageDesc {
 	VkImageUsageFlags usage_flags;
 	VkMemoryPropertyFlags memory_properties;
 	VkImageLayout initialLayout;
+	bool is_cubemap = false;
 };
 
 struct GpuImage {
@@ -589,11 +590,11 @@ private:
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& out_buffer, VkDeviceMemory& out_bufferMemory);
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 	
-	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels, VkCommandBuffer cb = VK_NULL_HANDLE );
-	void generateMipmaps(VkImage image, VkFormat format, int32_t texWidth, int32_t texheight, uint32_t mipLevels);
+	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels, uint32_t layerCount, VkCommandBuffer cb = VK_NULL_HANDLE );
+	void generateMipmaps(VkImage image, VkFormat format, int32_t texWidth, int32_t texheight, uint32_t mipLevels, uint32_t layerCount);
 	void createImage(ImageDesc desc, GpuImage& out_image);
-	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
-	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels, bool isCubemap);
+	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height, size_t layerSize, uint32_t layerCount);
 public:
 	Buffer createLocalBuffer(size_t size,VkBufferUsageFlags usage,  void* src_data = nullptr);
 	Buffer createVertexBuffer(size_t size, void* src_data = nullptr);
