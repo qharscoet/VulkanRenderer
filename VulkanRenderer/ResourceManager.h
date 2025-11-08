@@ -54,4 +54,12 @@ public:
 			});
 	}
 
+	GpuImageHandle createRWTexture(uint32_t w, uint32_t h, bool is_cubemap) {
+		m_device->createRWTexture(w, h, m_textures[m_texture_count++], true, true);
+
+		return GpuImageHandle(&m_textures[m_texture_count - 1], [this](GpuImage* img) {
+			m_device->destroyImage(*img);
+			});
+	}
+
 };

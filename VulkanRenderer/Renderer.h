@@ -91,13 +91,16 @@ private:
 
 	std::vector<RenderPass> renderPasses;
 
+	ComputePass computeSkyboxPass;
 
-	Pipeline computePipeline;
+	ComputePass computeParticlesPass;
 	VkDescriptorPool computeDescriptorPool;
 
 	std::vector<Buffer> particleStorageBuffers;
 
 	GpuImageHandle skyboxTexture;
+	GpuImageHandle equirectangularTexture;
+	GpuImageHandle resultCubemap;
 
 	GpuImageHandle defaultTexture;
 	GpuImageHandle defaultTextureBlack;
@@ -115,6 +118,9 @@ private:
 	void drawLightsRenderPass();
 	void drawRenderPassPBR();
 
+	//Compute callbacks
+	void updateParticles();
+
 	double lastTime;
 	double lastFrameTime;
 
@@ -126,6 +132,7 @@ private:
 	void initPipelinePBR();
 
 	void initDrawLightsRenderPass();
+	void initComputeSkyboxPipeline();
 	void initSkyboxRenderPass();
 
 	void initParticlesBuffers();
@@ -149,7 +156,8 @@ public:
 	MeshPacket createCubePacket(const float pos[3], float scale);
 	MeshPacket createConePacket(const float pos[3], float scale);
 	MeshPacket createSpherePacket(const float pos[3], float scale);
-	void loadSkybox(const std::array<const char*, 6>& faces);
+	void loadSkybox(const std::array<const char*, 6>& faces); // 6 different faces as cubemap
+	void loadSkybox(const std::filesystem::path); // equirectangular
 	void loadScene(std::filesystem::path path);
 	void addPacket(const MeshPacket& packet);
 	void drawPacket(const MeshPacket& packet);

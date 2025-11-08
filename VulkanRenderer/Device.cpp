@@ -73,7 +73,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 }
 
 void Device::SetRenderPassName(VkRenderPass renderpass, const char* name) {
-	if (SetDebugUtilsObjectName) {
+	if (SetDebugUtilsObjectName && name != nullptr) {
 		VkDebugUtilsObjectNameInfoEXT nameInfo = {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			.objectType = VK_OBJECT_TYPE_RENDER_PASS,
@@ -86,7 +86,7 @@ void Device::SetRenderPassName(VkRenderPass renderpass, const char* name) {
 
 void Device::SetShaderModuleName(VkShaderModule module, const char* name)
 {
-	if (SetDebugUtilsObjectName) {
+	if (SetDebugUtilsObjectName && name != nullptr) {
 		VkDebugUtilsObjectNameInfoEXT nameInfo = {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			.objectType = VK_OBJECT_TYPE_SHADER_MODULE,
@@ -99,7 +99,7 @@ void Device::SetShaderModuleName(VkShaderModule module, const char* name)
 
 void Device::SetImageName(VkImage image, const char* name)
 {
-	if (SetDebugUtilsObjectName) {
+	if (SetDebugUtilsObjectName && name != nullptr) {
 		VkDebugUtilsObjectNameInfoEXT nameInfo = {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			.objectType = VK_OBJECT_TYPE_IMAGE,
@@ -112,7 +112,7 @@ void Device::SetImageName(VkImage image, const char* name)
 
 void Device::SetBufferName(VkBuffer buffer, const char* name)
 {
-	if (SetDebugUtilsObjectName) {
+	if (SetDebugUtilsObjectName && name != nullptr) {
 		VkDebugUtilsObjectNameInfoEXT nameInfo = {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			.objectType = VK_OBJECT_TYPE_BUFFER,
@@ -592,11 +592,11 @@ void Device::createSwapChain() {
 	swapChainExtent = extent;
 }
 
-VkImageView Device::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels, bool isCubemap) {
+VkImageView Device::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels, bool isCubemap, bool write) {
 	VkImageViewCreateInfo viewInfo{};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	viewInfo.image = image;
-	viewInfo.viewType = isCubemap ? VK_IMAGE_VIEW_TYPE_CUBE: VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.viewType = isCubemap ? (write? VK_IMAGE_VIEW_TYPE_2D_ARRAY:VK_IMAGE_VIEW_TYPE_CUBE): VK_IMAGE_VIEW_TYPE_2D;
 	viewInfo.format = format;
 	viewInfo.subresourceRange.aspectMask = aspectFlags;
 	viewInfo.subresourceRange.baseMipLevel = 0;
@@ -862,11 +862,11 @@ VkDescriptorBufferInfo& Device::getDescriptorBufferInfo(const Buffer& buffer) {
 	return info;
 }
 
-VkDescriptorImageInfo& Device::getDescriptorImageInfo(const GpuImage& image, VkSampler sampler) {
+VkDescriptorImageInfo& Device::getDescriptorImageInfo(const VkImageView image, VkSampler sampler) {
 
 	VkDescriptorImageInfo info{
 		.sampler = sampler,
-		.imageView = image.view,
+		.imageView = image,
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
 
@@ -890,13 +890,17 @@ void Device::updateDescriptorSet(const std::vector<BindingDesc>& bindings, std::
 		VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
 		const bool isBuffer = binding.type == BindingType::UBO || binding.type == BindingType::StorageBuffer;
-		const bool isImage = binding.type == BindingType::ImageSampler;
+		const bool isImage = binding.type == BindingType::ImageSampler || binding.type == BindingType::StorageImage;
+
+		VkDescriptorBufferInfo* bufferInfo = isBuffer ? &(*bufferIt++) : nullptr;
+		VkDescriptorImageInfo* imageInfo = isImage ? &(*imageIt++) : nullptr;
 
 		if (isBuffer) {
 			descriptorType = binding.type == BindingType::UBO ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 		} else if (isImage)
 		{
-			descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptorType = binding.type == BindingType::ImageSampler ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			imageInfo->imageLayout = binding.type == BindingType::ImageSampler ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL;
 		}
 
 		descriptorWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -905,9 +909,10 @@ void Device::updateDescriptorSet(const std::vector<BindingDesc>& bindings, std::
 		descriptorWrites[i].dstArrayElement = 0;
 		descriptorWrites[i].descriptorType = descriptorType;
 		descriptorWrites[i].descriptorCount = 1;
-		descriptorWrites[i].pBufferInfo = isBuffer ? &(*bufferIt++) : nullptr;
-		descriptorWrites[i].pImageInfo = isImage ? &(*imageIt++) : nullptr; 
+		descriptorWrites[i].pBufferInfo = bufferInfo;
+		descriptorWrites[i].pImageInfo = imageInfo;
 		descriptorWrites[i].pTexelBufferView = nullptr; // Optional
+
 
 	}
 
@@ -984,25 +989,6 @@ void Device::createCommandBuffer() {
 }
 
 
-void Device::recordComputeCommandBuffer(VkCommandBuffer commandBuffer, const Pipeline& computePipeline) {
-	VkCommandBufferBeginInfo beginInfo{};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-	if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-		throw std::runtime_error("failed to begin recording compute command buffer!");
-	}
-
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline.graphicsPipeline);
-
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline.pipelineLayout, 0, 1, &computeDescriptorSets[current_frame], 0, nullptr);
-
-	vkCmdDispatch(commandBuffer, PARTICLE_COUNT / 256, 1, 1);
-
-	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-		throw std::runtime_error("failed to record compute command buffer!");
-	}
-
-}
 void Device::createSyncObjects() {
 	imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 	computeInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
@@ -1247,6 +1233,27 @@ void Device::beginDraw()
 void Device::endDraw()
 {
 
+	if (hasRecorededCompute)
+	{
+		VkCommandBuffer computeCommandBuffer = computeCommandBuffers[current_frame];
+		if (vkEndCommandBuffer(computeCommandBuffer) != VK_SUCCESS) {
+			throw std::runtime_error("failed to record compute command buffer!");
+		}
+
+
+		VkSubmitInfo submitInfo{};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &computeCommandBuffer;
+		submitInfo.signalSemaphoreCount = 1;
+		submitInfo.pSignalSemaphores = &computeFinishedSemaphores[current_frame];
+
+
+		if (vkQueueSubmit(computeQueue, 1, &submitInfo, computeInFlightFences[current_frame]) != VK_SUCCESS) {
+			throw std::runtime_error("failed to submit compute command buffer!");
+		};
+	}
+
 	if (skipDraw)
 	{
 		skipDraw = false;
@@ -1310,29 +1317,11 @@ void Device::endDraw()
 
 }
 
-void Device::dispatchCompute(const Pipeline& computePipeline)
+void Device::dispatchCommand(uint32_t count_x, uint32_t count_y, uint32_t count_z)
 {
+	VkCommandBuffer commandBuffer = computeCommandBuffers[current_frame];
 
-	vkWaitForFences(device, 1, &computeInFlightFences[current_frame], VK_TRUE, UINT64_MAX);
-	vkResetFences(device, 1, &computeInFlightFences[current_frame]);
-
-	vkResetCommandBuffer(computeCommandBuffers[current_frame], /*VkCommandBufferResetFlagBits*/ 0);
-	recordComputeCommandBuffer(computeCommandBuffers[current_frame], computePipeline);
-
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &computeCommandBuffers[current_frame];
-	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &computeFinishedSemaphores[current_frame];
-
-
-	if (vkQueueSubmit(computeQueue, 1, &submitInfo, computeInFlightFences[current_frame]) != VK_SUCCESS) {
-		throw std::runtime_error("failed to submit compute command buffer!");
-	};
-
-	hasRecorededCompute = true;
-
+	vkCmdDispatch(commandBuffer, count_x, count_y, count_z);
 }
 
 void Device::waitIdle()
@@ -1575,15 +1564,24 @@ void Device::generateMipmaps(VkImage image, VkFormat format, int32_t texWidth, i
 VkFormat getFormat(const Texture& tex) {
 
 	bool has_alpha = tex.channels == 4;
+	bool is_hdr = tex.isHdr();
 
-	uint8_t val = (has_alpha << 1) | (tex.is_srgb);
+	uint8_t val = (is_hdr << 2) | (has_alpha << 1) | (tex.is_srgb);
 
 	VkFormat out_format = VK_FORMAT_UNDEFINED;
 	switch (val) {
-	case 0b00: out_format = VK_FORMAT_R8G8B8_UNORM; break;  //No alpha, linear
-	case 0b01: out_format = VK_FORMAT_R8G8B8_SRGB; break;  //No alpha, srgb
-	case 0b10: out_format = VK_FORMAT_R8G8B8A8_UNORM; break; //Alpha, linear
-	case 0b11: out_format = VK_FORMAT_R8G8B8A8_SRGB; break; //Alpha, srgb
+	case 0b000: out_format = VK_FORMAT_R8G8B8_UNORM; break;  //SDR, No alpha, linear
+	case 0b001: out_format = VK_FORMAT_R8G8B8_SRGB; break;  //SDR, No alpha, srgb
+	case 0b010: out_format = VK_FORMAT_R8G8B8A8_UNORM; break; //SDR, Alpha, linear
+	case 0b011: out_format = VK_FORMAT_R8G8B8A8_SRGB; break; //SDR, Alpha, srgb
+
+	//Same for linear and SRGB
+	case 0b100: out_format = VK_FORMAT_R32G32B32_SFLOAT; break;  //HDR, No alpha, linear
+	case 0b101: out_format = VK_FORMAT_R32G32B32_SFLOAT; break;  //HDR, No alpha, srgb
+	case 0b110: out_format = VK_FORMAT_R32G32B32A32_SFLOAT; break; //HDR, Alpha, linear
+	case 0b111: out_format = VK_FORMAT_R32G32B32A32_SFLOAT; break; //HDR, Alpha, srgb
+		
+	default: throw std::runtime_error("Unsupported texture format"); break;
 	}
 
 	return out_format;
@@ -1597,7 +1595,7 @@ GpuImage Device::createTexture(Texture tex)
 
 	void* data;
 	vkMapMemory(device, stagingBuffer.memory, 0, tex.size, 0, &data);
-	memcpy(data, &tex.pixels[0], static_cast<size_t>(tex.size));
+	memcpy(data, tex.getRawPixels(),  static_cast<size_t>(tex.size));
 	vkUnmapMemory(device, stagingBuffer.memory);
 
 	uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(tex.width, tex.height)))) + 1;
@@ -1633,10 +1631,37 @@ GpuImage Device::createTexture(Texture tex)
 	destroyBuffer(stagingBuffer);
 
 	ret_image.view = createImageView(ret_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels, tex.is_cubemap);
+	ret_image.writeView = VK_NULL_HANDLE;
 	ret_image.mipLevels = mipLevels;
+	ret_image.height = tex.height;
+	ret_image.width = tex.width;
+
 	return ret_image;
 }
 
+
+void Device::createRWTexture(uint32_t width, uint32_t height, GpuImage& out_image, bool is_cubemap, bool sampled)
+{
+	ImageDesc desc = {
+		.width = width,
+		.height = height,
+		.mipLevels = 1,
+		.numSamples =  VK_SAMPLE_COUNT_1_BIT,
+		.format = VK_FORMAT_R32G32B32A32_SFLOAT,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		// TODO : check if we need to add VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT
+		.usage_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | (sampled ? VK_IMAGE_USAGE_SAMPLED_BIT : 0u),
+		.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.is_cubemap = is_cubemap,
+	};
+	createImage(desc, out_image);
+	out_image.view = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, 1, is_cubemap);
+	out_image.writeView = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, 1, is_cubemap, true);
+	out_image.mipLevels = 1;
+	out_image.width = width;
+	out_image.height = height;
+}
 
 void Device::createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa, bool sampled)
 {
@@ -1842,6 +1867,22 @@ void Device::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout
 		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
 		sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	}
+	else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_GENERAL)
+	{
+		barrier.srcAccessMask = 0;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+
+		sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		destinationStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+	}
+	else if (oldLayout == VK_IMAGE_LAYOUT_GENERAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+	{
+		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		sourceStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 	}
 	else {

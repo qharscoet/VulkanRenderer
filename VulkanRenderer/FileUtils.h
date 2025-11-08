@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <variant>
+#include <stdexcept>
 
 
 #define GLM_FORCE_RADIANS
@@ -15,13 +16,31 @@ struct Texture {
 	uint32_t height;
 	uint32_t width;
 	int channels;
-	std::vector<unsigned char> pixels;
 	size_t size;
 	bool is_srgb = true;
 	bool is_cubemap = false;
 
+	using PixelData = std::variant<std::vector<unsigned char>, std::vector<float>>;
+	PixelData pixels;
 	std::string name;
+
+	bool isHdr() const {
+		return std::holds_alternative<std::vector<float>>(pixels);
+	}
+
+	template<typename T>
+	const std::vector<T>& getPixels() const {
+		if (!std::holds_alternative<std::vector<T>>(pixels))
+			throw std::runtime_error("Texture is not this format");
+
+		return std::get<std::vector<T>>(pixels);
+	}
+
+	const void* getRawPixels() const {
+		return isHdr() ? (const void*)std::get<std::vector<float>>(pixels).data() : (const void*)std::get<std::vector<unsigned char>>(pixels).data();
+	}
 };
+
 
 struct MeshVertex
 {

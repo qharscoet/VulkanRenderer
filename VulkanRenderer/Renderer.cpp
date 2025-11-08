@@ -117,11 +117,12 @@ void Renderer::init(GLFWwindow* window, DeviceOptions options)
 
 
 
-	//initComputePipeline();
+	initComputePipeline();
+	initComputeSkyboxPipeline();
 	//initTestPipeline();
 	//initTestPipeline2();
 
-	//initParticlesBuffers();
+	initParticlesBuffers();
 
 
 	lastTime = glfwGetTime();
@@ -138,9 +139,9 @@ void Renderer::cleanup()
 	}
 
 
-	//cleanupParticles();
-	//m_device.destroyPipeline(computePipeline);
-	//m_device.destroyRenderPass(drawParticlesPass);
+	cleanupParticles();
+	m_device.destroyComputePass(computeParticlesPass);
+	m_device.destroyRenderPass(drawParticlesPass);
 
 }
 
@@ -168,11 +169,20 @@ void Renderer::draw()
 	updateComputeUniformBuffer();
 	updateLightData();
 
-	//m_device.dispatchCompute(computePipeline);
+	m_device.recordComputePass(computeParticlesPass);
+
+	static bool computedSky = false;
+	if (!computedSky)
+	{
+		m_device.recordComputePass(computeSkyboxPass);
+		computedSky = true;
+	}
+
 	m_device.beginDraw();
 
 	m_device.recordRenderPass(use_pbr ? renderPasses[1] : renderPasses[0]);
 	m_device.recordRenderPass(renderPasses[2]);
+	m_device.recordRenderPass(drawParticlesPass);
 	m_device.recordRenderPass(renderPasses[3]);
 	//m_device.recordRenderPass(drawParticlesPass);
 	//for (auto& renderPass : renderPasses)
@@ -460,9 +470,9 @@ void Renderer::drawRenderPass() {
 	m_device.pushConstants(&use_blinn, sizeof(MeshPacket::PushConstantsData) + 6 * sizeof(float), sizeof(uint32_t), (StageFlags)(e_Pixel | e_Vertex));
 	for (const auto& packet : packets)
 	{
-		const GpuImage& baseColor = *packet.textures[packet.materialData.baseColor];
+		const GpuImage& baseColor = *equirectangularTexture;// *packet.textures[packet.materialData.baseColor];
 		const GpuImage& normal = packet.materialData.normal >= 0 ? *packet.textures[packet.materialData.normal] : *getDefaultNormalMap();
-		m_device.bindRessources(0, {&m_device.getCurrentUniformBuffer()}, {&baseColor , &normal}, packet.sampler);
+		m_device.bindRessources(0, {&m_device.getCurrentUniformBuffer()}, {baseColor.view , normal.view}, packet.sampler);
 		drawPacket(packet);
 	}
 }
@@ -561,7 +571,7 @@ void Renderer::drawLightsRenderPass()
 		{
 			const GpuImage& baseColor = *packet.textures[packet.materialData.baseColor];
 			const GpuImage& normal = packet.materialData.normal >= 0 ? *packet.textures[packet.materialData.normal] : *getDefaultNormalMap();
-			m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { &baseColor , &normal }, packet.sampler);
+			m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { baseColor.view , normal.view }, packet.sampler);
 
 			m_device.pushConstants((void*)&l.color[0], sizeof(MeshPacket::PushConstantsData), 3 * sizeof(float), (StageFlags)(e_Vertex | e_Pixel));
 			m_device.drawPacket(packet);
@@ -629,6 +639,56 @@ void Renderer::initDrawLightsRenderPass()
 	renderPasses.push_back(m_device.createRenderPassAndPipeline(renderPassDesc, desc));
 }
 
+void Renderer::initComputeSkyboxPipeline() {
+	PipelineDesc desc = {
+		.type = PipelineType::Compute,
+		.computeShader = "equi_to_cubemap.slang.spv",
+		.bindings = {
+			{
+				{
+					.slot = 0,
+					.type = BindingType::StorageImage,
+					.stageFlags = e_Compute,
+				},
+				{
+					.slot = 1,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Compute,
+				},
+			}
+		},
+	};
+
+	ComputePassDesc computePassDesc = {
+			.dispatchFunction = [&]() {
+				BarrierDesc transitionBarrier = {
+					.image = resultCubemap.get(),
+					.oldLayout = ImageLayout::Undefined,
+					.newLayout = ImageLayout::General,
+					.mipLevels = 1,
+					.layerCount = 6,
+				};
+				m_device.transitionImage(transitionBarrier, PipelineType::Compute);
+
+				m_device.bindRessources(0, {}, { resultCubemap.get()->writeView, equirectangularTexture.get()->view}, defaultSampler, PipelineType::Compute);
+				m_device.dispatchCommand(
+					(uint32_t)std::ceil(resultCubemap->width / 32.0f),
+					(uint32_t)std::ceil(resultCubemap->height / 32.0f),
+					6);
+
+				transitionBarrier.oldLayout = ImageLayout::General;
+				transitionBarrier.newLayout = ImageLayout::ShaderRead;
+				m_device.transitionImage(transitionBarrier, PipelineType::Compute);
+			},
+			.debugInfo = {
+				.name = "Compute Skybox from Equirectangular",
+				.color = DebugColor::Magenta
+			}
+	};
+
+	computeSkyboxPass = m_device.createComputePass(computePassDesc, desc);
+}
+
 
 void Renderer::initSkyboxRenderPass()
 {
@@ -663,8 +723,8 @@ void Renderer::initSkyboxRenderPass()
 		.doClear = false,
 		.writeSwapChain = true,
 		.drawFunction = [&]() { 
-				m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { skyboxTexture.get()}, defaultSampler);
-				m_device.drawCommand(36)
+				m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { resultCubemap.get()->view}, defaultSampler);
+				m_device.drawCommand(36);
 		; },
 		.debugInfo = {
 			.name = "Skybox",
@@ -695,7 +755,7 @@ void Renderer::drawRenderPassPBR() {
 		const GpuImage& mettalicRoughness = packet.materialData.mettalicRoughness >= 0 ? *packet.textures[packet.materialData.mettalicRoughness] : *getDefaultTexture();
 		const GpuImage& occlusion = packet.materialData.occlusion >= 0 ? *packet.textures[packet.materialData.occlusion] : *getDefaultTexture();
 		const GpuImage& emissive = packet.materialData.emissive >= 0 ? *packet.textures[packet.materialData.emissive] : *getDefaultTextureBlack();
-		m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { &baseColor , &normal, &mettalicRoughness, &occlusion, &emissive }, packet.sampler);
+		m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { baseColor.view, normal.view, mettalicRoughness.view, occlusion.view, emissive.view }, packet.sampler);
 
 		m_device.pushConstants(&packet.materialData.pbrFactors, start_offset, sizeof(Mesh::Material::PBRFactors), (StageFlags)(e_Vertex | e_Pixel));
 		drawPacket(packet);
@@ -709,8 +769,8 @@ void Renderer::initPipelinePBR()
 
 	PipelineDesc desc = {
 		.type = PipelineType::Graphics,
-		.vertexShader = "pbr.slang.vs.spv",
-		.pixelShader = "pbr.slang.ps.spv",
+		.vertexShader = "pbr.slang.spv",
+		.pixelShader = "pbr.slang.spv",
 
 		.bindingDescription = &bindingDescription,
 		.attributeDescriptions = attributeDescriptions.data(),
@@ -792,6 +852,15 @@ void Renderer::initPipelinePBR()
 }
 
 
+void Renderer::updateParticles()
+{
+	const uint32_t current_frame = m_device.getCurrentFrame();
+	const uint32_t last_frame = (current_frame + 1) % m_device.getMaxFramesInFlight();
+
+	m_device.bindRessources(0, { &m_device.getCurrentComputeUniformBuffer(), &particleStorageBuffers[last_frame], &particleStorageBuffers[current_frame] }, {}, {}, PipelineType::Compute);
+	m_device.dispatchCommand(PARTICLE_COUNT / 256, 1, 1);
+}
+
 void Renderer::drawParticles()
 {
 	m_device.bindVertexBuffer(particleStorageBuffers[m_device.getCurrentFrame()]);
@@ -826,9 +895,16 @@ void Renderer::initComputePipeline()
 			},
 		};
 
-		computePipeline = m_device.createComputePipeline(desc);
-		computePipeline.descriptorPool = m_device.createDescriptorPool(desc.bindings[0].data(), desc.bindings[0].size()); //TODO: reconsider this
-		m_device.createComputeDescriptorSets(computePipeline);
+		ComputePassDesc computePassDesc = {
+			.dispatchFunction = [&]() { updateParticles(); },
+			.debugInfo = {
+				.name = "Particle Compute Pass",
+				.color = DebugColor::Magenta
+			}
+		};
+
+		computeParticlesPass = m_device.createComputePass(computePassDesc, desc);
+		m_device.createComputeDescriptorSets(computeParticlesPass.pipeline); //TODO FIX
 	}
 
 	{
@@ -855,6 +931,7 @@ void Renderer::initComputePipeline()
 			.hasDepth = true,
 			.useMsaa = device_options.usesMsaa,
 			.doClear = false,
+			.writeSwapChain = true,
 			.drawFunction = [&]() { drawParticles(); },
 			.debugInfo = {
 				.name = "Draw Particles Render Pass",
@@ -905,7 +982,7 @@ void Renderer::initTestPipeline()
 	m_device.createRenderTarget(800,600, test_images[0], false, true);
 	m_device.createRenderTarget(800,600, test_images[1], false, true);
 	m_device.createDepthTarget(800, 600, test_depth, false);
-	defaultSampler = m_device.createTextureSampler(1);
+	//defaultSampler = m_device.createTextureSampler(1);
 
 	RenderPassDesc renderPassDesc = {
 		.framebufferDesc = {
@@ -1003,7 +1080,7 @@ void Renderer::initParticlesBuffers()
 		float x = r * cos(theta) * HEIGHT / WIDTH;
 		float y = r * sin(theta);
 		particle.position = glm::vec2(x, y);
-		particle.velocity = glm::normalize(glm::vec2(x, y)) * 0.25f;
+		particle.velocity = glm::normalize(glm::vec2(x, y)) * 0.025f;
 		particle.color = glm::vec4(rndDist(rndEngine), rndDist(rndEngine), rndDist(rndEngine), 1.0f);
 	}
 
@@ -1044,7 +1121,7 @@ MeshPacket Renderer::createPacket(std::filesystem::path path, std::string textur
 
 
 	std::vector<GpuImageHandle> loaded_textures;
-	if (!tex.pixels.empty())
+	if (!tex.getPixels<unsigned char>().empty())
 	{
 		loaded_textures.push_back(m_resourceManager.createTexture(tex));
 		out_mesh.material.baseColor = 0;
@@ -1077,6 +1154,16 @@ void Renderer::loadSkybox(const std::array<const char*, 6>& faces)
 	const Texture cubeMap = loadCubemapTexture(faces);
 	
 	skyboxTexture = m_resourceManager.createTexture(cubeMap);
+}
+
+void Renderer::loadSkybox(const std::filesystem::path path)
+{
+
+	const Texture equirectangular = loadTexture(path.string().c_str());
+
+	equirectangularTexture = m_resourceManager.createTexture(equirectangular);
+	resultCubemap = m_resourceManager.createRWTexture(2048, 2048, true);
+	
 }
 
 void Renderer::loadScene(std::filesystem::path path)
@@ -1480,8 +1567,8 @@ void Renderer::createDefaultTextures()
 		.height = 128,
 		.width = 128,
 		.channels = 4,
+		.size = pixels.size() * sizeof(unsigned char),
 		.pixels = pixels,
-		.size = pixels.size() * sizeof(unsigned char)
 	};
 
 	defaultTexture = m_resourceManager.createTexture(tex);
@@ -1492,9 +1579,9 @@ void Renderer::createDefaultTextures()
 		.height = 128,
 		.width = 128,
 		.channels = 4,
-		.pixels = pixels,
 		.size = pixels.size() * sizeof(unsigned char),
-		.is_srgb = false
+		.is_srgb = false,
+		.pixels = pixels,
 	};
 
 	defaultTextureBlack = m_resourceManager.createTexture(tex);
@@ -1513,9 +1600,9 @@ void Renderer::createDefaultTextures()
 		.height = 128,
 		.width = 128,
 		.channels = 4,
-		.pixels = pixels,
 		.size = pixels.size() * sizeof(unsigned char),
-		.is_srgb = false
+		.is_srgb = false,
+		.pixels = pixels,
 	};
 
 	defaultNormalMap = m_resourceManager.createTexture(tex);

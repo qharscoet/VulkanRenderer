@@ -266,7 +266,7 @@ float4 PSMain(PSInput input, uniform Constants pc) : SV_TARGET
         float3 kD = 1.0 - kS;
         kD *= 1.0 - metallic;
 
-        Lo += (kD * (baseColor.rgb / PI) + specular ) * radiance * NdotL;
+        Lo += (kD * (baseColor.rgb /* / PI */) + specular ) * radiance * NdotL;
     }
 
     float3 ambient = float3(0.03) * baseColor.rgb * occlusion.r;

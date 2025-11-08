@@ -187,13 +187,14 @@ private:
 		//m_renderer.addPacket(m_renderer.createPacket("assets/viking_room.obj", "assets/viking_room.png"));
 		//m_renderer.addPacket(m_renderer.createPacket(gltfAssetsPath  + "CompareNormal/glTF/CompareNormal.gltf"));
 		//m_renderer.loadScene(gltfAssetsPath + "Sponza/glTF/Sponza.gltf");
-		//m_renderer.loadScene(gltfAssetsPath + "CarConcept/glTF/CarConcept.gltf");
-		m_renderer.loadScene(AssetsPath + "survival_guitar_backpack/scene.gltf");
+		m_renderer.loadScene(gltfAssetsPath + "CompareMetallic/glTF/CompareMetallic.gltf");
+		//m_renderer.loadScene(AssetsPath + "survival_guitar_backpack/scene.gltf");
 	}
 
 
 	void loadSkybox()
 	{
+		static const std::string gltfEnvMapPath = "./glTF-Sample-Environments/";
 		const std::array<const char*, 6> faces
 		{
 			"./assets/skybox/right.png",
@@ -204,6 +205,7 @@ private:
 			"./assets/skybox/back.png"
 		};
 		m_renderer.loadSkybox(faces);
+		m_renderer.loadSkybox(gltfEnvMapPath + "ennis.hdr");
 	}
 
 	void loadSpheres()

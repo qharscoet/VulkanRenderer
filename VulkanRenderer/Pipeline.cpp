@@ -67,6 +67,7 @@ VkDescriptorSetLayout Device::createDescriptorSetLayout(BindingDesc* bindingDesc
 		case BindingType::UBO: 				bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; break;
 		case BindingType::ImageSampler: 	bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; break;
 		case BindingType::StorageBuffer: 	bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; break;
+		case BindingType::StorageImage:		bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; break;
 		default:break;
 		}
 		bindings[i].descriptorCount = 1;
@@ -109,6 +110,7 @@ VkDescriptorPool Device::createDescriptorPool(BindingDesc* bindingDescs, size_t 
 		case BindingType::UBO: 				poolSizes[i].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; break;
 		case BindingType::ImageSampler: 	poolSizes[i].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; break;
 		case BindingType::StorageBuffer: 	poolSizes[i].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; break;
+		case BindingType::StorageImage: 	poolSizes[i].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; break;
 		default:break;
 		}
 
@@ -253,8 +255,8 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	auto vertShaderCode = readFile(baseShaderPath + desc.vertexShader);
 	auto fragShaderCode = readFile(baseShaderPath + desc.pixelShader);
 
-	const bool isVertHLSL = strstr(desc.vertexShader, ".vs") != NULL;
-	const bool isFragHLSL = strstr(desc.pixelShader, ".ps") != NULL;
+	const bool isVertHLSL = strstr(desc.vertexShader, ".vs") != NULL || strstr(desc.vertexShader, ".slang") != NULL;
+	const bool isFragHLSL = strstr(desc.pixelShader, ".ps") != NULL || strstr(desc.vertexShader, ".slang") != NULL;;
 
 	VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
 	VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
@@ -559,10 +561,19 @@ Pipeline Device::createComputePipeline(PipelineDesc desc)
 	vkDestroyShaderModule(device, computeShaderModule, nullptr);
 
 
-	out_pipeline.descriptorSetLayouts = setLayouts;
 	out_pipeline.renderPass = VK_NULL_HANDLE;
+	out_pipeline.renderPassMsaa = VK_NULL_HANDLE;
+	out_pipeline.graphicsPipelineMsaa = VK_NULL_HANDLE;
+
+	out_pipeline.descriptorSetLayouts = setLayouts;
 	out_pipeline.pipelineLayout = computePipelineLayout;
-	out_pipeline.descriptorPool = VK_NULL_HANDLE;
+	if (desc.bindings.size() > 0)
+		out_pipeline.descriptorPool = createDescriptorPool(desc.bindings[0].data(), desc.bindings[0].size()); //TODO: reconsider this
+	else
+		out_pipeline.descriptorPool = createDescriptorPool(nullptr, 0); //TODO: reconsider this
+
+	out_pipeline.descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+	out_pipeline.bindings = std::move(desc.bindings);
 
 	return out_pipeline;
 }
@@ -617,7 +628,9 @@ RenderPass Device::createRenderPassAndPipeline(RenderPassDesc renderPassDesc, Pi
 	memcpy(markerInfo.color, debug_colors[(int)renderPassDesc.debugInfo.color], sizeof(markerInfo.color));
 
 	SetRenderPassName(renderpass, renderPassDesc.debugInfo.name);
-	SetRenderPassName(renderpassMsaa, renderPassDesc.debugInfo.name);
+
+	if (renderpassMsaa != VK_NULL_HANDLE)
+		SetRenderPassName(renderpassMsaa, renderPassDesc.debugInfo.name);
 
 	return {
 		.renderPass = renderpass,
@@ -633,9 +646,21 @@ RenderPass Device::createRenderPassAndPipeline(RenderPassDesc renderPassDesc, Pi
 	};
 }
 
-void Device::setRenderPass(RenderPass& renderPass)
+ComputePass Device::createComputePass(ComputePassDesc computePassDesc, PipelineDesc pipelineDesc)
 {
-	currentRenderPass = &renderPass;
+	Pipeline pipeline = createComputePipeline(pipelineDesc);
+
+	VkDebugUtilsLabelEXT markerInfo = {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+			.pLabelName = computePassDesc.debugInfo.name,
+	};
+	memcpy(markerInfo.color, debug_colors[(int)computePassDesc.debugInfo.color], sizeof(markerInfo.color));
+
+	return {
+		.pipeline = pipeline,
+		.dispatch = computePassDesc.dispatchFunction,
+		.markerInfo = markerInfo,
+	};
 }
 
 
@@ -652,16 +677,16 @@ void Device::bindTexture(const GpuImage& image, VkSampler sampler)
 {
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 
-	VkDescriptorPool descriptorPool = currentRenderPass->pipeline.descriptorPool;
-	VkDescriptorSetLayout descriptorSetLayout = currentRenderPass->pipeline.descriptorSetLayouts[0];
+	VkDescriptorPool descriptorPool = currentPipeline->descriptorPool;
+	VkDescriptorSetLayout descriptorSetLayout = currentPipeline->descriptorSetLayouts[0];
 
 	std::hash<VkImage> hasher;
 	size_t hash = 0;
 	hash_combine(hash, hasher(image.image));
 
-	if (currentRenderPass->pipeline.descriptorSetsMap.contains(hash))
+	if (currentPipeline->descriptorSetsMap.contains(hash))
 	{
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &currentRenderPass->pipeline.descriptorSetsMap[hash], 0, nullptr);
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentPipeline->pipelineLayout, 0, 1, &currentPipeline->descriptorSetsMap[hash], 0, nullptr);
 		return;
 	}
 	else {
@@ -689,31 +714,31 @@ void Device::bindTexture(const GpuImage& image, VkSampler sampler)
 
 			vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
 		
-		currentRenderPass->pipeline.descriptorSetsMap[hash] = descriptorSet;
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+		currentPipeline->descriptorSetsMap[hash] = descriptorSet;
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentPipeline->pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 	}
 
 	//std::hash<T> hasher;
 	//glm::detail::hash_combine(seed, hasher(v));
 
 
-	//vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, 0, 1, &image.descriptorSet, 0, nullptr);
+	//vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentPipeline->pipelineLayout, 0, 1, &image.descriptorSet, 0, nullptr);
 }
 
 void Device::bindBuffer(const Buffer& buffer, uint32_t set, uint32_t binding)
 {
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 
-	VkDescriptorPool descriptorPool = currentRenderPass->pipeline.descriptorPool;
-	VkDescriptorSetLayout descriptorSetLayout = currentRenderPass->pipeline.descriptorSetLayouts[set];
+	VkDescriptorPool descriptorPool = currentPipeline->descriptorPool;
+	VkDescriptorSetLayout descriptorSetLayout = currentPipeline->descriptorSetLayouts[set];
 
 	std::hash<VkBuffer> hasher;
 	size_t hash = 0;
 	hash_combine(hash, hasher(buffer.buffer));
 
-	if (currentRenderPass->pipeline.descriptorSetsMap.contains(hash))
+	if (currentPipeline->descriptorSetsMap.contains(hash))
 	{
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, set, 1, &currentRenderPass->pipeline.descriptorSetsMap[hash], 0, nullptr);
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentPipeline->pipelineLayout, set, 1, &currentPipeline->descriptorSetsMap[hash], 0, nullptr);
 		return;
 	}
 	else {
@@ -738,19 +763,19 @@ void Device::bindBuffer(const Buffer& buffer, uint32_t set, uint32_t binding)
 
 		vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
 
-		currentRenderPass->pipeline.descriptorSetsMap[hash] = descriptorSet;
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, set, 1, &descriptorSet, 0, nullptr);
+		currentPipeline->descriptorSetsMap[hash] = descriptorSet;
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentPipeline->pipelineLayout, set, 1, &descriptorSet, 0, nullptr);
 	}
 
 }
 
-void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, std::vector<const GpuImage*> images, const VkSampler sampler)
+void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, std::vector<VkImageView> images, const VkSampler sampler, PipelineType binding_point)
 {
-	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
+	VkCommandBuffer commandBuffer = binding_point == PipelineType::Graphics ? commandBuffers[current_frame] : computeCommandBuffers[current_frame];
 
-	VkDescriptorPool descriptorPool = currentRenderPass->pipeline.descriptorPool;
-	VkDescriptorSetLayout descriptorSetLayout = currentRenderPass->pipeline.descriptorSetLayouts[set];
-	std::vector<BindingDesc>& bindings = currentRenderPass->pipeline.bindings[set];
+	VkDescriptorPool descriptorPool = currentPipeline->descriptorPool;
+	VkDescriptorSetLayout descriptorSetLayout = currentPipeline->descriptorSetLayouts[set];
+	std::vector<BindingDesc>& bindings = currentPipeline->bindings[set];
 
 	std::hash<VkImageView> img_hasher;
 	std::hash<VkSampler> sampler_hasher;
@@ -772,16 +797,18 @@ void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, st
 			break;
 
 		case BindingType::ImageSampler:
-			hash_combine(hash, img_hasher((*imageIt++)->view));
+			hash_combine(hash, img_hasher((*imageIt++)));
 			break;
 		}
 	}
 
 	hash_combine(hash, sampler_hasher(selectedSampler));
 
-	if (currentRenderPass->pipeline.descriptorSetsMap.contains(hash))
+	VkPipelineBindPoint vkBindingPoint = binding_point == PipelineType::Graphics ? VK_PIPELINE_BIND_POINT_GRAPHICS : VK_PIPELINE_BIND_POINT_COMPUTE;
+
+	if (currentPipeline->descriptorSetsMap.contains(hash))
 	{
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, set, 1, &currentRenderPass->pipeline.descriptorSetsMap[hash], 0, nullptr);
+		vkCmdBindDescriptorSets(commandBuffer, vkBindingPoint, currentPipeline->pipelineLayout, set, 1, &currentPipeline->descriptorSetsMap[hash], 0, nullptr);
 	}
 	else {
 		VkDescriptorSet descriptorSet;
@@ -791,22 +818,23 @@ void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, st
 		std::vector<VkDescriptorBufferInfo> descriptorBufferInfos;
 		descriptorImageInfos.reserve(images.size());
 		descriptorBufferInfos.reserve(images.size());
-		std::transform(images.begin(), images.end(), std::back_inserter(descriptorImageInfos), [&](const GpuImage* img) { return getDescriptorImageInfo(*img, selectedSampler); });
+		std::transform(images.begin(), images.end(), std::back_inserter(descriptorImageInfos), [&](const VkImageView img) { return getDescriptorImageInfo(img, selectedSampler); });
 		std::transform(buffers.begin(), buffers.end(), std::back_inserter(descriptorBufferInfos), [&](const Buffer* buff) { return getDescriptorBufferInfo(*buff); });
 
 		//auto descriptorImageInfos = images | std::views::transform([&](const GpuImage* img) { return getDescriptorImageInfo(*img, defaultSampler); });
 		//auto descriptorBufferInfos = buffers | std::views::transform([&](const Buffer* buff) { return getDescriptorBufferInfo(*buff); });
 
 		updateDescriptorSet(bindings, descriptorImageInfos, descriptorBufferInfos, descriptorSet);
-		currentRenderPass->pipeline.descriptorSetsMap[hash] = descriptorSet;
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentRenderPass->pipeline.pipelineLayout, set, 1, &descriptorSet, 0, nullptr);
+		currentPipeline->descriptorSetsMap[hash] = descriptorSet;
+		vkCmdBindDescriptorSets(commandBuffer, vkBindingPoint, currentPipeline->pipelineLayout, set, 1, &descriptorSet, 0, nullptr);
 	}
 }
 
-void Device::transitionImage(BarrierDesc desc)
+void Device::transitionImage(BarrierDesc desc, PipelineType pipeline_type)
 {
 	const VkImageLayout layoutMap[ImageLayout::Nb] = {
 		VK_IMAGE_LAYOUT_UNDEFINED,
+		VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -814,8 +842,10 @@ void Device::transitionImage(BarrierDesc desc)
 		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 	};
 
-	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
-	transitionImageLayout(desc.image->image, VK_FORMAT_R8G8B8A8_SRGB, layoutMap[desc.oldLayout], layoutMap[desc.newLayout], desc.mipLevels, 1, commandBuffer);
+	VkCommandBuffer commandBuffer = pipeline_type == PipelineType::Graphics ? commandBuffers[current_frame] : computeCommandBuffers[current_frame];
+
+	// TODO take care of the format
+	transitionImageLayout(desc.image->image, VK_FORMAT_R8G8B8A8_SRGB, layoutMap[desc.oldLayout], layoutMap[desc.newLayout], desc.mipLevels, desc.layerCount, commandBuffer);
 }
 
 void Device::drawCommand(uint32_t vertex_count)
@@ -830,7 +860,7 @@ void Device::pushConstants(const void* data, uint32_t offset, uint32_t size, Sta
 
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 
-	VkPipelineLayout layout = (pipelineLayout == VK_NULL_HANDLE) ? currentRenderPass->pipeline.pipelineLayout : pipelineLayout;
+	VkPipelineLayout layout = (pipelineLayout == VK_NULL_HANDLE) ? currentPipeline->pipelineLayout : pipelineLayout;
 
 	vkCmdPushConstants(commandBuffer, layout, getVkStageFlags(stageFlags), offset, size, data);
 }
@@ -841,7 +871,7 @@ void Device::drawPacket(const MeshPacket& packet)
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 
 	{
-		vkCmdPushConstants(commandBuffer, currentRenderPass->pipeline.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MeshPacket::PushConstantsData), &packet.transform);
+		vkCmdPushConstants(commandBuffer, currentPipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MeshPacket::PushConstantsData), &packet.transform);
 	}
 
 	{
@@ -862,7 +892,7 @@ void Device::drawPacket(const MeshPacket& packet)
 }
 
 
-void Device::destroyPipeline(Pipeline pipeline)
+void Device::destroyPipeline(const Pipeline& pipeline)
 {
 	for (const auto setLayout : pipeline.descriptorSetLayouts)
 	{
@@ -870,14 +900,17 @@ void Device::destroyPipeline(Pipeline pipeline)
 	}
 
 	vkDestroyPipeline(device, pipeline.graphicsPipeline, nullptr);
-	vkDestroyPipeline(device, pipeline.graphicsPipelineMsaa, nullptr);
+
+	if(pipeline.graphicsPipelineMsaa)
+		vkDestroyPipeline(device, pipeline.graphicsPipelineMsaa, nullptr);
+
 	vkDestroyPipelineLayout(device, pipeline.pipelineLayout, nullptr);
 	if(pipeline.descriptorPool)
 		vkDestroyDescriptorPool(device, pipeline.descriptorPool, nullptr);
 }
 
 
-void Device::destroyRenderPass(RenderPass renderPass)
+void Device::destroyRenderPass(const RenderPass& renderPass)
 {
 	vkDestroyRenderPass(device, renderPass.renderPass, nullptr);
 	if (renderPass.renderPassMsaa != VK_NULL_HANDLE)
@@ -886,10 +919,15 @@ void Device::destroyRenderPass(RenderPass renderPass)
 	destroyPipeline(renderPass.pipeline);
 }
 
+void Device::destroyComputePass(const ComputePass& computePass)
+{
+	destroyPipeline(computePass.pipeline);
+}
+
 void Device::recordRenderPass(VkCommandBuffer commandBuffer, RenderPass& renderPass)
 {
 	PushCmdLabel(commandBuffer, &renderPass.markerInfo);
-	currentRenderPass = &renderPass;
+	currentPipeline = &renderPass.pipeline;
 	VkRenderPassBeginInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderPassInfo.renderPass = this->usesMsaa? renderPass.renderPassMsaa:  renderPass.renderPass;
@@ -935,6 +973,40 @@ void Device::recordRenderPass(RenderPass& renderPass)
 
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
 	recordRenderPass(commandBuffer, renderPass);
+}
+
+void Device::recordComputePass(VkCommandBuffer commandBuffer, ComputePass& computePass) {
+
+	if (!hasRecorededCompute) {
+
+		vkWaitForFences(device, 1, &computeInFlightFences[current_frame], VK_TRUE, UINT64_MAX);
+		vkResetFences(device, 1, &computeInFlightFences[current_frame]);
+		vkResetCommandBuffer(commandBuffer, /*VkCommandBufferResetFlagBits*/ 0);
+
+
+		VkCommandBufferBeginInfo beginInfo{};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+		if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+			throw std::runtime_error("failed to begin recording compute command buffer!");
+		}
+
+
+		hasRecorededCompute = true;
+	}
+	currentPipeline = &computePass.pipeline;
+
+	PushCmdLabel(commandBuffer, &computePass.markerInfo);
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePass.pipeline.graphicsPipeline);
+	computePass.dispatch();
+	EndCmdLabel(commandBuffer);
+}
+
+void Device::recordComputePass(ComputePass& computePass)
+{
+	VkCommandBuffer commandBuffer = computeCommandBuffers[current_frame];
+
+	recordComputePass(commandBuffer, computePass);
 }
 
 void Device::recordImGui()

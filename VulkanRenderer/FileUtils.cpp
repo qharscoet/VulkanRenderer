@@ -43,19 +43,62 @@ std::vector<char> readFile(const std::string& filename) {
 
 Texture loadTexture(const char* path) {
 	int texWidth, texHeight, texChannels;
-	stbi_uc* pixels = stbi_load(path, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-	size_t imageSize = texWidth * texHeight * 4;
 
-	if (!pixels) {
-		throw std::runtime_error("failed to load texture image!");
+	auto load_lambda = []<typename T>(const char* path, int* width, int* height, int* channels) -> std::vector<T> {
+
+		T* pixels = nullptr;
+		if constexpr (std::is_same_v<T, unsigned char>) {
+			pixels = stbi_load(path, width, height, channels, STBI_rgb_alpha);
+			if (!pixels) {
+				throw std::runtime_error("failed to load texture image!");
+			}
+		}
+		else if constexpr (std::is_same_v<T, float>) {
+			pixels = stbi_loadf(path, width, height, channels, STBI_rgb_alpha);
+			if (!pixels) {
+				throw std::runtime_error("failed to load HDR texture image!");
+			}
+		}
+		else {
+			static_assert("Unsupported pixel type");
+		}
+
+		size_t imageSize = (*width) * (*height) * /*(*channels)*/ 4; //Force 4 channels
+		std::vector<T> pixel_data;
+		pixel_data.resize(imageSize);
+		
+		memcpy(&pixel_data[0], pixels, imageSize * sizeof(T));
+		*channels = 4;
+	
+		stbi_image_free(pixels);
+
+		return pixel_data;
+	};
+
+	Texture::PixelData pixel_data;
+
+	if (stbi_is_hdr(path))
+	{
+		pixel_data = std::move(load_lambda.template operator() < float > (path, &texWidth, &texHeight, &texChannels));
+	}
+	else
+	{
+		pixel_data = std::move(load_lambda.template operator() < unsigned char > (path, &texWidth, &texHeight, &texChannels));
 	}
 
-	std::vector<unsigned char> pixel_data;
-	pixel_data.resize(imageSize);
-	memcpy(&pixel_data[0], pixels, imageSize);
+	size_t imageSize = texWidth * texHeight * texChannels * (stbi_is_hdr(path) ? sizeof(float) : sizeof(unsigned char));
 
-	stbi_image_free(pixels);
-	return { (uint32_t)texWidth, (uint32_t)texHeight, texChannels, std::move(pixel_data), imageSize };
+
+	return {
+		.height = (uint32_t)texHeight,
+		.width = (uint32_t)texWidth,
+		.channels = texChannels,
+		.size = imageSize,
+		.is_srgb = true,
+		.is_cubemap = false,
+		.pixels = std::move(pixel_data),
+		.name = std::string(path)
+	};
 }
 
 
@@ -94,10 +137,10 @@ Texture loadCubemapTexture(const std::array<const char*, 6>& face_paths)
 		.height = (uint32_t)texHeight,
 		.width = (uint32_t)texWidth,
 		.channels = texChannels,
-		.pixels = std::move(pixels),
 		.size = faceSize * 6,
 		.is_srgb = false,
-		.is_cubemap = true
+		.is_cubemap = true,
+		.pixels = std::move(pixels)
 	};
 }
 

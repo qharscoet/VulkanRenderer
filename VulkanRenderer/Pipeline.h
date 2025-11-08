@@ -28,7 +28,8 @@ enum class DepthCompareOp {
 enum class BindingType {
 	UBO,
 	ImageSampler,
-	StorageBuffer
+	StorageBuffer,
+	StorageImage,
 };
 
 enum StageFlags {
@@ -91,6 +92,7 @@ struct FramebufferDesc {
 
 enum ImageLayout {
 	Undefined,
+	General,
 	TransferSrc,
 	TransferDst,
 	RenderTarget,
@@ -105,6 +107,7 @@ struct BarrierDesc {
 	ImageLayout oldLayout;
 	ImageLayout newLayout;
 	uint32_t mipLevels;
+	uint32_t layerCount = 1;
 };
 
 
@@ -174,5 +177,16 @@ struct RenderPass {
 
 	std::function<void()> draw;
 
+	VkDebugUtilsLabelEXT markerInfo;
+};
+
+struct ComputePassDesc {
+	std::function<void()> dispatchFunction;
+	DebugMarkerInfo debugInfo;
+};
+
+struct ComputePass {
+	Pipeline pipeline;
+	std::function<void()> dispatch;
 	VkDebugUtilsLabelEXT markerInfo;
 };
