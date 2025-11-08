@@ -92,6 +92,7 @@ private:
 	std::vector<RenderPass> renderPasses;
 
 	ComputePass computeSkyboxPass;
+	ComputePass computeIBLPass;
 
 	ComputePass computeParticlesPass;
 	VkDescriptorPool computeDescriptorPool;
@@ -101,6 +102,8 @@ private:
 	GpuImageHandle skyboxTexture;
 	GpuImageHandle equirectangularTexture;
 	GpuImageHandle resultCubemap;
+	GpuImageHandle irradianceMap;
+	GpuImageHandle specularMap;
 
 	GpuImageHandle defaultTexture;
 	GpuImageHandle defaultTextureBlack;
@@ -132,7 +135,7 @@ private:
 	void initPipelinePBR();
 
 	void initDrawLightsRenderPass();
-	void initComputeSkyboxPipeline();
+	void initComputeSkyboxPasses();
 	void initSkyboxRenderPass();
 
 	void initParticlesBuffers();

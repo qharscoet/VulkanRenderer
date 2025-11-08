@@ -35,7 +35,7 @@ struct Constants
 
     uint normal_mode;
     uint debug_mode;
-    uint padding0;
+    uint ibl;
 	uint padding1;
 
     float4 baseColorFactor;
@@ -137,6 +137,9 @@ cbuffer light_data : register(b0, space1)
 {
     Light light[10];
 }
+[[vk::binding(1, 1)]]
+SamplerCube irradianceMap;
+
 
 Sampler2D g_baseColor;
 Sampler2D g_normal;
@@ -144,7 +147,9 @@ Sampler2D g_metallicRoughness;
 Sampler2D g_occlusion;
 Sampler2D g_emissive;
 
+
 /* https://learnopengl.com/PBR/Theory */
+/* https://github.com/KhronosGroup/glTF-Sample-Renderer/ */
 
 float3 computeNormal(PSInput input)
 {
@@ -234,13 +239,16 @@ float4 PSMain(PSInput input, uniform Constants pc) : SV_TARGET
     float3 N = pc.normal_mode && !isnan(input.tangent) ? computeNormal(input) : normalize(input.normal);
     float3 V = normalize(pc.eye - input.worldPos);
 
-    for (int i = 0; i < pc.light_count; i++)
-    {
-        Light l = light[i];
+    float3 F0 = float3(0.04, 0.04, 0.04); // dielectric reflectance
+    F0 = lerp(F0, baseColor.rgb, metallic);
+
+	for (int i = 0; i < pc.light_count; i++)
+	{
+		Light l = light[i];
 		float3 L = normalize(l.position - input.worldPos);
 		if (l.type == DIRLIGHT)
-            L = normalize(-l.position); // position is used as direction in dirlight
-        float3 H = normalize(V + L);
+			L = normalize(-l.position); // position is used as direction in dirlight
+		float3 H = normalize(V + L);
 
 		float3 radiance = getRadiance(l, input, V);
 
@@ -248,29 +256,40 @@ float4 PSMain(PSInput input, uniform Constants pc) : SV_TARGET
 		float NdotL = max(dot(N, L), 0.0);
 		float NdotV = max(dot(N, V), 0.0);
 		float NdotH = max(dot(N, H), 0.0);
-        float HdotV = max(dot(H, V), 0.0);
+		float HdotV = max(dot(H, V), 0.0);
 
+		float3 F = fresnelSchlick(HdotV, F0);
 
-        float3 F0 = float3(0.04, 0.04, 0.04);            // dielectric reflectance
-        F0 = lerp(F0, baseColor.rgb, metallic);
-        float3 F = fresnelSchlick(HdotV, F0);
-
-        float NDF = NDistributionGGX(NdotH, roughness);
-        float G = GeometrySmith(NdotV, NdotL, roughness);
+		float NDF = NDistributionGGX(NdotH, roughness);
+		float G = GeometrySmith(NdotV, NdotL, roughness);
 
 		float3 numerator = NDF * G * F;
 		float denominator = 4.0 * NdotV * NdotL + 0.001; // prevent divide by zero
 		float3 specular = numerator / denominator;
 
 		float3 kS = F;
-        float3 kD = 1.0 - kS;
-        kD *= 1.0 - metallic;
+		float3 kD = 1.0 - kS;
+		kD *= 1.0 - metallic;
 
-        Lo += (kD * (baseColor.rgb /* / PI */) + specular ) * radiance * NdotL;
+		Lo += (kD * (baseColor.rgb/ PI) + specular ) * radiance * NdotL;
+	}
+
+    float3 ambient;
+    if (pc.ibl > 0)
+    {
+		float3 kS = fresnelSchlick(max(dot(N, V), 0.0), F0);
+		float3 kD = 1.0 - kS;
+		float3 irradiance = irradianceMap.Sample(N).rgb;
+        float3 diffuse = irradiance * baseColor.rgb;
+        ambient = (kD * diffuse) * occlusion;
     }
+    else {
+		ambient = float3(0.03) * baseColor.rgb * occlusion.r;
+	}
 
-    float3 ambient = float3(0.03) * baseColor.rgb * occlusion.r;
-    float3 color = (Lo * occlusion) + emissive;
+
+    float3 color = ambient + Lo + emissive;
+    //float3 color = (Lo * occlusion) + emissive;
 
 
     // HDR Tone mapping ? Reinhard operator nantoka

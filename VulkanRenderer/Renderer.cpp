@@ -118,7 +118,7 @@ void Renderer::init(GLFWwindow* window, DeviceOptions options)
 
 
 	initComputePipeline();
-	initComputeSkyboxPipeline();
+	initComputeSkyboxPasses();
 	//initTestPipeline();
 	//initTestPipeline2();
 
@@ -161,6 +161,7 @@ void Renderer::newImGuiFrame()
 static uint32_t normal_mode = true;
 static uint32_t use_blinn = true;
 static uint32_t use_pbr = false;
+static uint32_t use_ibl = false;
 static int debug_mode = 0;
 
 void Renderer::draw()
@@ -175,6 +176,7 @@ void Renderer::draw()
 	if (!computedSky)
 	{
 		m_device.recordComputePass(computeSkyboxPass);
+		m_device.recordComputePass(computeIBLPass);
 		computedSky = true;
 	}
 
@@ -324,6 +326,10 @@ void Renderer::drawImgui()
 	ImGui::Checkbox("Use Normal Map", (bool*)&normal_mode);
 	ImGui::Checkbox("Use Blinn-Phong", (bool*)&use_blinn);
 	ImGui::Checkbox("Use PBR", (bool*)&use_pbr);
+	if (use_pbr)
+	{
+		ImGui::Checkbox("Use IBL", (bool*)&use_ibl);
+	}
 	ImGui::Combo("Debug Mode", &debug_mode, "None\0Normal\0Tangent\0Binormal\0Normal Map\0Shaded Normal\0");
 
 	if (ImGui::CollapsingHeader("Object List"))
@@ -639,54 +645,106 @@ void Renderer::initDrawLightsRenderPass()
 	renderPasses.push_back(m_device.createRenderPassAndPipeline(renderPassDesc, desc));
 }
 
-void Renderer::initComputeSkyboxPipeline() {
-	PipelineDesc desc = {
-		.type = PipelineType::Compute,
-		.computeShader = "equi_to_cubemap.slang.spv",
-		.bindings = {
-			{
+void Renderer::initComputeSkyboxPasses() {
+	{
+		PipelineDesc desc = {
+			.type = PipelineType::Compute,
+			.computeShader = "equi_to_cubemap.slang.spv",
+			.bindings = {
 				{
-					.slot = 0,
-					.type = BindingType::StorageImage,
-					.stageFlags = e_Compute,
-				},
-				{
-					.slot = 1,
-					.type = BindingType::ImageSampler,
-					.stageFlags = e_Compute,
-				},
-			}
-		},
-	};
-
-	ComputePassDesc computePassDesc = {
-			.dispatchFunction = [&]() {
-				BarrierDesc transitionBarrier = {
-					.image = resultCubemap.get(),
-					.oldLayout = ImageLayout::Undefined,
-					.newLayout = ImageLayout::General,
-					.mipLevels = 1,
-					.layerCount = 6,
-				};
-				m_device.transitionImage(transitionBarrier, PipelineType::Compute);
-
-				m_device.bindRessources(0, {}, { resultCubemap.get()->writeView, equirectangularTexture.get()->view}, defaultSampler, PipelineType::Compute);
-				m_device.dispatchCommand(
-					(uint32_t)std::ceil(resultCubemap->width / 32.0f),
-					(uint32_t)std::ceil(resultCubemap->height / 32.0f),
-					6);
-
-				transitionBarrier.oldLayout = ImageLayout::General;
-				transitionBarrier.newLayout = ImageLayout::ShaderRead;
-				m_device.transitionImage(transitionBarrier, PipelineType::Compute);
+					{
+						.slot = 0,
+						.type = BindingType::StorageImage,
+						.stageFlags = e_Compute,
+					},
+					{
+						.slot = 1,
+						.type = BindingType::ImageSampler,
+						.stageFlags = e_Compute,
+					},
+				}
 			},
-			.debugInfo = {
-				.name = "Compute Skybox from Equirectangular",
-				.color = DebugColor::Magenta
-			}
-	};
+		};
 
-	computeSkyboxPass = m_device.createComputePass(computePassDesc, desc);
+		ComputePassDesc computePassDesc = {
+				.dispatchFunction = [&]() {
+					BarrierDesc transitionBarrier = {
+						.image = resultCubemap.get(),
+						.oldLayout = ImageLayout::Undefined,
+						.newLayout = ImageLayout::General,
+						.mipLevels = 1,
+						.layerCount = 6,
+					};
+					m_device.transitionImage(transitionBarrier, PipelineType::Compute);
+
+					m_device.bindRessources(0, {}, { resultCubemap.get()->writeView, equirectangularTexture.get()->view}, defaultSampler, PipelineType::Compute);
+					m_device.dispatchCommand(
+						(uint32_t)std::ceil(resultCubemap->width / 32.0f),
+						(uint32_t)std::ceil(resultCubemap->height / 32.0f),
+						6);
+
+					transitionBarrier.oldLayout = ImageLayout::General;
+					transitionBarrier.newLayout = ImageLayout::ShaderRead;
+					m_device.transitionImage(transitionBarrier, PipelineType::Compute);
+				},
+				.debugInfo = {
+					.name = "Compute Skybox from Equirectangular",
+					.color = DebugColor::Magenta
+				}
+		};
+
+		computeSkyboxPass = m_device.createComputePass(computePassDesc, desc);
+	}
+
+	{
+		PipelineDesc desc = {
+			.type = PipelineType::Compute,
+			.computeShader = "compute_ibl.slang.spv",
+			.bindings = {
+				{
+					{
+						.slot = 0,
+						.type = BindingType::StorageImage,
+						.stageFlags = e_Compute,
+					},
+					{
+						.slot = 1,
+						.type = BindingType::ImageSampler,
+						.stageFlags = e_Compute,
+					},
+				}
+			},
+		};
+
+		ComputePassDesc computePassDesc = {
+				.dispatchFunction = [&]() {
+					BarrierDesc transitionBarrier = {
+						.image = irradianceMap.get(),
+						.oldLayout = ImageLayout::Undefined,
+						.newLayout = ImageLayout::General,
+						.mipLevels = 1,
+						.layerCount = 6,
+					};
+					m_device.transitionImage(transitionBarrier, PipelineType::Compute);
+
+					m_device.bindRessources(0, {}, { irradianceMap.get()->writeView, resultCubemap.get()->view}, defaultSampler, PipelineType::Compute);
+					m_device.dispatchCommand(
+						(uint32_t)std::ceil(irradianceMap->width / 32.0f),
+						(uint32_t)std::ceil(resultCubemap->height / 32.0f),
+						6);
+
+					transitionBarrier.oldLayout = ImageLayout::General;
+					transitionBarrier.newLayout = ImageLayout::ShaderRead;
+					m_device.transitionImage(transitionBarrier, PipelineType::Compute);
+				},
+				.debugInfo = {
+					.name = "Compute Skybox from Equirectangular",
+					.color = DebugColor::Magenta
+				}
+		};
+	
+		computeIBLPass = m_device.createComputePass(computePassDesc, desc);
+	}
 }
 
 
@@ -723,7 +781,7 @@ void Renderer::initSkyboxRenderPass()
 		.doClear = false,
 		.writeSwapChain = true,
 		.drawFunction = [&]() { 
-				m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { resultCubemap.get()->view}, defaultSampler);
+				m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { irradianceMap.get()->view}, defaultSampler);
 				m_device.drawCommand(36);
 		; },
 		.debugInfo = {
@@ -737,7 +795,7 @@ void Renderer::initSkyboxRenderPass()
 }
 
 void Renderer::drawRenderPassPBR() {
-	m_device.bindRessources(1, { &light_data_gpu}, {});
+	m_device.bindRessources(1, { &light_data_gpu}, {irradianceMap.get()->view }, defaultSampler);
 	uint32_t count = lights.size();
 
 	size_t start_offset = sizeof(MeshPacket::PushConstantsData);
@@ -746,6 +804,7 @@ void Renderer::drawRenderPassPBR() {
 	m_device.pushConstants(&count, start_offset + 3 * sizeof(float), sizeof(float), (StageFlags)(e_Vertex | e_Pixel));
 	m_device.pushConstants(&normal_mode, start_offset + 4 * sizeof(float), sizeof(uint32_t), (StageFlags)(e_Vertex | e_Pixel));
 	m_device.pushConstants(&debug_mode, start_offset + 5 * sizeof(float), sizeof(uint32_t), (StageFlags)(e_Vertex | e_Pixel));
+	m_device.pushConstants(&use_ibl, start_offset + 6 * sizeof(float), sizeof(uint32_t), (StageFlags)(e_Vertex | e_Pixel));
 
 	start_offset += 6 * sizeof(float) + 2*sizeof(float); // 2 is padding
 	for (const auto& packet : packets)
@@ -824,12 +883,18 @@ void Renderer::initPipelinePBR()
 					.type = BindingType::UBO,
 					.stageFlags = e_Pixel,
 				},
+				//Irradiance map
+				{
+					.slot = 1,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				}
 			}
 		},
 		.pushConstantsRanges = {
 			{
 				.offset = 0,
-				.size = sizeof(MeshPacket::PushConstantsData) + sizeof(float) * 6 + sizeof(Mesh::Material::PBRFactors) + 8 /*padding*/,
+				.size = sizeof(MeshPacket::PushConstantsData) + sizeof(float) * 7 + sizeof(Mesh::Material::PBRFactors) + 4 /*padding*/,
 				.stageFlags = (StageFlags)(e_Vertex | e_Pixel)
 			}
 		}
@@ -1163,6 +1228,8 @@ void Renderer::loadSkybox(const std::filesystem::path path)
 
 	equirectangularTexture = m_resourceManager.createTexture(equirectangular);
 	resultCubemap = m_resourceManager.createRWTexture(2048, 2048, true);
+	irradianceMap = m_resourceManager.createRWTexture(32, 32, true);
+	specularMap = m_resourceManager.createRWTexture(32, 32, true);
 	
 }
 
