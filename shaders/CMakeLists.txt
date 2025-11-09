@@ -58,25 +58,22 @@ foreach(HLSL ${HLSL_SOURCE_FILES})
 foreach(SLANG ${SLANG_SOURCE_FILES})
   get_filename_component(FILE_NAME  ${SLANG} NAME_WE)
   message(STATUS ${FILE_NAME})
-  set(SPIRV_VS "${PROJECT_SOURCE_DIR}/shaders/spv/${FILE_NAME}.slang.vs.spv")
-  set(SPIRV_PS "${PROJECT_SOURCE_DIR}/shaders/spv/${FILE_NAME}.slang.ps.spv")
+  set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/spv/${FILE_NAME}.slang.spv")
   message(STATUS "BUILDING SLANG SHADER")
   message(STATUS ${SLANG})
   if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 	add_custom_command(
-		OUTPUT ${SPIRV_VS} ${SPIRV_PS}
-		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_4 -emit-spirv-directly -g -fvk-use-entrypoint-name -entry VSMain -o ${SPIRV_VS}
-		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_4 -emit-spirv-directly -g -fvk-use-entrypoint-name -entry PSMain -o ${SPIRV_PS}
+		OUTPUT ${SPIRV}
+		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_4 -g -o ${SPIRV}
 		DEPENDS ${SLANG})
   else()
 	add_custom_command(
-		OUTPUT ${SPIRV_VS} ${SPIRV_PS}
-		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_4 -fvk-use-entrypoint-name -entry VSMain -o ${SPIRV_VS}
-		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_4 -fvk-use-entrypoint-name -entry PSMain -o ${SPIRV_PS}
+		OUTPUT ${SPIRV}
+		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_4  -o ${SPIRV}
 		DEPENDS ${SLANG})
   endif()
 
-  list(APPEND SPIRV_BINARY_FILES ${SPIRV_VS} ${SPIRV_PS})
+  list(APPEND SPIRV_BINARY_FILES ${SPIRV})
  
 endforeach(SLANG)
 
