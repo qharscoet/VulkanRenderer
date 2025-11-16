@@ -94,6 +94,21 @@ VkDescriptorSetLayout Device::createDescriptorSetLayout(BindingDesc* bindingDesc
 	return out_layout;
 }
 
+VkPushConstantRange Device::createPushConstantRange(const PushConstantsRange& range)
+{
+	VkPushConstantRange pushConstantRange{};
+	uint32_t stageFlags = 0;
+	if (range.stageFlags & e_Pixel)		stageFlags |= VK_SHADER_STAGE_FRAGMENT_BIT;
+	if (range.stageFlags & e_Vertex)	stageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
+	if (range.stageFlags & e_Compute)	stageFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
+
+	return VkPushConstantRange{
+		.stageFlags = stageFlags,
+		.offset = range.offset,
+		.size = range.size
+		};
+}
+
 VkDescriptorPool Device::createDescriptorPool(BindingDesc* bindingDescs, size_t count) {
 
 	VkDescriptorPool out_pool;
@@ -431,17 +446,7 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 
 	for (auto& range : desc.pushConstantsRanges)
 	{
-		VkPushConstantRange pushConstantRange{};
-		uint32_t stageFlags = 0;
-		if (range.stageFlags & e_Pixel)		stageFlags |= VK_SHADER_STAGE_FRAGMENT_BIT;
-		if (range.stageFlags & e_Vertex)	stageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
-		if (range.stageFlags & e_Compute)	stageFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
-
-		pushConstantsRanges.push_back(VkPushConstantRange{
-			.stageFlags = stageFlags,
-			.offset = range.offset,
-			.size = range.size
-			});
+		pushConstantsRanges.push_back(createPushConstantRange(range));
 	}
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -535,12 +540,18 @@ Pipeline Device::createComputePipeline(PipelineDesc desc)
 		setLayouts.push_back(createDescriptorSetLayout(bindingSet.data(), bindingSet.size()));
 	}
 
+	std::vector<VkPushConstantRange> pushConstantsRanges;
+	for (auto& range : desc.pushConstantsRanges)
+	{
+		pushConstantsRanges.push_back(createPushConstantRange(range));
+	}
+
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = setLayouts.size(); // Optional
 	pipelineLayoutInfo.pSetLayouts = setLayouts.data();
-	pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
-	pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+	pipelineLayoutInfo.pushConstantRangeCount = pushConstantsRanges.size(); // Optional
+	pipelineLayoutInfo.pPushConstantRanges = pushConstantsRanges.data(); // Optional
 
 	VkPipelineLayout computePipelineLayout;
 	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &computePipelineLayout) != VK_SUCCESS) {
@@ -848,6 +859,51 @@ void Device::transitionImage(BarrierDesc desc, PipelineType pipeline_type)
 	transitionImageLayout(desc.image->image, VK_FORMAT_R8G8B8A8_SRGB, layoutMap[desc.oldLayout], layoutMap[desc.newLayout], desc.mipLevels, desc.layerCount, commandBuffer);
 }
 
+void Device::generateMipmaps(GpuImage& image, PipelineType pipeline_type)
+{
+	if (pipeline_type == PipelineType::Compute)
+	{
+		int32_t mipWidth = image.width;
+		int32_t mipHeight = image.height;
+		uint32_t mipLevels = image.mipLevels;
+		uint32_t layerCount = image.layerCount;
+
+		VkCommandBuffer commandBuffer = computeCommandBuffers[current_frame];
+
+		for (uint32_t i = 1; i < mipLevels; i++)
+		{
+
+			VkImageBlit blit{};
+			blit.srcOffsets[0] = { 0,0,0 };
+			blit.srcOffsets[1] = { mipWidth, mipHeight, 1 };
+			blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			blit.srcSubresource.mipLevel = i - 1;
+			blit.srcSubresource.baseArrayLayer = 0;
+			blit.srcSubresource.layerCount = layerCount;
+
+			blit.dstOffsets[0] = { 0,0,0 };
+			blit.dstOffsets[1] = { std::max(mipWidth / 2, 1), std::max(mipHeight / 2, 1), 1 };
+			blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			blit.dstSubresource.mipLevel = i;
+			blit.dstSubresource.baseArrayLayer = 0;
+			blit.dstSubresource.layerCount = layerCount;
+
+			vkCmdBlitImage(commandBuffer,
+				image.image, VK_IMAGE_LAYOUT_GENERAL,
+				image.image, VK_IMAGE_LAYOUT_GENERAL,
+				1, &blit,
+				VK_FILTER_LINEAR);
+
+			if (mipWidth > 1) mipWidth /= 2;
+			if (mipHeight > 1) mipHeight /= 2;
+		}
+	} 
+	else
+	{
+		generateMipmaps(image.image, VK_FORMAT_R8G8B8A8_SRGB, image.width, image.height, image.mipLevels, image.layerCount);
+	}
+}
+
 void Device::drawCommand(uint32_t vertex_count)
 {
 	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
@@ -858,7 +914,7 @@ void Device::drawCommand(uint32_t vertex_count)
 void Device::pushConstants(const void* data, uint32_t offset, uint32_t size, StageFlags stageFlags, VkPipelineLayout pipelineLayout)
 {
 
-	VkCommandBuffer commandBuffer = commandBuffers[current_frame];
+	VkCommandBuffer commandBuffer = stageFlags & e_Compute ? computeCommandBuffers[current_frame]:commandBuffers[current_frame];
 
 	VkPipelineLayout layout = (pipelineLayout == VK_NULL_HANDLE) ? currentPipeline->pipelineLayout : pipelineLayout;
 

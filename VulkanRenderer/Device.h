@@ -60,12 +60,25 @@ struct ImageDesc {
 	bool is_cubemap = false;
 };
 
+enum class ImageFormat {
+	Undefined,
+	RGB8,
+	RGB8_Unorm,
+	RGBA8,
+	RGBA8_Unorm,
+	RGB_Float,
+	RGBA_Float,
+	RG16_Float,
+};
+
 struct GpuImage {
 	VkImage image;
 	VkDeviceMemory memory;
 	VkImageView view;
-	VkImageView writeView;
-	uint32_t mipLevels;
+	std::vector<VkImageView> writeViews;
+	ImageFormat format;
+	uint32_t mipLevels = 1;
+	uint32_t layerCount = 1;
 	uint32_t width;
 	uint32_t height;
 };
@@ -597,7 +610,7 @@ private:
 	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels, uint32_t layerCount, VkCommandBuffer cb = VK_NULL_HANDLE );
 	void generateMipmaps(VkImage image, VkFormat format, int32_t texWidth, int32_t texheight, uint32_t mipLevels, uint32_t layerCount);
 	void createImage(ImageDesc desc, GpuImage& out_image);
-	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels, bool isCubemap, bool write = false);
+	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t baseMip, uint32_t mipCount, bool isCubemap, bool write = false);
 	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height, size_t layerSize, uint32_t layerCount);
 public:
 	Buffer createLocalBuffer(size_t size,VkBufferUsageFlags usage,  void* src_data = nullptr);
@@ -607,7 +620,7 @@ public:
 	void destroyBuffer(Buffer& buffer);
 
 	GpuImage createTexture(Texture tex);
-	void createRWTexture(uint32_t width, uint32_t height, GpuImage& out_image, bool is_cubemap, bool sampled = false);
+	void createRWTexture(uint32_t width, uint32_t height, GpuImage& out_image, ImageFormat format, bool is_cubemap, bool sampled = false, bool allocateMips = false);
 	void createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa, bool sampled = false);
 	void createDepthTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa);
 	void destroyImage(GpuImage image);
@@ -636,6 +649,7 @@ private:
 
 	VkRenderPass createRenderPass(RenderPassDesc desc);
 	VkDescriptorSetLayout createDescriptorSetLayout(BindingDesc* bindings, size_t count);
+	VkPushConstantRange createPushConstantRange(const PushConstantsRange& range);
 	void createDescriptorSets(VkDescriptorSetLayout layout, VkDescriptorPool pool, VkDescriptorSet* out_sets, uint32_t count);
 	void recordRenderPass(VkCommandBuffer commandBuffer, RenderPass& renderPass);
 	void recordComputePass(VkCommandBuffer commandBuffer, ComputePass& renderPass);
@@ -657,6 +671,7 @@ public:
 	/*Deprecated*/void bindBuffer(const Buffer& buiffer, uint32_t set, uint32_t binding);
 	void bindRessources(uint32_t set, std::vector<const Buffer*> buffers, std::vector<VkImageView> images, const VkSampler sampler = VK_NULL_HANDLE, PipelineType binding_point = PipelineType::Graphics);
 	void transitionImage(BarrierDesc desc, PipelineType pipeline_type = PipelineType::Graphics);
+	void generateMipmaps(GpuImage& image, PipelineType pipeline_type = PipelineType::Graphics);
 	void drawCommand(uint32_t vertex_count);
 	void dispatchCommand(uint32_t count_x, uint32_t count_y, uint32_t count_z);
 	void pushConstants(const void* data, uint32_t offset, uint32_t size, StageFlags = e_Vertex, VkPipelineLayout pipelineLayout = VK_NULL_HANDLE);

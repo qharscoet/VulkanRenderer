@@ -170,13 +170,15 @@ void Renderer::draw()
 	updateComputeUniformBuffer();
 	updateLightData();
 
-	m_device.recordComputePass(computeParticlesPass);
+	//m_device.recordComputePass(computeParticlesPass);
 
 	static bool computedSky = false;
 	if (!computedSky)
 	{
 		m_device.recordComputePass(computeSkyboxPass);
 		m_device.recordComputePass(computeIBLPass);
+		m_device.recordComputePass(computeIBLSpecularPass);
+		m_device.recordComputePass(computeBRDFLUTPass);
 		computedSky = true;
 	}
 
@@ -184,7 +186,7 @@ void Renderer::draw()
 
 	m_device.recordRenderPass(use_pbr ? renderPasses[1] : renderPasses[0]);
 	m_device.recordRenderPass(renderPasses[2]);
-	m_device.recordRenderPass(drawParticlesPass);
+	//m_device.recordRenderPass(drawParticlesPass);
 	m_device.recordRenderPass(renderPasses[3]);
 	//m_device.recordRenderPass(drawParticlesPass);
 	//for (auto& renderPass : renderPasses)
@@ -476,7 +478,7 @@ void Renderer::drawRenderPass() {
 	m_device.pushConstants(&use_blinn, sizeof(MeshPacket::PushConstantsData) + 6 * sizeof(float), sizeof(uint32_t), (StageFlags)(e_Pixel | e_Vertex));
 	for (const auto& packet : packets)
 	{
-		const GpuImage& baseColor = *equirectangularTexture;// *packet.textures[packet.materialData.baseColor];
+		const GpuImage& baseColor = *packet.textures[packet.materialData.baseColor];
 		const GpuImage& normal = packet.materialData.normal >= 0 ? *packet.textures[packet.materialData.normal] : *getDefaultNormalMap();
 		m_device.bindRessources(0, {&m_device.getCurrentUniformBuffer()}, {baseColor.view , normal.view}, packet.sampler);
 		drawPacket(packet);
@@ -672,16 +674,18 @@ void Renderer::initComputeSkyboxPasses() {
 						.image = resultCubemap.get(),
 						.oldLayout = ImageLayout::Undefined,
 						.newLayout = ImageLayout::General,
-						.mipLevels = 1,
+						.mipLevels = resultCubemap->mipLevels,
 						.layerCount = 6,
 					};
 					m_device.transitionImage(transitionBarrier, PipelineType::Compute);
 
-					m_device.bindRessources(0, {}, { resultCubemap.get()->writeView, equirectangularTexture.get()->view}, defaultSampler, PipelineType::Compute);
+					m_device.bindRessources(0, {}, { resultCubemap.get()->writeViews[0], equirectangularTexture.get()->view}, defaultSampler, PipelineType::Compute);
 					m_device.dispatchCommand(
 						(uint32_t)std::ceil(resultCubemap->width / 32.0f),
 						(uint32_t)std::ceil(resultCubemap->height / 32.0f),
 						6);
+
+					m_device.generateMipmaps(*resultCubemap, PipelineType::Compute);
 
 					transitionBarrier.oldLayout = ImageLayout::General;
 					transitionBarrier.newLayout = ImageLayout::ShaderRead;
@@ -727,23 +731,138 @@ void Renderer::initComputeSkyboxPasses() {
 					};
 					m_device.transitionImage(transitionBarrier, PipelineType::Compute);
 
-					m_device.bindRessources(0, {}, { irradianceMap.get()->writeView, resultCubemap.get()->view}, defaultSampler, PipelineType::Compute);
+					m_device.bindRessources(0, {}, { irradianceMap.get()->writeViews[0], resultCubemap.get()->view}, defaultSampler, PipelineType::Compute);
 					m_device.dispatchCommand(
 						(uint32_t)std::ceil(irradianceMap->width / 32.0f),
-						(uint32_t)std::ceil(resultCubemap->height / 32.0f),
+						(uint32_t)std::ceil(irradianceMap->height / 32.0f),
 						6);
+
+					transitionBarrier.oldLayout = ImageLayout::General;
+					transitionBarrier.newLayout = ImageLayout::ShaderRead;
+
+					m_device.transitionImage(transitionBarrier, PipelineType::Compute);
+				},
+				.debugInfo = {
+					.name = "Compute Diffuse IBL",
+					.color = DebugColor::Magenta
+				}
+		};
+	
+		computeIBLPass = m_device.createComputePass(computePassDesc, desc);
+	}
+
+	{
+		PipelineDesc desc = {
+			.type = PipelineType::Compute,
+			.computeShader = "compute_ibl_specular.slang.spv",
+			.bindings = {
+				{
+					{
+						.slot = 0,
+						.type = BindingType::StorageImage,
+						.stageFlags = e_Compute,
+					},
+					{
+						.slot = 1,
+						.type = BindingType::ImageSampler,
+						.stageFlags = e_Compute,
+					},
+				}
+			},
+			.pushConstantsRanges = {
+				{
+					.offset = 0,
+					.size = 2 * sizeof(float), // roughness + mip
+					.stageFlags = (StageFlags)(e_Compute)
+				}
+			}
+		};
+
+		ComputePassDesc computePassDesc = {
+				.dispatchFunction = [&]() {			
+					BarrierDesc transitionBarrier = {
+						.image = specularMap.get(),
+						.oldLayout = ImageLayout::Undefined,
+						.newLayout = ImageLayout::General,
+						.mipLevels = specularMap->mipLevels,
+						.layerCount = 6,
+					};
+					m_device.transitionImage(transitionBarrier, PipelineType::Compute);
+
+
+					for (uint32_t i = 0; i < specularMap->mipLevels; i++)
+					{
+						m_device.bindRessources(0, {}, { specularMap.get()->writeViews[i], resultCubemap.get()->view}, defaultSampler, PipelineType::Compute);
+
+						float roughness = (float)i / specularMap->mipLevels;
+						m_device.pushConstants(&roughness, 0, sizeof(float), e_Compute);
+						m_device.pushConstants(&i, sizeof(float), sizeof(float), e_Compute);
+
+						float w = specularMap->width >> i;
+						float h = specularMap->height >> i;
+						m_device.dispatchCommand(
+							(uint32_t)std::ceil(w / 32.0f),
+							(uint32_t)std::ceil(h / 32.0f),
+							6);
+					}
 
 					transitionBarrier.oldLayout = ImageLayout::General;
 					transitionBarrier.newLayout = ImageLayout::ShaderRead;
 					m_device.transitionImage(transitionBarrier, PipelineType::Compute);
 				},
 				.debugInfo = {
-					.name = "Compute Skybox from Equirectangular",
+					.name = "Compute Specular IBL",
 					.color = DebugColor::Magenta
 				}
 		};
-	
-		computeIBLPass = m_device.createComputePass(computePassDesc, desc);
+
+		computeIBLSpecularPass = m_device.createComputePass(computePassDesc, desc);
+	}
+
+	{
+		PipelineDesc desc = {
+			.type = PipelineType::Compute,
+			.computeShader = "compute_brdf_lut.slang.spv",
+			.bindings = {
+				{
+					{
+						.slot = 0,
+						.type = BindingType::StorageImage,
+						.stageFlags = e_Compute,
+					},
+				}
+			},
+		};
+
+		ComputePassDesc computePassDesc = {
+				.dispatchFunction = [&]() {
+					BarrierDesc transitionBarrier = {
+						.image = BRDF_LUT.get(),
+						.oldLayout = ImageLayout::Undefined,
+						.newLayout = ImageLayout::General,
+						.mipLevels = BRDF_LUT->mipLevels,
+						.layerCount = 1,
+					};
+					m_device.transitionImage(transitionBarrier, PipelineType::Compute);
+
+					m_device.bindRessources(0, {}, { BRDF_LUT.get()->writeViews[0] }, VK_NULL_HANDLE, PipelineType::Compute);
+					m_device.dispatchCommand(
+						(uint32_t)std::ceil(BRDF_LUT->width / 32.0f),
+						(uint32_t)std::ceil(BRDF_LUT->height / 32.0f),
+						1);
+
+
+					transitionBarrier.oldLayout = ImageLayout::General;
+					transitionBarrier.newLayout = ImageLayout::ShaderRead;
+					m_device.transitionImage(transitionBarrier, PipelineType::Compute);
+				},
+				.debugInfo = {
+					.name = "Compute BRDF LUT",
+					.color = DebugColor::Magenta
+				}
+		};
+
+		computeBRDFLUTPass = m_device.createComputePass(computePassDesc, desc);
 	}
 }
 
@@ -781,7 +900,7 @@ void Renderer::initSkyboxRenderPass()
 		.doClear = false,
 		.writeSwapChain = true,
 		.drawFunction = [&]() { 
-				m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { irradianceMap.get()->view}, defaultSampler);
+				m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { specularMap.get()->view}, defaultSampler);
 				m_device.drawCommand(36);
 		; },
 		.debugInfo = {
@@ -795,7 +914,7 @@ void Renderer::initSkyboxRenderPass()
 }
 
 void Renderer::drawRenderPassPBR() {
-	m_device.bindRessources(1, { &light_data_gpu}, {irradianceMap.get()->view }, defaultSampler);
+	m_device.bindRessources(1, { &light_data_gpu}, {irradianceMap.get()->view, specularMap.get()->view, BRDF_LUT.get()->view}, defaultSampler);
 	uint32_t count = lights.size();
 
 	size_t start_offset = sizeof(MeshPacket::PushConstantsData);
@@ -886,6 +1005,18 @@ void Renderer::initPipelinePBR()
 				//Irradiance map
 				{
 					.slot = 1,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				},
+				//Specular prefiltered map
+				{
+					.slot = 2,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				},
+				// BRDF LUT
+				{
+					.slot = 3,
 					.type = BindingType::ImageSampler,
 					.stageFlags = e_Pixel,
 				}
@@ -1227,10 +1358,10 @@ void Renderer::loadSkybox(const std::filesystem::path path)
 	const Texture equirectangular = loadTexture(path.string().c_str());
 
 	equirectangularTexture = m_resourceManager.createTexture(equirectangular);
-	resultCubemap = m_resourceManager.createRWTexture(2048, 2048, true);
-	irradianceMap = m_resourceManager.createRWTexture(32, 32, true);
-	specularMap = m_resourceManager.createRWTexture(32, 32, true);
-	
+	resultCubemap = m_resourceManager.createRWTexture(2048, 2048, ImageFormat::RGBA_Float, true, true);
+	irradianceMap = m_resourceManager.createRWTexture(32, 32, ImageFormat::RGBA_Float,  true);
+	specularMap = m_resourceManager.createRWTexture(1024, 1024, ImageFormat::RGBA_Float,  true, true);
+	BRDF_LUT = m_resourceManager.createRWTexture(512, 512, ImageFormat::RG16_Float, false, false);
 }
 
 void Renderer::loadScene(std::filesystem::path path)

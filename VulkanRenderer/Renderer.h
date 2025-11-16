@@ -93,6 +93,8 @@ private:
 
 	ComputePass computeSkyboxPass;
 	ComputePass computeIBLPass;
+	ComputePass computeIBLSpecularPass;
+	ComputePass computeBRDFLUTPass;
 
 	ComputePass computeParticlesPass;
 	VkDescriptorPool computeDescriptorPool;
@@ -104,6 +106,7 @@ private:
 	GpuImageHandle resultCubemap;
 	GpuImageHandle irradianceMap;
 	GpuImageHandle specularMap;
+	GpuImageHandle BRDF_LUT;
 
 	GpuImageHandle defaultTexture;
 	GpuImageHandle defaultTextureBlack;

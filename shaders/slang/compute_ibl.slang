@@ -67,6 +67,7 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
     float3 right = normalize(cross(up, normal));
     up = normalize(cross(normal, right));
 
+	// loops over pi
 #if 1
     float sampleDelta = 0.025;
     float nrSamples = 0.0;
@@ -86,6 +87,7 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 
 	 irradiance = PI * irradiance * (1.0 / float(nrSamples));
 #endif
+     //hammersley
 #if 0
     uint nrSamples = 1024;
     for (uint i = 0; i < nrSamples; ++i) {
@@ -97,6 +99,6 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 
 	}
     irradiance = irradiance * (1.0 / float(nrSamples));
-	#endif
+#endif
     irradiance_map[threadId] = float4(irradiance, 1.0);
 }

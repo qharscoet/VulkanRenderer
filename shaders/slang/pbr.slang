@@ -139,6 +139,10 @@ cbuffer light_data : register(b0, space1)
 }
 [[vk::binding(1, 1)]]
 SamplerCube irradianceMap;
+[[vk::binding(2, 1)]]
+SamplerCube specularMap; 
+[[vk::binding(3, 1)]]
+Sampler2D brdfLUT;
 
 
 Sampler2D g_baseColor;
@@ -196,6 +200,11 @@ float3 getRadiance(Light l, PSInput input, float3 V)
 float3 fresnelSchlick(float HdotV, float3 F0)
 {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - HdotV, 0.0, 1.0), 5.0);
+}
+
+float3 fresnelSchlickRoughness(float cosTheta, float3 F0, float roughness)
+{
+    return F0 + (max(float3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
 float NDistributionGGX(float NdotH, float roughness)
@@ -277,11 +286,24 @@ float4 PSMain(PSInput input, uniform Constants pc) : SV_TARGET
     float3 ambient;
     if (pc.ibl > 0)
     {
-		float3 kS = fresnelSchlick(max(dot(N, V), 0.0), F0);
+        float3 kS = fresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
 		float3 kD = 1.0 - kS;
 		float3 irradiance = irradianceMap.Sample(N).rgb;
         float3 diffuse = irradiance * baseColor.rgb;
-        ambient = (kD * diffuse) * occlusion;
+
+        float3 R = reflect(-V, N);
+
+        uint2 cubeSize;
+        uint mipLevels;
+        specularMap.GetDimensions(0, cubeSize.x, cubeSize.y, mipLevels);
+
+        float3 prefilteredColor = specularMap.SampleLevel(R, roughness * mipLevels).rgb;
+
+        float3 F = kS;
+        float2 envBRDF = brdfLUT.Sample(float2(max(dot(N, V), 0.0), roughness)).rg;
+        float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+        
+		ambient = (kD * diffuse + specular) * occlusion;
     }
     else {
 		ambient = float3(0.03) * baseColor.rgb * occlusion.r;

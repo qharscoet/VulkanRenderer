@@ -592,15 +592,15 @@ void Device::createSwapChain() {
 	swapChainExtent = extent;
 }
 
-VkImageView Device::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels, bool isCubemap, bool write) {
+VkImageView Device::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t baseMip, uint32_t mipCount, bool isCubemap, bool write) {
 	VkImageViewCreateInfo viewInfo{};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	viewInfo.image = image;
 	viewInfo.viewType = isCubemap ? (write? VK_IMAGE_VIEW_TYPE_2D_ARRAY:VK_IMAGE_VIEW_TYPE_CUBE): VK_IMAGE_VIEW_TYPE_2D;
 	viewInfo.format = format;
 	viewInfo.subresourceRange.aspectMask = aspectFlags;
-	viewInfo.subresourceRange.baseMipLevel = 0;
-	viewInfo.subresourceRange.levelCount = mipLevels;
+	viewInfo.subresourceRange.baseMipLevel = baseMip;
+	viewInfo.subresourceRange.levelCount = mipCount;
 	viewInfo.subresourceRange.baseArrayLayer = 0;
 	viewInfo.subresourceRange.layerCount = isCubemap ? 6 : 1;
 
@@ -616,7 +616,7 @@ void Device::createImageViews() {
 	swapChainImageViews.resize(swapChainImages.size());
 
 	for (size_t i = 0; i < swapChainImages.size(); i++) {
-		swapChainImageViews[i] = createImageView(swapChainImages[i], swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1, false);
+		swapChainImageViews[i] = createImageView(swapChainImages[i], swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT,0, 1, false);
 	}
 }
 
@@ -1459,6 +1459,11 @@ void Device::destroyImage(GpuImage image) {
 	vkDestroyImage(device, image.image, nullptr);
 	vkFreeMemory(device, image.memory, nullptr);
 	vkDestroyImageView(device, image.view, nullptr);
+
+	for (auto& writeView : image.writeViews)
+	{
+		vkDestroyImageView(device, writeView, nullptr);
+	}
 }
 
 
@@ -1587,6 +1592,39 @@ VkFormat getFormat(const Texture& tex) {
 	return out_format;
 }
 
+ImageFormat getFormat(const VkFormat format)
+{
+	switch (format)
+	{
+	case VK_FORMAT_R8G8B8_UNORM: return ImageFormat::RGB8_Unorm;  break;  //SDR, No alpha, linear
+	case VK_FORMAT_R8G8B8_SRGB: return ImageFormat::RGB8; break;  //SDR, No alpha, srgb
+	case VK_FORMAT_R8G8B8A8_UNORM: return ImageFormat::RGBA8_Unorm; break; //SDR, Alpha, linear
+	case VK_FORMAT_R8G8B8A8_SRGB: return ImageFormat::RGBA8; break; //SDR, Alpha, srgb
+
+
+	case VK_FORMAT_R32G32B32_SFLOAT: return ImageFormat::RGB_Float; break;  //HDR, No alpha, linear
+	case VK_FORMAT_R32G32B32A32_SFLOAT: return ImageFormat::RGBA_Float; break; //HDR, Alpha, linear
+	case VK_FORMAT_R16G16_SFLOAT:return ImageFormat::RG16_Float; break;
+	default: return ImageFormat::Undefined; break;
+	}
+}
+
+VkFormat getFormat(const ImageFormat format)
+{
+	switch (format)
+	{
+	case ImageFormat::RGB8_Unorm: return VK_FORMAT_R8G8B8_UNORM; break;  //SDR, No alpha, linear
+	case ImageFormat::RGB8: return VK_FORMAT_R8G8B8_SRGB; break;  //SDR, No alpha, srgb
+	case ImageFormat::RGBA8_Unorm: return VK_FORMAT_R8G8B8A8_UNORM; break; //SDR, Alpha, linear
+	case ImageFormat::RGBA8: return VK_FORMAT_R8G8B8A8_SRGB; break; //SDR, Alpha, srgb
+
+	case ImageFormat::RGB_Float: return VK_FORMAT_R32G32B32_SFLOAT; break;  //HDR, No alpha, linear
+	case ImageFormat::RGBA_Float: return VK_FORMAT_R32G32B32A32_SFLOAT; break; //HDR, Alpha, linear
+	case ImageFormat::RG16_Float: return VK_FORMAT_R16G16_SFLOAT; break;
+	default: return VK_FORMAT_UNDEFINED; break;
+	}
+}
+
 GpuImage Device::createTexture(Texture tex) 
 {
 	GpuImage ret_image;
@@ -1599,6 +1637,7 @@ GpuImage Device::createTexture(Texture tex)
 	vkUnmapMemory(device, stagingBuffer.memory);
 
 	uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(tex.width, tex.height)))) + 1;
+	VkFormat format = getFormat(tex);
 	ImageDesc desc = {
 		.width = tex.width,
 		.height = tex.height,
@@ -1630,9 +1669,10 @@ GpuImage Device::createTexture(Texture tex)
 	
 	destroyBuffer(stagingBuffer);
 
-	ret_image.view = createImageView(ret_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels, tex.is_cubemap);
-	ret_image.writeView = VK_NULL_HANDLE;
+	ret_image.view = createImageView(ret_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, 0, mipLevels, tex.is_cubemap);
+	ret_image.format = getFormat(format);
 	ret_image.mipLevels = mipLevels;
+	ret_image.layerCount = layer_count;
 	ret_image.height = tex.height;
 	ret_image.width = tex.width;
 
@@ -1640,25 +1680,33 @@ GpuImage Device::createTexture(Texture tex)
 }
 
 
-void Device::createRWTexture(uint32_t width, uint32_t height, GpuImage& out_image, bool is_cubemap, bool sampled)
+void Device::createRWTexture(uint32_t width, uint32_t height, GpuImage& out_image, ImageFormat format, bool is_cubemap, bool sampled, bool allocateMips)
 {
+	uint32_t mipLevels = allocateMips ? static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1 : 1;
 	ImageDesc desc = {
 		.width = width,
 		.height = height,
-		.mipLevels = 1,
+		.mipLevels = mipLevels,
 		.numSamples =  VK_SAMPLE_COUNT_1_BIT,
-		.format = VK_FORMAT_R32G32B32A32_SFLOAT,
+		.format = getFormat(format),
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
 		// TODO : check if we need to add VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT
-		.usage_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | (sampled ? VK_IMAGE_USAGE_SAMPLED_BIT : 0u),
+		.usage_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | (sampled ? VK_IMAGE_USAGE_SAMPLED_BIT : 0u) | (allocateMips ? VK_IMAGE_USAGE_TRANSFER_DST_BIT |VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0u),
 		.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.is_cubemap = is_cubemap,
 	};
 	createImage(desc, out_image);
-	out_image.view = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, 1, is_cubemap);
-	out_image.writeView = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, 1, is_cubemap, true);
-	out_image.mipLevels = 1;
+	out_image.view = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, 0, mipLevels, is_cubemap);
+
+	for (uint32_t i = 0; i < mipLevels; i++)
+	{
+		out_image.writeViews.push_back(createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, i,1, is_cubemap, true));
+	}
+
+	out_image.format = ImageFormat::RGBA_Float;
+	out_image.mipLevels = mipLevels;
+	out_image.layerCount = is_cubemap ? 6 : 1;
 	out_image.width = width;
 	out_image.height = height;
 }
@@ -1679,7 +1727,9 @@ void Device::createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_i
 	};
 
 	createImage(desc, out_image);
-	out_image.view = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, 1, false);
+	out_image.view = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, false);
+	out_image.format = getFormat(swapChainImageFormat);
+	out_image.layerCount = 1;
 
 }
 
@@ -1697,7 +1747,8 @@ void Device::createDepthTarget(uint32_t width, uint32_t height, GpuImage& out_im
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
 	createImage(desc, out_image);
-	out_image.view = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_DEPTH_BIT, 1, false);
+	out_image.format = getFormat(findDepthFormat());
+	out_image.view = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_DEPTH_BIT,0,  1, false);
 }
 
 VkSampler Device::createTextureSampler(uint32_t mipLevels) {
