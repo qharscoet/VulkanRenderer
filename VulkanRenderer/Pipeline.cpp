@@ -808,6 +808,7 @@ void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, st
 			break;
 
 		case BindingType::ImageSampler:
+		case BindingType::StorageImage:
 			hash_combine(hash, img_hasher((*imageIt++)));
 			break;
 		}

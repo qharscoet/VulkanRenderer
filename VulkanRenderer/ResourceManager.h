@@ -9,6 +9,9 @@
 using BufferHandle = std::shared_ptr<Buffer>;
 using GpuImageHandle = std::shared_ptr<GpuImage>;
 
+using Sampler = VkSampler;
+using SamplerHandle = std::shared_ptr<Sampler>;
+
 class ResourceManager {
 private:
 	Device* m_device;
@@ -19,6 +22,9 @@ private:
 
 	std::array<GpuImage, 512> m_textures;
 	size_t m_texture_count = 0;
+
+	std::array<Sampler, 32> m_samplers;
+	size_t m_sampler_count = 0;
 
 public:
 	ResourceManager(Device* device) : m_device(device) { }
@@ -62,4 +68,13 @@ public:
 			});
 	}
 
+
+	SamplerHandle createSampler(SamplerDesc desc)
+	{
+		m_samplers[m_sampler_count++] = m_device->createTextureSampler(desc);
+
+		return SamplerHandle(&m_samplers[m_sampler_count - 1], [this](Sampler* sampl) {
+			m_device->destroySampler(*sampl);
+		});
+	}
 };

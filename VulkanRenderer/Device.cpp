@@ -1751,14 +1751,49 @@ void Device::createDepthTarget(uint32_t width, uint32_t height, GpuImage& out_im
 	out_image.view = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_DEPTH_BIT,0,  1, false);
 }
 
-VkSampler Device::createTextureSampler(uint32_t mipLevels) {
+
+VkSamplerAddressMode getAddressMode(WrapMode mode) {
+	switch (mode) {
+	case WrapMode::Clamp:
+		return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	case WrapMode::Repeat:
+		return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	case WrapMode::MirroredRepeat:
+		return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+	default:
+		return VK_SAMPLER_ADDRESS_MODE_REPEAT; // Default to Repeat
+	}
+}
+
+
+VkFilter getFilter(FilterMode mode) {
+	switch (mode) {
+	case FilterMode::Linear:
+		return VK_FILTER_LINEAR;
+	case FilterMode::Nearest:
+		return VK_FILTER_NEAREST;
+	case FilterMode::Nearest_MipNearest:
+		return VK_FILTER_NEAREST; // Nearest filtering for both texture and mipmap
+	case FilterMode::Nearest_MipLinear:
+		return VK_FILTER_NEAREST; // Nearest filtering for texture, Linear filtering for mipmaps
+	case FilterMode::Linear_MipNearest:
+		return VK_FILTER_LINEAR;  // Linear filtering for texture, Nearest filtering for mipmaps
+	case FilterMode::Linear_MipLinear:
+		return VK_FILTER_LINEAR;  // Linear filtering for both texture and mipmaps
+	default:
+		// Handle unexpected FilterMode case
+		return VK_FILTER_LINEAR;  // Default to linear filter
+	}
+}
+
+VkSampler Device::createTextureSampler(SamplerDesc desc) {
 	VkSamplerCreateInfo samplerInfo{};
 	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	samplerInfo.magFilter = VK_FILTER_LINEAR;
-	samplerInfo.minFilter = VK_FILTER_LINEAR;
+	samplerInfo.magFilter = getFilter(desc.magFilter);
+	samplerInfo.minFilter = getFilter(desc.minFilter);
 	
-	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.addressModeU = getAddressMode(desc.wrapS);
+	samplerInfo.addressModeV = getAddressMode(desc.wrapT);
 	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 
 	VkPhysicalDeviceProperties properties{};
@@ -1777,7 +1812,7 @@ VkSampler Device::createTextureSampler(uint32_t mipLevels) {
 	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	samplerInfo.mipLodBias = 0.0f;
 	samplerInfo.minLod = 0;
-	samplerInfo.maxLod = mipLevels;
+	samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
 
 	VkSampler sampler;
 	if (vkCreateSampler(device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS) {

@@ -111,7 +111,7 @@ private:
 	GpuImageHandle defaultTexture;
 	GpuImageHandle defaultTextureBlack;
 	GpuImageHandle defaultNormalMap;
-	VkSampler defaultSampler;
+	SamplerHandle defaultSampler;
 
 	std::vector<MeshPacket> packets;
 	std::vector<Light> lights;

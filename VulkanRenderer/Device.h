@@ -83,9 +83,32 @@ struct GpuImage {
 	uint32_t height;
 };
 
+enum class FilterMode {
+	Linear, Nearest, Nearest_MipNearest, Nearest_MipLinear, Linear_MipNearest, Linear_MipLinear
+};
+
+enum class WrapMode {
+	Clamp, Repeat, MirroredRepeat
+};
+
+struct SamplerDesc {
+	FilterMode magFilter = FilterMode::Linear;
+	FilterMode minFilter = FilterMode::Linear;
+	WrapMode wrapS = WrapMode::Repeat;
+	WrapMode wrapT = WrapMode::Repeat;
+};
+
 
 using BufferHandle = std::shared_ptr<Buffer>;
 using GpuImageHandle = std::shared_ptr<GpuImage>;
+using SamplerHandle = std::shared_ptr<VkSampler>;
+
+struct ImageSampler {
+	VkImageView view;
+	VkSampler sampl;
+};
+
+using ImageResourceBindInfo = std::variant< ImageSampler,  VkImageView>;
 
 struct MeshPacket {
 	BufferHandle vertexBuffer;
@@ -95,7 +118,7 @@ struct MeshPacket {
 	VkSampler sampler;
 
 	std::vector<GpuImageHandle> textures;
-
+	std::vector<SamplerHandle> samplers;
 
 	//struct Transform {
 	//	float translation[3];
@@ -109,12 +132,17 @@ struct MeshPacket {
 		glm::mat4 model;
 	};
 
+	struct ImageSampler {
+		int texIdx = -1;
+		int samplerIdx = -1;
+	};
+
 	struct MaterialData {
-		int baseColor = -1;
-		int mettalicRoughness = -1;
-		int normal = -1;
-		int emissive = -1;
-		int occlusion = -1;
+		ImageSampler baseColor;
+		ImageSampler mettalicRoughness;
+		ImageSampler normal;
+		ImageSampler emissive;
+		ImageSampler occlusion;
 
 		struct PBRFactors {
 			float baseColorFactor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -126,6 +154,11 @@ struct MeshPacket {
 
 	std::string name;
 };
+
+#define GET_PACKET_TEXTURE_IMAGE(packet, texName, defaultHandle) (((packet).materialData.texName.texIdx >= 0) ? *(packet).textures[packet.materialData.texName.texIdx] : defaultHandle)
+#define GET_PACKET_TEXTURE_IMAGEVIEW(packet, texName, defaultHandle) (((packet).materialData.texName.texIdx >= 0) ? (packet).textures[packet.materialData.texName.texIdx]->view : defaultHandle->view)
+#define GET_PACKET_SAMPLER_HANDLE(packet, texName, defaultHandle) (((packet).materialData.texName.samplerIdx >= 0) ? *(packet).samplers[packet.materialData.texName.samplerIdx] : defaultHandle)
+#define GET_PACKET_IMAGESAMPLER_PAIR(packet, texName, defaultTex, defaultSampl) {GET_PACKET_TEXTURE_IMAGEVIEW(packet, texName, defaultTex) , GET_PACKET_SAMPLER_HANDLE(packet, texName, defaultSampl)}
 
 struct Vertex {
 	glm::vec3 pos;
@@ -629,7 +662,7 @@ public:
 		vkDestroySampler(device, sampler, nullptr);
 	}
 
-	VkSampler createTextureSampler(uint32_t mipLevels);
+	VkSampler createTextureSampler(SamplerDesc desc);
 
 	void updateUniformBuffer(void* data, size_t size);
 	void updateComputeUniformBuffer(void* data, size_t size);
