@@ -478,11 +478,11 @@ void Renderer::drawRenderPass() {
 	m_device.pushConstants(&use_blinn, sizeof(MeshPacket::PushConstantsData) + 6 * sizeof(float), sizeof(uint32_t), (StageFlags)(e_Pixel | e_Vertex));
 	for (const auto& packet : packets)
 	{
-		const GpuImage& baseColor = *packet.textures[packet.materialData.baseColor.texIdx];
-		const GpuImage& normal = GET_PACKET_TEXTURE_IMAGE(packet, normal, *getDefaultNormalMap());
+		const ImageBindInfo baseColor = packet.getTextureBindInfo(MeshPacket::TextureType::BaseColor, getDefaultTexture(), defaultSampler);
+		const ImageBindInfo normal = packet.getTextureBindInfo(MeshPacket::TextureType::Normal, getDefaultNormalMap(), defaultSampler);
 
 		//const ImageResourceBindInfo bindInfo = ImageSampler(GET_PACKET_IMAGESAMPLER_PAIR(packet, normal, getDefaultNormalMap(), *defaultSampler));
-		m_device.bindRessources(0, {&m_device.getCurrentUniformBuffer()}, {baseColor.view , normal.view}, packet.sampler);
+		m_device.bindRessources(0, {&m_device.getCurrentUniformBuffer()}, {baseColor , normal});
 		drawPacket(packet);
 	}
 }
@@ -579,9 +579,9 @@ void Renderer::drawLightsRenderPass()
 		const MeshPacket& packet = l.cube;
 		if (l.cube.vertexBuffer != nullptr)
 		{
-			const GpuImage& baseColor = GET_PACKET_TEXTURE_IMAGE(packet, baseColor, *getDefaultTexture());
-			const GpuImage& normal = GET_PACKET_TEXTURE_IMAGE(packet, normal, *getDefaultNormalMap());
-			m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { baseColor.view , normal.view }, packet.sampler);
+			const ImageBindInfo baseColor = packet.getTextureBindInfo(MeshPacket::TextureType::BaseColor, getDefaultTexture(), defaultSampler);
+			const ImageBindInfo normal = packet.getTextureBindInfo(MeshPacket::TextureType::Normal, getDefaultNormalMap(), defaultSampler);
+			m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { baseColor , normal });
 
 			m_device.pushConstants((void*)&l.color[0], sizeof(MeshPacket::PushConstantsData), 3 * sizeof(float), (StageFlags)(e_Vertex | e_Pixel));
 			m_device.drawPacket(packet);
@@ -681,7 +681,10 @@ void Renderer::initComputeSkyboxPasses() {
 					};
 					m_device.transitionImage(transitionBarrier, PipelineType::Compute);
 
-					m_device.bindRessources(0, {}, { resultCubemap->writeViews[0], equirectangularTexture->view}, *defaultSampler, PipelineType::Compute);
+					const ImageBindInfo resultCubeWrite = { resultCubemap->writeViews[0] };
+					const ImageBindInfo equiRectangular = { equirectangularTexture->view, *defaultSampler };
+					m_device.bindRessources(0, {}, { resultCubeWrite, equiRectangular  }, PipelineType::Compute);
+
 					m_device.dispatchCommand(
 						(uint32_t)std::ceil(resultCubemap->width / 32.0f),
 						(uint32_t)std::ceil(resultCubemap->height / 32.0f),
@@ -733,7 +736,9 @@ void Renderer::initComputeSkyboxPasses() {
 					};
 					m_device.transitionImage(transitionBarrier, PipelineType::Compute);
 
-					m_device.bindRessources(0, {}, { irradianceMap->writeViews[0], resultCubemap->view}, *defaultSampler, PipelineType::Compute);
+					const ImageBindInfo irradianceWrite = { irradianceMap->writeViews[0] };
+					const ImageBindInfo envMap = { resultCubemap->view, *defaultSampler };
+					m_device.bindRessources(0, {}, { irradianceWrite, envMap }, PipelineType::Compute);
 					m_device.dispatchCommand(
 						(uint32_t)std::ceil(irradianceMap->width / 32.0f),
 						(uint32_t)std::ceil(irradianceMap->height / 32.0f),
@@ -794,7 +799,9 @@ void Renderer::initComputeSkyboxPasses() {
 
 					for (uint32_t i = 0; i < specularMap->mipLevels; i++)
 					{
-						m_device.bindRessources(0, {}, { specularMap->writeViews[i], resultCubemap->view}, *defaultSampler, PipelineType::Compute);
+						const ImageBindInfo specularWrite = { specularMap->writeViews[i] };
+						const ImageBindInfo envMap = { resultCubemap->view, *defaultSampler };
+						m_device.bindRessources(0, {}, { specularWrite, envMap }, PipelineType::Compute);
 
 						float roughness = (float)i / specularMap->mipLevels;
 						m_device.pushConstants(&roughness, 0, sizeof(float), e_Compute);
@@ -847,7 +854,7 @@ void Renderer::initComputeSkyboxPasses() {
 					};
 					m_device.transitionImage(transitionBarrier, PipelineType::Compute);
 
-					m_device.bindRessources(0, {}, { BRDF_LUT.get()->writeViews[0] }, VK_NULL_HANDLE, PipelineType::Compute);
+					m_device.bindRessources(0, {}, { {BRDF_LUT.get()->writeViews[0]} }, PipelineType::Compute);
 					m_device.dispatchCommand(
 						(uint32_t)std::ceil(BRDF_LUT->width / 32.0f),
 						(uint32_t)std::ceil(BRDF_LUT->height / 32.0f),
@@ -902,7 +909,7 @@ void Renderer::initSkyboxRenderPass()
 		.doClear = false,
 		.writeSwapChain = true,
 		.drawFunction = [&]() { 
-				m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { specularMap->view}, *defaultSampler);
+				m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, {{ specularMap->view, *defaultSampler}});
 				m_device.drawCommand(36);
 		; },
 		.debugInfo = {
@@ -916,9 +923,12 @@ void Renderer::initSkyboxRenderPass()
 }
 
 void Renderer::drawRenderPassPBR() {
-	m_device.bindRessources(1, { &light_data_gpu}, {irradianceMap->view, specularMap->view, BRDF_LUT->view}, *defaultSampler);
-	uint32_t count = lights.size();
+	const ImageBindInfo irradiance = { irradianceMap->view , *defaultSampler};
+	const ImageBindInfo specular = { specularMap->view , *defaultSampler};
+	const ImageBindInfo brdf = { BRDF_LUT->view , *defaultSampler };
+	m_device.bindRessources(1, { &light_data_gpu}, { irradiance, specular, brdf});
 
+	uint32_t count = lights.size();
 	size_t start_offset = sizeof(MeshPacket::PushConstantsData);
 
 	m_device.pushConstants(cameraInfo.position, start_offset, 3 * sizeof(float), (StageFlags)(e_Vertex | e_Pixel));
@@ -930,12 +940,12 @@ void Renderer::drawRenderPassPBR() {
 	start_offset += 6 * sizeof(float) + 2*sizeof(float); // 2 is padding
 	for (const auto& packet : packets)
 	{
-		const GpuImage& baseColor = GET_PACKET_TEXTURE_IMAGE(packet, baseColor, *getDefaultTexture());
-		const GpuImage& normal = GET_PACKET_TEXTURE_IMAGE(packet, normal, *getDefaultNormalMap());
-		const GpuImage & mettalicRoughness = GET_PACKET_TEXTURE_IMAGE(packet, mettalicRoughness, *getDefaultTexture());
-		const GpuImage & occlusion = GET_PACKET_TEXTURE_IMAGE(packet, occlusion, *getDefaultTexture());
-		const GpuImage & emissive = GET_PACKET_TEXTURE_IMAGE(packet, emissive, *getDefaultTextureBlack());
-		m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { baseColor.view, normal.view, mettalicRoughness.view, occlusion.view, emissive.view }, packet.sampler);
+		const ImageBindInfo baseColor = packet.getTextureBindInfo(MeshPacket::TextureType::BaseColor, getDefaultTexture(), defaultSampler);
+		const ImageBindInfo normal = packet.getTextureBindInfo(MeshPacket::TextureType::Normal, getDefaultNormalMap(), defaultSampler);
+		const ImageBindInfo  mettalicRoughness = packet.getTextureBindInfo(MeshPacket::TextureType::MetallicRoughness, getDefaultTexture(), defaultSampler);
+		const ImageBindInfo  occlusion = packet.getTextureBindInfo(MeshPacket::TextureType::Occlusion, getDefaultTexture(), defaultSampler);
+		const ImageBindInfo  emissive = packet.getTextureBindInfo(MeshPacket::TextureType::Emissive, getDefaultTextureBlack(), defaultSampler);
+		m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { baseColor, normal, mettalicRoughness, occlusion, emissive });
 
 		m_device.pushConstants(&packet.materialData.pbrFactors, start_offset, sizeof(Mesh::Material::PBRFactors), (StageFlags)(e_Vertex | e_Pixel));
 		drawPacket(packet);
@@ -1055,7 +1065,7 @@ void Renderer::updateParticles()
 	const uint32_t current_frame = m_device.getCurrentFrame();
 	const uint32_t last_frame = (current_frame + 1) % m_device.getMaxFramesInFlight();
 
-	m_device.bindRessources(0, { &m_device.getCurrentComputeUniformBuffer(), &particleStorageBuffers[last_frame], &particleStorageBuffers[current_frame] }, {}, {}, PipelineType::Compute);
+	m_device.bindRessources(0, { &m_device.getCurrentComputeUniformBuffer(), &particleStorageBuffers[last_frame], &particleStorageBuffers[current_frame] }, {}, PipelineType::Compute);
 	m_device.dispatchCommand(PARTICLE_COUNT / 256, 1, 1);
 }
 
@@ -1425,7 +1435,7 @@ void Renderer::destroyPacket(MeshPacket packet)
 	//m_device.destroyBuffer(packet.indexBuffer);
 
 	//m_device.destroyImage(packet.texture);
-	m_device.destroySampler(packet.sampler);
+	//m_device.destroySampler(packet.sampler);
 
 	//for (GpuImage& tex : packet.textures)
 	//{
@@ -1638,37 +1648,38 @@ MeshPacket Renderer::createPacket(const Mesh& mesh, const std::vector<GpuImageHa
 
 
 
+	using TextureType = MeshPacket::TextureType;
 	if (mesh.material.baseColor >= 0)
 	{
 		out_packet.textures.push_back(textures[mesh.material.baseColor]);
-		out_packet.materialData.baseColor.texIdx = out_packet.textures.size() - 1;
+		out_packet.materialData.texturesIdx[TextureType::BaseColor].texIdx = out_packet.textures.size() - 1;
 	}
 	else
 	{
 		out_packet.textures.push_back(getDefaultTexture());
-		out_packet.materialData.baseColor.texIdx = out_packet.textures.size() - 1;
+		out_packet.materialData.texturesIdx[TextureType::BaseColor].texIdx = out_packet.textures.size() - 1;
 	}
 
 
 	if (mesh.material.normal >= 0) {
 		out_packet.textures.push_back(textures[mesh.material.normal]);
-		out_packet.materialData.normal.texIdx = out_packet.textures.size() - 1;
+		out_packet.materialData.texturesIdx[TextureType::Normal].texIdx = out_packet.textures.size() - 1;
 	}
 	if (mesh.material.mettalicRoughness >= 0) {
 		out_packet.textures.push_back(textures[mesh.material.mettalicRoughness]);
-		out_packet.materialData.mettalicRoughness.texIdx = out_packet.textures.size() - 1;
+		out_packet.materialData.texturesIdx[TextureType::MetallicRoughness].texIdx = out_packet.textures.size() - 1;
 	}
 	if (mesh.material.occlusion >= 0) {
 		out_packet.textures.push_back(textures[mesh.material.occlusion]);
-		out_packet.materialData.occlusion.texIdx = out_packet.textures.size() - 1;
+		out_packet.materialData.texturesIdx[TextureType::Occlusion].texIdx = out_packet.textures.size() - 1;
 	}
 	if (mesh.material.emissive >= 0) {
 		out_packet.textures.push_back(textures[mesh.material.emissive]);
-		out_packet.materialData.emissive.texIdx = out_packet.textures.size() - 1;
+		out_packet.materialData.texturesIdx[TextureType::Emissive].texIdx = out_packet.textures.size() - 1;
 	}
 
 
-	out_packet.sampler = m_device.createTextureSampler({});
+	out_packet.sampler = m_resourceManager.createSampler({});
 	return out_packet;
 }
 
@@ -1683,7 +1694,7 @@ MeshPacket Renderer::createCubePacket(const float pos[3], float size)
 
 
 	out_packet.textures.push_back(getDefaultTexture());
-	out_packet.sampler = *defaultSampler;
+	out_packet.sampler = defaultSampler;
 	out_packet.name = "Cube";
 
 
@@ -1691,7 +1702,7 @@ MeshPacket Renderer::createCubePacket(const float pos[3], float size)
 	out_packet.transform = glm::scale(out_packet.transform, glm::vec3(size, size, size));
 
 	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
-	out_packet.materialData.baseColor.texIdx = 0;
+	out_packet.materialData.texturesIdx[MeshPacket::TextureType::BaseColor].texIdx = 0;
 
 	return out_packet;
 }
@@ -1707,14 +1718,14 @@ MeshPacket Renderer::createConePacket(const float pos[3], float size)
 
 
 	out_packet.textures.push_back(getDefaultTexture());
-	out_packet.sampler = *defaultSampler;
+	out_packet.sampler = defaultSampler;
 	out_packet.name = "Cube";
 
 	out_packet.transform = glm::translate(glm::mat4(1.0f), glm::vec3(pos[0], pos[1], pos[2]));
 	out_packet.transform = glm::scale(out_packet.transform, glm::vec3(size, size, size));
 
 	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
-	out_packet.materialData.baseColor.texIdx = 0;
+	out_packet.materialData.texturesIdx[MeshPacket::TextureType::BaseColor].texIdx = 0;
 
 	return out_packet;
 }
@@ -1739,7 +1750,7 @@ MeshPacket Renderer::createSpherePacket(const float pos[3], float size)
 	out_packet.vertexBuffer = vertexBuffer;
 	out_packet.indexBuffer = indexBuffer;
 	out_packet.textures.push_back(getDefaultTexture());
-	out_packet.sampler = *defaultSampler;
+	out_packet.sampler = defaultSampler;
 	out_packet.name = "Sphere";
 
 
@@ -1747,7 +1758,7 @@ MeshPacket Renderer::createSpherePacket(const float pos[3], float size)
 	out_packet.transform = glm::scale(out_packet.transform, glm::vec3(size, size, size));
 
 	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
-	out_packet.materialData.baseColor .texIdx= 0;
+	out_packet.materialData.texturesIdx[MeshPacket::TextureType::BaseColor].texIdx = 0;
 	out_packet.materialData.pbrFactors.baseColorFactor[0] = 1.0f;
 	out_packet.materialData.pbrFactors.baseColorFactor[1] = 1.0f;
 	out_packet.materialData.pbrFactors.baseColorFactor[2] = 1.0f;

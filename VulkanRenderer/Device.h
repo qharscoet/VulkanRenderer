@@ -101,21 +101,23 @@ struct SamplerDesc {
 
 using BufferHandle = std::shared_ptr<Buffer>;
 using GpuImageHandle = std::shared_ptr<GpuImage>;
-using SamplerHandle = std::shared_ptr<VkSampler>;
 
-struct ImageSampler {
-	VkImageView view;
-	VkSampler sampl;
+using Sampler = VkSampler;
+using SamplerHandle = std::shared_ptr<Sampler>;
+
+struct ImageBindInfo {
+	VkImageView imageview;
+	VkSampler sampl = VK_NULL_HANDLE;
 };
 
-using ImageResourceBindInfo = std::variant< ImageSampler,  VkImageView>;
+//using ImageBindInfo = std::variant<ImageSamplerBindInfo, VkImageView>;
 
 struct MeshPacket {
 	BufferHandle vertexBuffer;
 	BufferHandle indexBuffer;
 
 	//GpuImage texture;
-	VkSampler sampler;
+	SamplerHandle sampler;
 
 	std::vector<GpuImageHandle> textures;
 	std::vector<SamplerHandle> samplers;
@@ -126,23 +128,24 @@ struct MeshPacket {
 	//	float scale[3];
 	//} transform;
 
-	glm::mat4 transform;
+	glm::mat4 transform = glm::mat4(1.0);
 
 	struct PushConstantsData {
 		glm::mat4 model;
 	};
 
-	struct ImageSampler {
+	struct ImageSamplerIndices {
 		int texIdx = -1;
 		int samplerIdx = -1;
 	};
 
+	enum TextureType {
+		BaseColor, MetallicRoughness, Normal, Emissive, Occlusion,
+		Nb
+	};
+
 	struct MaterialData {
-		ImageSampler baseColor;
-		ImageSampler mettalicRoughness;
-		ImageSampler normal;
-		ImageSampler emissive;
-		ImageSampler occlusion;
+		ImageSamplerIndices texturesIdx[TextureType::Nb];
 
 		struct PBRFactors {
 			float baseColorFactor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -153,12 +156,16 @@ struct MeshPacket {
 	} materialData;
 
 	std::string name;
-};
 
-#define GET_PACKET_TEXTURE_IMAGE(packet, texName, defaultHandle) (((packet).materialData.texName.texIdx >= 0) ? *(packet).textures[packet.materialData.texName.texIdx] : defaultHandle)
-#define GET_PACKET_TEXTURE_IMAGEVIEW(packet, texName, defaultHandle) (((packet).materialData.texName.texIdx >= 0) ? (packet).textures[packet.materialData.texName.texIdx]->view : defaultHandle->view)
-#define GET_PACKET_SAMPLER_HANDLE(packet, texName, defaultHandle) (((packet).materialData.texName.samplerIdx >= 0) ? *(packet).samplers[packet.materialData.texName.samplerIdx] : defaultHandle)
-#define GET_PACKET_IMAGESAMPLER_PAIR(packet, texName, defaultTex, defaultSampl) {GET_PACKET_TEXTURE_IMAGEVIEW(packet, texName, defaultTex) , GET_PACKET_SAMPLER_HANDLE(packet, texName, defaultSampl)}
+	const ImageBindInfo getTextureBindInfo(const TextureType type, const GpuImageHandle defaultTexture, const SamplerHandle defaultSampl) const
+	{
+		const ImageSamplerIndices indices = materialData.texturesIdx[type];
+		const GpuImageHandle& image = indices.texIdx >= 0 ? textures[indices.texIdx] : defaultTexture;
+		const SamplerHandle& sampler = indices.samplerIdx >= 0 ? samplers[indices.samplerIdx] : defaultSampl;
+
+		return { image->view, *sampler };
+	}
+};
 
 struct Vertex {
 	glm::vec3 pos;
@@ -671,7 +678,7 @@ public:
 	const Buffer& getCurrentComputeUniformBuffer() { return computeUniformBuffers[current_frame]; };
 
 	VkDescriptorBufferInfo& getDescriptorBufferInfo(const Buffer& buffer);
-	VkDescriptorImageInfo& getDescriptorImageInfo(const VkImageView image, VkSampler sampler);
+	VkDescriptorImageInfo& getDescriptorImageInfo(const ImageBindInfo image);
 
 	void updateDescriptorSet(const std::vector<BindingDesc>& bindings, std::vector<VkDescriptorImageInfo>& images, std::vector<VkDescriptorBufferInfo>& buffers, VkDescriptorSet set);
 	void updateComputeDescriptorSets(const std::vector<Buffer>& buffers);
@@ -702,7 +709,7 @@ public:
 	void bindVertexBuffer(Buffer& buffer);
 	/*Deprecated*/void bindTexture(const GpuImage& image, VkSampler sampler);
 	/*Deprecated*/void bindBuffer(const Buffer& buiffer, uint32_t set, uint32_t binding);
-	void bindRessources(uint32_t set, std::vector<const Buffer*> buffers, std::vector<VkImageView> images, const VkSampler sampler = VK_NULL_HANDLE, PipelineType binding_point = PipelineType::Graphics);
+	void bindRessources(uint32_t set, std::vector<const Buffer*> buffers, std::vector<ImageBindInfo> images, PipelineType binding_point = PipelineType::Graphics);
 	void transitionImage(BarrierDesc desc, PipelineType pipeline_type = PipelineType::Graphics);
 	void generateMipmaps(GpuImage& image, PipelineType pipeline_type = PipelineType::Graphics);
 	void drawCommand(uint32_t vertex_count);

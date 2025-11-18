@@ -862,12 +862,12 @@ VkDescriptorBufferInfo& Device::getDescriptorBufferInfo(const Buffer& buffer) {
 	return info;
 }
 
-VkDescriptorImageInfo& Device::getDescriptorImageInfo(const VkImageView image, VkSampler sampler) {
+VkDescriptorImageInfo& Device::getDescriptorImageInfo(const ImageBindInfo image) {
 
 	VkDescriptorImageInfo info{
-		.sampler = sampler,
-		.imageView = image,
-		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		.sampler = image.sampl,
+		.imageView = image.imageview,
+		.imageLayout = image.sampl != VK_NULL_HANDLE ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL
 	};
 
 	return info;
@@ -900,7 +900,6 @@ void Device::updateDescriptorSet(const std::vector<BindingDesc>& bindings, std::
 		} else if (isImage)
 		{
 			descriptorType = binding.type == BindingType::ImageSampler ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-			imageInfo->imageLayout = binding.type == BindingType::ImageSampler ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL;
 		}
 
 		descriptorWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

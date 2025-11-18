@@ -780,7 +780,7 @@ void Device::bindBuffer(const Buffer& buffer, uint32_t set, uint32_t binding)
 
 }
 
-void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, std::vector<VkImageView> images, const VkSampler sampler, PipelineType binding_point)
+void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, std::vector<ImageBindInfo> images, PipelineType binding_point)
 {
 	VkCommandBuffer commandBuffer = binding_point == PipelineType::Graphics ? commandBuffers[current_frame] : computeCommandBuffers[current_frame];
 
@@ -795,7 +795,6 @@ void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, st
 
 	auto imageIt = images.begin();
 	auto bufferIt = buffers.begin();
-	VkSampler selectedSampler = sampler;
 
 	for (const auto& binding : bindings)
 	{
@@ -808,13 +807,14 @@ void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, st
 			break;
 
 		case BindingType::ImageSampler:
+			hash_combine(hash, sampler_hasher(imageIt->sampl));
+			//FALLTHROUGH
 		case BindingType::StorageImage:
-			hash_combine(hash, img_hasher((*imageIt++)));
+			hash_combine(hash, img_hasher((imageIt++)->imageview));
 			break;
 		}
 	}
 
-	hash_combine(hash, sampler_hasher(selectedSampler));
 
 	VkPipelineBindPoint vkBindingPoint = binding_point == PipelineType::Graphics ? VK_PIPELINE_BIND_POINT_GRAPHICS : VK_PIPELINE_BIND_POINT_COMPUTE;
 
@@ -830,7 +830,7 @@ void Device::bindRessources(uint32_t set, std::vector<const Buffer*> buffers, st
 		std::vector<VkDescriptorBufferInfo> descriptorBufferInfos;
 		descriptorImageInfos.reserve(images.size());
 		descriptorBufferInfos.reserve(images.size());
-		std::transform(images.begin(), images.end(), std::back_inserter(descriptorImageInfos), [&](const VkImageView img) { return getDescriptorImageInfo(img, selectedSampler); });
+		std::transform(images.begin(), images.end(), std::back_inserter(descriptorImageInfos), [&](const ImageBindInfo img) { return getDescriptorImageInfo(img); });
 		std::transform(buffers.begin(), buffers.end(), std::back_inserter(descriptorBufferInfos), [&](const Buffer* buff) { return getDescriptorBufferInfo(*buff); });
 
 		//auto descriptorImageInfos = images | std::views::transform([&](const GpuImage* img) { return getDescriptorImageInfo(*img, defaultSampler); });

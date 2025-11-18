@@ -23,7 +23,7 @@ private:
 	std::array<GpuImage, 512> m_textures;
 	size_t m_texture_count = 0;
 
-	std::array<Sampler, 32> m_samplers;
+	std::array<Sampler, 256> m_samplers;
 	size_t m_sampler_count = 0;
 
 public:
