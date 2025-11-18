@@ -300,7 +300,7 @@ float4 PSMain(PSInput input, uniform Constants pc) : SV_TARGET
         float3 prefilteredColor = specularMap.SampleLevel(R, roughness * mipLevels).rgb;
 
         float3 F = kS;
-        float2 envBRDF = brdfLUT.Sample(float2(max(dot(N, V), 0.0), roughness)).rg;
+        float2 envBRDF = brdfLUT.Sample(float2(max(dot(N, V), 0.0), 1-roughness)).rg; // reverse roughness as UV.y is upside down against OpenGL
         float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
         
 		ambient = (kD * diffuse + specular) * occlusion;
