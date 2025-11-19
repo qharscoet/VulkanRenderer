@@ -76,6 +76,11 @@ struct Mesh {
 			float roughnessFactor;
 			float occlusionStrength;
 		} pbrFactors;
+		
+		std::string alphaMode;
+		float alphaCutoff = 0.5f;
+		bool doubleSided = false;
+		
 	} material;
 };
 

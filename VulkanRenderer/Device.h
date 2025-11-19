@@ -144,6 +144,16 @@ struct MeshPacket {
 	struct MaterialData {
 		ImageSamplerIndices texturesIdx[TextureType::Nb];
 
+		struct AlphaCoverage {
+			enum AlphaMode {
+				Opaque,
+				Mask,
+				Blend
+			} alphaMode = Opaque;
+			
+			float cutoff = 0.5f;
+		} alphaCoverage;
+
 		struct PBRFactors {
 			float baseColorFactor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 			float metallicFactor = 1.0f;

@@ -442,6 +442,11 @@ void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, size_t primitiv
 	out_mesh->material.pbrFactors.roughnessFactor = material.pbrMetallicRoughness.roughnessFactor;
 	out_mesh->material.pbrFactors.occlusionStrength = material.occlusionTexture.strength;
 
+	out_mesh->material.doubleSided = material.doubleSided;
+	out_mesh->material.alphaCutoff = material.alphaCutoff;
+	out_mesh->material.alphaMode = material.alphaMode;
+
+
 	/*out_mesh->material = {
 		.baseColor = material.pbrMetallicRoughness.baseColorTexture.index,
 		.mettalicRoughness = material.pbrMetallicRoughness.metallicRoughnessTexture.index,

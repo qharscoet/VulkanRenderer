@@ -1682,6 +1682,16 @@ MeshPacket Renderer::createPacket(const Mesh& mesh, const std::vector<GpuImageHa
 
 	memcpy(&out_packet.materialData.pbrFactors, &mesh.material.pbrFactors, sizeof(mesh.material.pbrFactors));
 
+
+	if(mesh.material.alphaMode == "OPAQUE")
+		out_packet.materialData.alphaCoverage.alphaMode = MeshPacket::MaterialData::AlphaCoverage::AlphaMode::Opaque;
+	else if(mesh.material.alphaMode == "MASK")
+		out_packet.materialData.alphaCoverage.alphaMode = MeshPacket::MaterialData::AlphaCoverage::AlphaMode::Mask;
+	else if(mesh.material.alphaMode == "BLEND")
+		out_packet.materialData.alphaCoverage.alphaMode = MeshPacket::MaterialData::AlphaCoverage::AlphaMode::Blend;
+	else
+		out_packet.materialData.alphaCoverage.alphaMode = MeshPacket::MaterialData::AlphaCoverage::AlphaMode::Opaque;
+
 	using TextureType = MeshPacket::TextureType;
 
 	const auto setTextureInfo = [&](Mesh::ImageSamplerIndices indices, TextureType dest_type) {
