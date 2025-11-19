@@ -54,14 +54,21 @@ struct MeshVertex
 struct Mesh {
 	std::vector<MeshVertex> vertices;
 	std::vector<uint32_t> indices;
-	std::vector<Texture> textures;
+
+
+	std::vector<Texture> textures; /* DEPRECIATED */
+
+	struct ImageSamplerIndices {
+		int texIdx = -1;
+		int samplerIdx = -1;
+	};
 
 	struct Material {
-		int baseColor;
-		int mettalicRoughness;
-		int normal;
-		int emissive;
-		int occlusion;
+		ImageSamplerIndices baseColor;
+		ImageSamplerIndices mettalicRoughness;
+		ImageSamplerIndices normal;
+		ImageSamplerIndices emissive;
+		ImageSamplerIndices occlusion;
 
 		struct PBRFactors {
 			float baseColorFactor[4];
@@ -88,9 +95,17 @@ struct Node {
 	glm::mat4 matrix; // transform
 };
 
+struct SamplerInfo {
+	int magFilter;
+	int minFilter;
+	int wrapS;
+	int wrapT;
+};
+
 struct Scene {
 	std::vector<Node> nodes;
 	std::vector<Texture> textures;
+	std::vector<SamplerInfo> samplers;
 };
 
 std::vector<char> readFile(const std::string& filename);

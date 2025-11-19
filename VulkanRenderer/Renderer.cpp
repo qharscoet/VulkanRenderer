@@ -1332,9 +1332,10 @@ MeshPacket Renderer::createPacket(std::filesystem::path path, std::string textur
 	if (!tex.getPixels<unsigned char>().empty())
 	{
 		loaded_textures.push_back(m_resourceManager.createTexture(tex));
-		out_mesh.material.baseColor = 0;
+		out_mesh.material.baseColor.texIdx = 0;
+		out_mesh.material.baseColor.samplerIdx = -1;
 	}
-	out_packet = createPacket(out_mesh, loaded_textures);
+	out_packet = createPacket(out_mesh, loaded_textures, {});
 
 	out_packet.transform = glm::mat4(1.0f);
 
@@ -1376,6 +1377,36 @@ void Renderer::loadSkybox(const std::filesystem::path path)
 	BRDF_LUT = m_resourceManager.createRWTexture(512, 512, ImageFormat::RG16_Float, false, false);
 }
 
+SamplerDesc getSamplerDesc(const SamplerInfo& info) {
+	auto toFilter = [](int v) {
+		switch (v) {
+		case 9728: return FilterMode::Nearest;
+		case 9729: return FilterMode::Linear;
+		case 9984: return FilterMode::Nearest_MipNearest;
+		case 9985: return FilterMode::Linear_MipNearest;
+		case 9986: return FilterMode::Nearest_MipLinear;
+		case 9987: return FilterMode::Linear_MipLinear;
+		default:   return FilterMode::Linear;
+		}
+		};
+
+	auto toWrap = [](int v) {
+		switch (v) {
+		case 33071: return WrapMode::Clamp;
+		case 10497: return WrapMode::Repeat;
+		case 33648: return WrapMode::MirroredRepeat;
+		default:    return WrapMode::Repeat;
+		}
+		};
+
+	SamplerDesc desc;
+	desc.magFilter = toFilter(info.magFilter);
+	desc.minFilter = toFilter(info.minFilter);
+	desc.wrapS = toWrap(info.wrapS);
+	desc.wrapT = toWrap(info.wrapT);
+	return desc;
+}
+
 void Renderer::loadScene(std::filesystem::path path)
 {
 	if (path.extension() != ".gltf")
@@ -1383,7 +1414,6 @@ void Renderer::loadScene(std::filesystem::path path)
 
 
 	Scene out_scene;
-
 	loadGltf(path.string().c_str(), &out_scene);
 
 	std::vector<GpuImageHandle> loaded_textures;
@@ -1394,6 +1424,13 @@ void Renderer::loadScene(std::filesystem::path path)
 		m_device.SetImageName(image->image, (path.filename().string() + "/" + t.name).c_str());
 	}
 
+	std::vector<SamplerHandle> loaded_samplers;
+	for (const SamplerInfo& sampl : out_scene.samplers)
+	{
+		SamplerHandle sampler = m_resourceManager.createSampler(getSamplerDesc(sampl));
+		loaded_samplers.push_back(sampler);
+	}
+
 
 	std::function<void(const Node&)>  loadNode = [&](const Node& node) -> void
 	{
@@ -1402,8 +1439,7 @@ void Renderer::loadScene(std::filesystem::path path)
 			for (const Mesh& mesh : *primitives)
 			{
 
-				MeshPacket packet = createPacket(mesh, loaded_textures);
-
+				MeshPacket packet = createPacket(mesh, loaded_textures, loaded_samplers);
 
 				packet.transform = node.matrix;
 
@@ -1637,7 +1673,7 @@ void Renderer::addSpotlight(const float pos[3])
 	lights.push_back(light);
 }
 
-MeshPacket Renderer::createPacket(const Mesh& mesh, const std::vector<GpuImageHandle>& textures)
+MeshPacket Renderer::createPacket(const Mesh& mesh, const std::vector<GpuImageHandle>& textures, const std::vector<SamplerHandle>& samplers)
 {
 	MeshPacket out_packet;
 	out_packet.vertexBuffer = m_resourceManager.createVertexBuffer(mesh.vertices.size() * sizeof(mesh.vertices[0]), (void*)mesh.vertices.data());
@@ -1646,40 +1682,40 @@ MeshPacket Renderer::createPacket(const Mesh& mesh, const std::vector<GpuImageHa
 
 	memcpy(&out_packet.materialData.pbrFactors, &mesh.material.pbrFactors, sizeof(mesh.material.pbrFactors));
 
-
-
 	using TextureType = MeshPacket::TextureType;
-	if (mesh.material.baseColor >= 0)
+
+	const auto setTextureInfo = [&](Mesh::ImageSamplerIndices indices, TextureType dest_type) {
+		if (indices.texIdx >= 0)
+		{
+			out_packet.textures.push_back(textures[indices.texIdx]);
+			out_packet.materialData.texturesIdx[dest_type].texIdx = out_packet.textures.size() - 1;
+
+			const SamplerHandle sampler = indices.samplerIdx >= 0 ? samplers[indices.samplerIdx] : defaultSampler;
+			out_packet.samplers.push_back(sampler);
+			out_packet.materialData.texturesIdx[dest_type].samplerIdx = out_packet.samplers.size() - 1;
+		}
+	};
+
+	//Base Color needs to have a default texture always set
+	if (mesh.material.baseColor.texIdx>= 0)
 	{
-		out_packet.textures.push_back(textures[mesh.material.baseColor]);
-		out_packet.materialData.texturesIdx[TextureType::BaseColor].texIdx = out_packet.textures.size() - 1;
+		setTextureInfo(mesh.material.baseColor, TextureType::BaseColor);
 	}
 	else
 	{
 		out_packet.textures.push_back(getDefaultTexture());
 		out_packet.materialData.texturesIdx[TextureType::BaseColor].texIdx = out_packet.textures.size() - 1;
+
+		out_packet.samplers.push_back(defaultSampler);
+		out_packet.materialData.texturesIdx[TextureType::BaseColor].samplerIdx = out_packet.samplers.size() - 1;
 	}
 
-
-	if (mesh.material.normal >= 0) {
-		out_packet.textures.push_back(textures[mesh.material.normal]);
-		out_packet.materialData.texturesIdx[TextureType::Normal].texIdx = out_packet.textures.size() - 1;
-	}
-	if (mesh.material.mettalicRoughness >= 0) {
-		out_packet.textures.push_back(textures[mesh.material.mettalicRoughness]);
-		out_packet.materialData.texturesIdx[TextureType::MetallicRoughness].texIdx = out_packet.textures.size() - 1;
-	}
-	if (mesh.material.occlusion >= 0) {
-		out_packet.textures.push_back(textures[mesh.material.occlusion]);
-		out_packet.materialData.texturesIdx[TextureType::Occlusion].texIdx = out_packet.textures.size() - 1;
-	}
-	if (mesh.material.emissive >= 0) {
-		out_packet.textures.push_back(textures[mesh.material.emissive]);
-		out_packet.materialData.texturesIdx[TextureType::Emissive].texIdx = out_packet.textures.size() - 1;
-	}
+	setTextureInfo(mesh.material.normal, TextureType::Normal);
+	setTextureInfo(mesh.material.mettalicRoughness, TextureType::MetallicRoughness);
+	setTextureInfo(mesh.material.occlusion, TextureType::Occlusion);
+	setTextureInfo(mesh.material.emissive, TextureType::Emissive);
 
 
-	out_packet.sampler = m_resourceManager.createSampler({});
 	return out_packet;
 }
 
@@ -1694,7 +1730,7 @@ MeshPacket Renderer::createCubePacket(const float pos[3], float size)
 
 
 	out_packet.textures.push_back(getDefaultTexture());
-	out_packet.sampler = defaultSampler;
+	out_packet.samplers.push_back(defaultSampler);
 	out_packet.name = "Cube";
 
 
@@ -1703,6 +1739,7 @@ MeshPacket Renderer::createCubePacket(const float pos[3], float size)
 
 	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
 	out_packet.materialData.texturesIdx[MeshPacket::TextureType::BaseColor].texIdx = 0;
+	out_packet.materialData.texturesIdx[MeshPacket::TextureType::BaseColor].samplerIdx = 0;
 
 	return out_packet;
 }
@@ -1718,7 +1755,7 @@ MeshPacket Renderer::createConePacket(const float pos[3], float size)
 
 
 	out_packet.textures.push_back(getDefaultTexture());
-	out_packet.sampler = defaultSampler;
+	out_packet.samplers.push_back(defaultSampler);
 	out_packet.name = "Cube";
 
 	out_packet.transform = glm::translate(glm::mat4(1.0f), glm::vec3(pos[0], pos[1], pos[2]));
@@ -1726,6 +1763,7 @@ MeshPacket Renderer::createConePacket(const float pos[3], float size)
 
 	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
 	out_packet.materialData.texturesIdx[MeshPacket::TextureType::BaseColor].texIdx = 0;
+	out_packet.materialData.texturesIdx[MeshPacket::TextureType::BaseColor].samplerIdx = 0;
 
 	return out_packet;
 }
@@ -1750,7 +1788,7 @@ MeshPacket Renderer::createSpherePacket(const float pos[3], float size)
 	out_packet.vertexBuffer = vertexBuffer;
 	out_packet.indexBuffer = indexBuffer;
 	out_packet.textures.push_back(getDefaultTexture());
-	out_packet.sampler = defaultSampler;
+	out_packet.samplers.push_back(defaultSampler);
 	out_packet.name = "Sphere";
 
 
@@ -1759,6 +1797,7 @@ MeshPacket Renderer::createSpherePacket(const float pos[3], float size)
 
 	memset(&out_packet.materialData, -1, sizeof(out_packet.materialData));
 	out_packet.materialData.texturesIdx[MeshPacket::TextureType::BaseColor].texIdx = 0;
+	out_packet.materialData.texturesIdx[MeshPacket::TextureType::BaseColor].samplerIdx = 0;
 	out_packet.materialData.pbrFactors.baseColorFactor[0] = 1.0f;
 	out_packet.materialData.pbrFactors.baseColorFactor[1] = 1.0f;
 	out_packet.materialData.pbrFactors.baseColorFactor[2] = 1.0f;

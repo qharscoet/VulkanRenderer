@@ -116,9 +116,6 @@ struct MeshPacket {
 	BufferHandle vertexBuffer;
 	BufferHandle indexBuffer;
 
-	//GpuImage texture;
-	SamplerHandle sampler;
-
 	std::vector<GpuImageHandle> textures;
 	std::vector<SamplerHandle> samplers;
 

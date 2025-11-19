@@ -368,14 +368,6 @@ void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, size_t primitiv
 
 			memcpy(v.pos, positions.start_addr + i * positions.stride, positions.elem_size);
 
-		/*	if (positions.maxRange > 0)
-			{
-				const float factor = 1.0f / positions.maxRange;
-				v.pos[0] *= factor;
-				v.pos[1] *= factor;
-				v.pos[2] *= factor;
-			}*/
-
 			if (normal_info.has_value())
 				memcpy(v.normals, normal_info->start_addr + i * normal_info->stride, normal_info->elem_size);
 
@@ -428,17 +420,19 @@ void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, size_t primitiv
 	const tinygltf::Material& material = model.materials[m.primitives[primitive_idx].material];
 
 
-	const auto getImageIndex = [&] (int tex_idx) -> int {
+	const auto getImageSamplerIndex = [&] (int tex_idx) -> Mesh::ImageSamplerIndices {
 		if (tex_idx < 0)
-			return -1 ;
-		return model.textures[tex_idx].source;
+			return { -1, -1 };
+		return { model.textures[tex_idx].source, model.textures[tex_idx].sampler };
 	};
 
-	out_mesh->material.baseColor = getImageIndex(material.pbrMetallicRoughness.baseColorTexture.index);
-	out_mesh->material.mettalicRoughness = getImageIndex(material.pbrMetallicRoughness.metallicRoughnessTexture.index);
-	out_mesh->material.normal = getImageIndex(material.normalTexture.index);
-	out_mesh->material.occlusion = getImageIndex(material.occlusionTexture.index);
-	out_mesh->material.emissive = getImageIndex(material.emissiveTexture.index);
+
+	out_mesh->material.baseColor = getImageSamplerIndex(material.pbrMetallicRoughness.baseColorTexture.index);
+	out_mesh->material.mettalicRoughness = getImageSamplerIndex(material.pbrMetallicRoughness.metallicRoughnessTexture.index);
+	out_mesh->material.normal = getImageSamplerIndex(material.normalTexture.index);
+	out_mesh->material.occlusion = getImageSamplerIndex(material.occlusionTexture.index);
+	out_mesh->material.emissive = getImageSamplerIndex(material.emissiveTexture.index);
+
 
 	for (int i = 0; i < 4; i++)
 	{
@@ -524,6 +518,16 @@ int loadGltf(const char* path, Scene* out_scene)
 		t.pixels = img.image;
 		t.name = img.name.empty() ? img.uri : img.name;
 		out_scene->textures.push_back(t);
+	}
+
+	for (auto sampl : model.samplers)
+	{
+		out_scene->samplers.push_back(SamplerInfo{
+			.magFilter = sampl.magFilter,
+			.minFilter = sampl.minFilter,
+			.wrapS = sampl.wrapS,
+			.wrapT = sampl.wrapT
+		});
 	}
 
 	// Helper function to process nodes recursively
@@ -622,14 +626,14 @@ int loadGltf(const char* path, Scene* out_scene)
 				Mesh mesh;
 				loadGltfMesh(model, gltf_node.mesh, primitive_idx, &mesh);
 
-				if(mesh.material.normal >= 0)
-					out_scene->textures[mesh.material.normal].is_srgb = false;
-				if(mesh.material.mettalicRoughness >= 0)
-					out_scene->textures[mesh.material.mettalicRoughness].is_srgb = false;
-				if(mesh.material.emissive >= 0)
-					out_scene->textures[mesh.material.emissive].is_srgb = false;
-				if(mesh.material.occlusion >= 0)
-					out_scene->textures[mesh.material.occlusion].is_srgb = false;
+				if(mesh.material.normal.texIdx >= 0)
+					out_scene->textures[mesh.material.normal.texIdx].is_srgb = false;
+				if(mesh.material.mettalicRoughness.texIdx >= 0)
+					out_scene->textures[mesh.material.mettalicRoughness.texIdx].is_srgb = false;
+				if(mesh.material.emissive.texIdx >= 0)
+					out_scene->textures[mesh.material.emissive.texIdx].is_srgb = false;
+				if(mesh.material.occlusion.texIdx >= 0)
+					out_scene->textures[mesh.material.occlusion.texIdx].is_srgb = false;
 
 				primitives.push_back(std::move(mesh));
 			}
