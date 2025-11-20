@@ -483,6 +483,9 @@ void Renderer::drawRenderPass() {
 
 		//const ImageResourceBindInfo bindInfo = ImageSampler(GET_PACKET_IMAGESAMPLER_PAIR(packet, normal, getDefaultNormalMap(), *defaultSampler));
 		m_device.bindRessources(0, {&m_device.getCurrentUniformBuffer()}, {baseColor , normal});
+
+		float alphaCutoff = packet.materialData.getAlphaCutoff();
+		m_device.pushConstants(&alphaCutoff, sizeof(MeshPacket::PushConstantsData) + 7 * sizeof(float), sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
 		drawPacket(packet);
 	}
 }
@@ -542,7 +545,7 @@ void Renderer::initPipeline()
 		.pushConstantsRanges = {
 			{
 				.offset = 0,
-				.size = sizeof(MeshPacket::PushConstantsData) + sizeof(float) * 7,
+				.size = sizeof(MeshPacket::PushConstantsData) + sizeof(float) * 8,
 				.stageFlags = (StageFlags)(e_Vertex | e_Pixel)
 			},
 			//{
@@ -937,7 +940,7 @@ void Renderer::drawRenderPassPBR() {
 	m_device.pushConstants(&debug_mode, start_offset + 5 * sizeof(float), sizeof(uint32_t), (StageFlags)(e_Vertex | e_Pixel));
 	m_device.pushConstants(&use_ibl, start_offset + 6 * sizeof(float), sizeof(uint32_t), (StageFlags)(e_Vertex | e_Pixel));
 
-	start_offset += 6 * sizeof(float) + 2*sizeof(float); // 2 is padding
+	start_offset += 7 * sizeof(float) + sizeof(float); // 2 is padding
 	for (const auto& packet : packets)
 	{
 		const ImageBindInfo baseColor = packet.getTextureBindInfo(MeshPacket::TextureType::BaseColor, getDefaultTexture(), defaultSampler);
@@ -947,7 +950,10 @@ void Renderer::drawRenderPassPBR() {
 		const ImageBindInfo  emissive = packet.getTextureBindInfo(MeshPacket::TextureType::Emissive, getDefaultTextureBlack(), defaultSampler);
 		m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, { baseColor, normal, mettalicRoughness, occlusion, emissive });
 
+		float alphaCutoff = packet.materialData.getAlphaCutoff();
+
 		m_device.pushConstants(&packet.materialData.pbrFactors, start_offset, sizeof(Mesh::Material::PBRFactors), (StageFlags)(e_Vertex | e_Pixel));
+		m_device.pushConstants(&alphaCutoff, start_offset + sizeof(Mesh::Material::PBRFactors), sizeof(float), (StageFlags)(e_Vertex | e_Pixel));
 		drawPacket(packet);
 	}
 }
@@ -1037,7 +1043,7 @@ void Renderer::initPipelinePBR()
 		.pushConstantsRanges = {
 			{
 				.offset = 0,
-				.size = sizeof(MeshPacket::PushConstantsData) + sizeof(float) * 7 + sizeof(Mesh::Material::PBRFactors) + 4 /*padding*/,
+				.size = sizeof(MeshPacket::PushConstantsData) + sizeof(float) * 7 + sizeof(Mesh::Material::PBRFactors) + 8 /*padding*/,
 				.stageFlags = (StageFlags)(e_Vertex | e_Pixel)
 			}
 		}

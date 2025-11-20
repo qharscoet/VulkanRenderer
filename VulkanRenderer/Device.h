@@ -160,6 +160,16 @@ struct MeshPacket {
 			float roughnessFactor = 1.0f;
 			float occlusionStrength = 1.0f;
 		} pbrFactors;
+
+		float getAlphaCutoff() const {
+			float alphaCutoff;
+			if (alphaCoverage.alphaMode == AlphaCoverage::AlphaMode::Mask)
+				alphaCutoff = alphaCoverage.cutoff;
+			else
+				alphaCutoff = 0.0f;
+			return alphaCutoff;
+		}
+
 	} materialData;
 
 	std::string name;

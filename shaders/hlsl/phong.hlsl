@@ -83,6 +83,7 @@ struct Constants
 	uint normal_mode;
 	uint debug_mode;
 	uint blinn;
+	float alphaCutoff;
 };
 
 [[vk::push_constant]]
@@ -211,6 +212,10 @@ float4 calcLight(PSInput input, Light l, float3 norm)
 float4 PSMain(PSInput input) : SV_TARGET
 {
 	float4 texColor = g_texture.Sample(g_sampler, input.uv) * float4(input.color, 1.0f);
+	
+	if(texColor.a < pc.alphaCutoff)
+		discard;
+	
 	float4 output = 0;
 	
 	float3 NTex = g_normal.Sample(g_sampler, input.uv) * 2.0f - 1.0f;

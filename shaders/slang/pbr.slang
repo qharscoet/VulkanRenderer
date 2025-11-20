@@ -43,6 +43,7 @@ struct Constants
     float metallicFactor;
     float roughnessFactor;
     float occlusionStrength;
+    float alphaCutoff;
 
 };
 
@@ -237,6 +238,10 @@ float4 PSMain(PSInput input, uniform Constants pc) : SV_TARGET
 {
 
     float4 baseColor = g_baseColor.Sample(input.uv) * pc.baseColorFactor;
+
+    if (baseColor.a < pc.alphaCutoff)
+        discard;
+
     float4 metallicRoughness = g_metallicRoughness.Sample(input.uv);
 
     float metallic = metallicRoughness.b * pc.metallicFactor;
