@@ -263,5 +263,5 @@ float4 PSMain(PSInput input) : SV_TARGET
 	//return float4(input.binormal.x * 0.5 + 0.5 , 0,0,0);
 	//return float4(vNout * 0.5 + 0.5, 0);
 	
-	return final_output;
+	return float4(final_output.rgb, texColor.a);
 }

@@ -89,7 +89,20 @@ private:
 	DeviceOptions device_options;
 	RenderPass drawParticlesPass;
 
-	std::vector<RenderPass> renderPasses;
+	enum class RenderPasses {
+		Main,
+		MainAlpha,
+		MainPBR,
+		MainAlphaPBR,
+		DrawSkybox,
+		DrawLightsRenderPass,
+		Test,
+		Test2,
+
+		Nb
+	};
+
+	RenderPass renderPasses[(size_t)RenderPasses::Nb];
 
 	ComputePass computeSkyboxPass;
 	ComputePass computeIBLPass;
@@ -114,15 +127,17 @@ private:
 	SamplerHandle defaultSampler;
 
 	std::vector<MeshPacket> packets;
+	std::vector<MeshPacket> transparent_packets;
 	std::vector<Light> lights;
 
 	CameraInfo cameraInfo;
 
+	void sortTransparentPackets();
 	//Draw callbacks
-	void drawRenderPass();
+	void drawRenderPass(const std::vector<MeshPacket>& packets);
+	void drawRenderPassPBR(const std::vector<MeshPacket>& packets);
 	void drawParticles();
 	void drawLightsRenderPass();
-	void drawRenderPassPBR();
 
 	//Compute callbacks
 	void updateParticles();

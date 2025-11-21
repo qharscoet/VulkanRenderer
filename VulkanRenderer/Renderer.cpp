@@ -184,10 +184,11 @@ void Renderer::draw()
 
 	m_device.beginDraw();
 
-	m_device.recordRenderPass(use_pbr ? renderPasses[1] : renderPasses[0]);
-	m_device.recordRenderPass(renderPasses[2]);
+	m_device.recordRenderPass(renderPasses[(size_t)RenderPasses::DrawSkybox]);
+	m_device.recordRenderPass(use_pbr ? renderPasses[(size_t)RenderPasses::MainPBR] : renderPasses[(size_t)RenderPasses::Main]);
+	m_device.recordRenderPass(use_pbr ? renderPasses[(size_t)RenderPasses::MainAlphaPBR] : renderPasses[(size_t)RenderPasses::MainAlpha]);
+	m_device.recordRenderPass(renderPasses[(size_t)RenderPasses::DrawLightsRenderPass]);
 	//m_device.recordRenderPass(drawParticlesPass);
-	m_device.recordRenderPass(renderPasses[3]);
 	//m_device.recordRenderPass(drawParticlesPass);
 	//for (auto& renderPass : renderPasses)
 	//{
@@ -466,7 +467,20 @@ void Renderer::drawImgui()
 }
 
 
-void Renderer::drawRenderPass() {
+void Renderer::sortTransparentPackets()
+{
+	glm::vec3 camPos = glm::make_vec3(cameraInfo.position);
+	std::sort(transparent_packets.begin(), transparent_packets.end(),
+		[camPos](const MeshPacket& a, const MeshPacket& b) {
+			glm::vec3 aPos = glm::vec3(a.transform[3]);
+			glm::vec3 bPos = glm::vec3(b.transform[3]);
+			float distA = glm::length(camPos - aPos);
+			float distB = glm::length(camPos - bPos);
+			return distA > distB; // Sort in descending order (farthest first)
+		});
+}
+
+void Renderer::drawRenderPass(const std::vector<MeshPacket>& packets) {
 	m_device.bindRessources(1, {&light_data_gpu, &material_data }, {});
 	m_device.pushConstants(cameraInfo.position, sizeof(MeshPacket::PushConstantsData), 3 * sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
 
@@ -560,9 +574,9 @@ void Renderer::initPipeline()
 		.colorAttachement_count = 1,
 		.hasDepth = true,
 		.useMsaa = false,
-		.doClear = true,
+		.doClear = false,
 		.writeSwapChain = true,
-		.drawFunction = [&]() { drawRenderPass(); },
+		.drawFunction = [&]() { drawRenderPass(packets); },
 		.debugInfo = {
 				.name = "Main Render Pass",
 				.color = DebugColor::Blue,
@@ -572,7 +586,14 @@ void Renderer::initPipeline()
 	material_data = m_device.createUniformBuffer(sizeof(MaterialData));
 	memcpy(material_data.mapped_memory, &materials[EMERALD], sizeof(MaterialData));
 
-	renderPasses.push_back(m_device.createRenderPassAndPipeline(renderPassDesc, desc));
+	renderPasses[(size_t)RenderPasses::Main] = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
+
+
+	desc.blendMode = BlendMode::AlphaBlend;
+	renderPassDesc.doClear = false;
+	renderPassDesc.debugInfo.name = "Transparent Render Pass";
+	renderPassDesc.drawFunction = [&]() { sortTransparentPackets(); drawRenderPass(transparent_packets); };
+	renderPasses[(size_t)RenderPasses::MainAlpha] = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 }
 
 void Renderer::drawLightsRenderPass()
@@ -649,7 +670,7 @@ void Renderer::initDrawLightsRenderPass()
 		},
 	};
 
-	renderPasses.push_back(m_device.createRenderPassAndPipeline(renderPassDesc, desc));
+	renderPasses[(size_t)RenderPasses::DrawLightsRenderPass] = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 }
 
 void Renderer::initComputeSkyboxPasses() {
@@ -909,7 +930,7 @@ void Renderer::initSkyboxRenderPass()
 		.colorAttachement_count = 1,
 		.hasDepth = true,
 		.useMsaa = device_options.usesMsaa,
-		.doClear = false,
+		.doClear = true,
 		.writeSwapChain = true,
 		.drawFunction = [&]() { 
 				m_device.bindRessources(0, { &m_device.getCurrentUniformBuffer() }, {{ specularMap->view, *defaultSampler}});
@@ -922,10 +943,10 @@ void Renderer::initSkyboxRenderPass()
 	};
 
 
-	renderPasses.push_back(m_device.createRenderPassAndPipeline(renderPassDesc, desc));
+	renderPasses[(size_t)RenderPasses::DrawSkybox] = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 }
 
-void Renderer::drawRenderPassPBR() {
+void Renderer::drawRenderPassPBR(const std::vector<MeshPacket>& packets) {
 	const ImageBindInfo irradiance = { irradianceMap->view , *defaultSampler};
 	const ImageBindInfo specular = { specularMap->view , *defaultSampler};
 	const ImageBindInfo brdf = { BRDF_LUT->view , *defaultSampler };
@@ -1053,16 +1074,22 @@ void Renderer::initPipelinePBR()
 		.colorAttachement_count = 1,
 		.hasDepth = true,
 		.useMsaa = false,
-		.doClear = true,
+		.doClear = false,
 		.writeSwapChain = true,
-		.drawFunction = [&]() { drawRenderPassPBR(); },
+		.drawFunction = [&]() { drawRenderPassPBR(packets); },
 		.debugInfo = {
-				.name = "Main Render Pass",
+				.name = "Main Render Pass PBR",
 				.color = DebugColor::Blue,
 		},
 	};
 
-	renderPasses.push_back(m_device.createRenderPassAndPipeline(renderPassDesc, desc));
+	renderPasses[(size_t)RenderPasses::MainPBR] = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
+
+	desc.blendMode = BlendMode::AlphaBlend;
+	renderPassDesc.doClear = false;
+	renderPassDesc.debugInfo.name = "Main Render Pass PBR Alpha Blend";
+	renderPassDesc.drawFunction = [&]() { drawRenderPassPBR(transparent_packets); };
+	renderPasses[(size_t)RenderPasses::MainAlphaPBR] = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 }
 
 
@@ -1224,7 +1251,7 @@ void Renderer::initTestPipeline()
 		}
 	};
 
-	renderPasses.push_back(m_device.createRenderPassAndPipeline(renderPassDesc, desc));
+	renderPasses[(size_t)RenderPasses::Test] = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 
 }
 
@@ -1272,7 +1299,7 @@ void Renderer::initTestPipeline2()
 	};
 
 
-	renderPasses.push_back(m_device.createRenderPassAndPipeline(renderPassDesc, desc));
+	renderPasses[(size_t)RenderPasses::Test2] = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 
 }
 
@@ -1493,11 +1520,25 @@ void Renderer::destroyAllPackets()
 	}
 
 	packets.clear();
+
+	for (auto& packet : transparent_packets)
+	{
+		destroyPacket(packet);
+	}
+
+	transparent_packets.clear();
 }
 
 void Renderer::addPacket(const MeshPacket& packet)
 {
-	packets.push_back(packet);
+	if (packet.materialData.alphaCoverage.alphaMode == MeshPacket::MaterialData::AlphaCoverage::AlphaMode::Blend)
+	{
+		transparent_packets.push_back(packet);
+	}
+	else
+	{
+		packets.push_back(packet);
+	}
 }
 
 void Renderer::drawPacket(const MeshPacket& packet)
@@ -1698,6 +1739,7 @@ MeshPacket Renderer::createPacket(const Mesh& mesh, const std::vector<GpuImageHa
 	else
 		out_packet.materialData.alphaCoverage.alphaMode = MeshPacket::MaterialData::AlphaCoverage::AlphaMode::Opaque;
 
+	out_packet.materialData.alphaCoverage.cutoff = mesh.material.alphaCutoff;
 	using TextureType = MeshPacket::TextureType;
 
 	const auto setTextureInfo = [&](Mesh::ImageSamplerIndices indices, TextureType dest_type) {

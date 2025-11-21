@@ -379,7 +379,7 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	VkPipelineDepthStencilStateCreateInfo depthStencil{};
 	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 	depthStencil.depthTestEnable = VK_TRUE;
-	depthStencil.depthWriteEnable = VK_TRUE;
+	depthStencil.depthWriteEnable = desc.blendMode == BlendMode::Opaque;
 	depthStencil.depthCompareOp = static_cast<VkCompareOp>(desc.depthCompareOp); // VK_COMPARE_OP_LESS
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
 	depthStencil.minDepthBounds = 0.0f; // Optional
@@ -969,11 +969,14 @@ void Device::destroyPipeline(const Pipeline& pipeline)
 
 void Device::destroyRenderPass(const RenderPass& renderPass)
 {
-	vkDestroyRenderPass(device, renderPass.renderPass, nullptr);
-	if (renderPass.renderPassMsaa != VK_NULL_HANDLE)
-		vkDestroyRenderPass(device, renderPass.renderPassMsaa, nullptr);
+	if (renderPass.renderPass)
+	{
+		vkDestroyRenderPass(device, renderPass.renderPass, nullptr);
+		if (renderPass.renderPassMsaa != VK_NULL_HANDLE)
+			vkDestroyRenderPass(device, renderPass.renderPassMsaa, nullptr);
 
-	destroyPipeline(renderPass.pipeline);
+		destroyPipeline(renderPass.pipeline);
+	}
 }
 
 void Device::destroyComputePass(const ComputePass& computePass)

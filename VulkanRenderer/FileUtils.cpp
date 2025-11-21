@@ -404,8 +404,10 @@ void loadGltfMesh(const tinygltf::Model& model, size_t mesh_idx, size_t primitiv
 		for (int i = 0; i < accessor.count; i++)
 		{
 			//TODO: read the format correctly;
-			uint16_t* addr = (uint16_t*)(data + i * stride);
-			out_mesh->indices.push_back(*addr);
+			uint32_t idx = 0;
+			memcpy(&idx, data + i * stride, elem_size);
+			//uint16_t* addr = (uint16_t*)(data + i * stride);
+			out_mesh->indices.push_back(idx);
 		}
 
 	}

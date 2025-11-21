@@ -318,9 +318,8 @@ float4 PSMain(PSInput input, uniform Constants pc) : SV_TARGET
     float3 color = ambient + Lo + emissive;
     //float3 color = (Lo * occlusion) + emissive;
 
-
     // HDR Tone mapping ? Reinhard operator nantoka
-    //color = color / (color + float3(1.0));
-    //color = pow(color, float3(1.0 / 2.2));
-    return float4(color, 0);
+    // color = color / (color + float3(1.0));
+    // color = pow(color, float3(1.0 / 2.2));
+    return float4(color, baseColor.a);
 }

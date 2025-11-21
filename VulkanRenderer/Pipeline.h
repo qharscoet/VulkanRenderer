@@ -162,9 +162,9 @@ struct Pipeline {
 };
 
 struct RenderPass {
-	VkRenderPass renderPass;
-	VkRenderPass renderPassMsaa;
-	uint32_t colorAttachement_count;
+	VkRenderPass renderPass = VK_NULL_HANDLE;
+	VkRenderPass renderPassMsaa = VK_NULL_HANDLE;
+	uint32_t colorAttachement_count = 0;
 	bool hasDepth;
 
 	Pipeline pipeline;
