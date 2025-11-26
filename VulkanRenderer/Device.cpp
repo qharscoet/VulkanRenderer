@@ -1679,18 +1679,18 @@ GpuImage Device::createTexture(Texture tex)
 }
 
 
-void Device::createRWTexture(uint32_t width, uint32_t height, GpuImage& out_image, ImageFormat format, bool is_cubemap, bool sampled, bool allocateMips)
+void Device::createRWTexture(GpuImage& out_image, uint32_t width, uint32_t height, ImageFormat format, bool is_cubemap, bool sampled, bool allocateMips)
 {
 	uint32_t mipLevels = allocateMips ? static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1 : 1;
 	ImageDesc desc = {
 		.width = width,
 		.height = height,
 		.mipLevels = mipLevels,
-		.numSamples =  VK_SAMPLE_COUNT_1_BIT,
+		.numSamples = VK_SAMPLE_COUNT_1_BIT,
 		.format = getFormat(format),
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
 		// TODO : check if we need to add VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT
-		.usage_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | (sampled ? VK_IMAGE_USAGE_SAMPLED_BIT : 0u) | (allocateMips ? VK_IMAGE_USAGE_TRANSFER_DST_BIT |VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0u),
+		.usage_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | (sampled ? VK_IMAGE_USAGE_SAMPLED_BIT : 0u) | (allocateMips ? VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0u),
 		.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.is_cubemap = is_cubemap,
@@ -1700,7 +1700,7 @@ void Device::createRWTexture(uint32_t width, uint32_t height, GpuImage& out_imag
 
 	for (uint32_t i = 0; i < mipLevels; i++)
 	{
-		out_image.writeViews.push_back(createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, i,1, is_cubemap, true));
+		out_image.writeViews.push_back(createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_COLOR_BIT, i, 1, is_cubemap, true));
 	}
 
 	out_image.format = ImageFormat::RGBA_Float;
@@ -1710,7 +1710,7 @@ void Device::createRWTexture(uint32_t width, uint32_t height, GpuImage& out_imag
 	out_image.height = height;
 }
 
-void Device::createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa, bool sampled)
+void Device::createRenderTarget(GpuImage& out_image, uint32_t width, uint32_t height, bool msaa, bool sampled)
 {
 	ImageDesc desc = {
 		.width = width,
@@ -1732,7 +1732,7 @@ void Device::createRenderTarget(uint32_t width, uint32_t height, GpuImage& out_i
 
 }
 
-void Device::createDepthTarget(uint32_t width, uint32_t height, GpuImage& out_image, bool msaa)
+void Device::createDepthTarget(GpuImage& out_image, uint32_t width, uint32_t height, bool msaa, bool sampled)
 {
 	ImageDesc desc = {
 		.width = width,
@@ -1741,7 +1741,7 @@ void Device::createDepthTarget(uint32_t width, uint32_t height, GpuImage& out_im
 		.numSamples = msaa ? msaaSamples : VK_SAMPLE_COUNT_1_BIT,
 		.format = findDepthFormat(),
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
-		.usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		.usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | (sampled ? VK_IMAGE_USAGE_SAMPLED_BIT : 0u),
 		.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
@@ -1850,12 +1850,12 @@ bool Device::hasStencilComponent(VkFormat format) {
 }
 
 void Device::createColorResources() {
-	createRenderTarget(swapChainExtent.width, swapChainExtent.height, colorTarget, this->usesMsaa);
+	createRenderTarget(colorTarget, swapChainExtent.width, swapChainExtent.height, this->usesMsaa);
 }
 
 void Device::createDepthBufferResources() {
 
-	createDepthTarget(swapChainExtent.width, swapChainExtent.height, depthBuffer, this->usesMsaa);
+	createDepthTarget(depthBuffer, swapChainExtent.width, swapChainExtent.height, this->usesMsaa);
 }
 
 
@@ -1911,6 +1911,8 @@ inline Device::MyCommandBuffer Device::getCommandBuffer()
 
 void Device::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels, uint32_t layerCount, VkCommandBuffer cb) {
 	MyCommandBuffer commandBuffer = cb != VK_NULL_HANDLE?MyCommandBuffer(cb):getCommandBuffer();
+
+	bool isDepthTarget = oldLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
 	
 	VkImageMemoryBarrier barrier{};
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1921,7 +1923,7 @@ void Device::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout
 	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 
 	barrier.image = image;
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	barrier.subresourceRange.aspectMask = isDepthTarget ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
 	barrier.subresourceRange.baseMipLevel = 0;
 	barrier.subresourceRange.levelCount = mipLevels;
 	barrier.subresourceRange.baseArrayLayer = 0;
@@ -1969,6 +1971,24 @@ void Device::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout
 
 		sourceStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	}
+	else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) {
+		barrier.srcAccessMask = 0;
+		barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+		sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	}
+	else if (oldLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+		barrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		sourceStage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	}
+	else if (oldLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && newLayout== VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) {
+		barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+		sourceStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 	}
 	else {
 		throw std::invalid_argument("unsupported layout transition!");

@@ -22,16 +22,10 @@ struct UniformBuffer
 };
 ConstantBuffer<UniformBuffer> ubo;
 
-
 struct Constants
 {
 	float4x4 model;
-	float3 color;
-	
 };
-
-
-Sampler2D g_texture;
 
 [shader("vertex")]
 PSInput VSMain(VSInput input, uniform Constants pc)
@@ -48,5 +42,5 @@ PSInput VSMain(VSInput input, uniform Constants pc)
 [shader("pixel")]
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	return g_texture.Sample(input.uv) * float4(input.color, 0);
+    return 0;
 }

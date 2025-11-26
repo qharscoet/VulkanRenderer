@@ -96,6 +96,7 @@ private:
 		MainAlphaPBR,
 		DrawSkybox,
 		DrawLightsRenderPass,
+		DrawShadowMap,
 		Test,
 		Test2,
 
@@ -120,6 +121,9 @@ private:
 	GpuImageHandle irradianceMap;
 	GpuImageHandle specularMap;
 	GpuImageHandle BRDF_LUT;
+
+	GpuImageHandle shadowMap;
+	BufferHandle sunViewProj;
 
 	GpuImageHandle defaultTexture;
 	GpuImageHandle defaultTextureBlack;
@@ -155,6 +159,8 @@ private:
 	void initDrawLightsRenderPass();
 	void initComputeSkyboxPasses();
 	void initSkyboxRenderPass();
+
+	void initDrawShadowMapRenderPass();
 
 	void initParticlesBuffers();
 	void cleanupParticles();

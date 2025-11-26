@@ -96,6 +96,7 @@ enum ImageLayout {
 	TransferSrc,
 	TransferDst,
 	RenderTarget,
+	DepthTarget,
 	ShaderRead,
 	SwapChain,
 
@@ -157,8 +158,8 @@ struct Pipeline {
 	std::vector<std::vector<BindingDesc>> bindings;
 	VkDescriptorPool descriptorPool;
 	VkPipelineLayout pipelineLayout;
-	VkPipeline graphicsPipeline;
-	VkPipeline graphicsPipelineMsaa;
+	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
+	VkPipeline graphicsPipelineMsaa = VK_NULL_HANDLE;
 };
 
 struct RenderPass {

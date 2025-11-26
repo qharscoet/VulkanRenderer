@@ -60,13 +60,13 @@ foreach(SLANG ${SLANG_SOURCE_FILES})
   message(STATUS ${FILE_NAME})
   set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/spv/${FILE_NAME}.slang.spv")
   message(STATUS "BUILDING SLANG SHADER")
-  message(STATUS ${SLANG})
+  message(STATUS ${SLANG}) 
   if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 	add_custom_command(
 		OUTPUT ${SPIRV}
 		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_4 -g -o ${SPIRV}
 		DEPENDS ${SLANG})
-  else()
+  else() 
 	add_custom_command(
 		OUTPUT ${SPIRV}
 		COMMAND ${SLANG_VALIDATOR} ${SLANG} -target spirv -profile spirv_1_4  -o ${SPIRV}

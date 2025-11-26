@@ -206,7 +206,7 @@ private:
 			"./assets/skybox/back.png"
 		};
 		m_renderer.loadSkybox(faces);
-		m_renderer.loadSkybox(gltfEnvMapPath + "ennis.hdr");
+		m_renderer.loadSkybox(gltfEnvMapPath + "footprint_court.hdr");
 	}
 
 	void loadSpheres()

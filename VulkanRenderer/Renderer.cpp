@@ -115,7 +115,7 @@ void Renderer::init(GLFWwindow* window, DeviceOptions options)
 	initDrawLightsRenderPass();
 	initSkyboxRenderPass();
 
-
+	initDrawShadowMapRenderPass();
 
 	initComputePipeline();
 	initComputeSkyboxPasses();
@@ -184,6 +184,7 @@ void Renderer::draw()
 
 	m_device.beginDraw();
 
+	m_device.recordRenderPass(renderPasses[(size_t)RenderPasses::DrawShadowMap]);
 	m_device.recordRenderPass(renderPasses[(size_t)RenderPasses::DrawSkybox]);
 	m_device.recordRenderPass(use_pbr ? renderPasses[(size_t)RenderPasses::MainPBR] : renderPasses[(size_t)RenderPasses::Main]);
 	m_device.recordRenderPass(use_pbr ? renderPasses[(size_t)RenderPasses::MainAlphaPBR] : renderPasses[(size_t)RenderPasses::MainAlpha]);
@@ -620,7 +621,7 @@ void Renderer::initDrawLightsRenderPass()
 
 	PipelineDesc desc = {
 		.type = PipelineType::Graphics,
-		.vertexShader = "basic.slang.vs.spv",
+		.vertexShader = "basic.slang.spv",
 		.pixelShader = "basic.ps.spv",
 
 		.bindingDescription = &bindingDescription,
@@ -946,6 +947,88 @@ void Renderer::initSkyboxRenderPass()
 	renderPasses[(size_t)RenderPasses::DrawSkybox] = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 }
 
+void Renderer::initDrawShadowMapRenderPass()
+{
+	auto attributeDescriptions = Vertex::getAttributeDescriptions();
+	auto bindingDescription = Vertex::getBindingDescription();
+
+	shadowMap = m_resourceManager.createTexture<DeviceTextureType::DepthTarget>(1024, 1024, false, true);
+	sunViewProj = m_resourceManager.createBuffer<DeviceBufferType::Uniform>(sizeof(UniformBufferObject));
+
+	PipelineDesc desc = {
+		.type = PipelineType::Graphics,
+		.vertexShader = "empty.slang.spv",
+		.pixelShader = "empty.slang.spv",
+
+		.bindingDescription = &bindingDescription,
+		.attributeDescriptions = attributeDescriptions.data(),
+		.attributeDescriptionsCount = attributeDescriptions.size(),
+
+		.blendMode = BlendMode::Opaque,
+		.topology = PrimitiveToplogy::TriangleList,
+		.bindings = {
+			{
+				{
+					.slot = 0,
+					.type = BindingType::UBO,
+					.stageFlags = e_Vertex,
+				},
+			}
+		},
+		.pushConstantsRanges = {
+			{
+				.offset = 0,
+				.size = sizeof(MeshPacket::PushConstantsData),
+				.stageFlags = (StageFlags)(e_Vertex | e_Pixel)
+			}
+		}
+	};
+
+	RenderPassDesc renderPassDesc = {
+		.framebufferDesc = {
+			.images = {},
+			.depth = shadowMap.get(),
+			.width = 800,
+			.height = 600,
+		},
+		.colorAttachement_count = 0,
+		.hasDepth = true,
+		.useMsaa = false,
+		.doClear = true,
+		.drawFunction = [&]() { 
+			BarrierDesc transitionBarrier = {
+						.image = shadowMap.get(),
+						.oldLayout = ImageLayout::ShaderRead,
+						.newLayout = ImageLayout::DepthTarget,
+						.mipLevels = shadowMap->mipLevels,
+						.layerCount = shadowMap->layerCount,
+					};
+			//m_device.transitionImage(transitionBarrier, PipelineType::Graphics);
+
+			m_device.bindRessources(0, { sunViewProj.get()}, {});
+			for (const auto& packet : packets)
+			{
+				drawPacket(packet);
+			}	
+		},
+		.postDrawBarriers = {
+			/* {
+				.image = shadowMap.get(),
+				.oldLayout = ImageLayout::DepthTarget,
+				.newLayout = ImageLayout::ShaderRead,
+				.mipLevels = 1
+			}*/
+		},
+		.debugInfo = {
+			.name = "Draw Shadow Map",
+			.color = DebugColor::Grey,
+		}
+	};
+
+	renderPasses[(size_t)RenderPasses::DrawShadowMap] = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
+}
+
+
 void Renderer::drawRenderPassPBR(const std::vector<MeshPacket>& packets) {
 	const ImageBindInfo irradiance = { irradianceMap->view , *defaultSampler};
 	const ImageBindInfo specular = { specularMap->view , *defaultSampler};
@@ -1220,9 +1303,9 @@ void Renderer::initTestPipeline()
 		}
 	};
 	
-	m_device.createRenderTarget(800,600, test_images[0], false, true);
-	m_device.createRenderTarget(800,600, test_images[1], false, true);
-	m_device.createDepthTarget(800, 600, test_depth, false);
+	m_device.createRenderTarget(test_images[0], 800, 600, false, true);
+	m_device.createRenderTarget(test_images[1], 800,600 , false, true);
+	m_device.createDepthTarget(test_depth, 800, 600, false);
 	//defaultSampler = m_device.createTextureSampler(1);
 
 	RenderPassDesc renderPassDesc = {
@@ -1595,13 +1678,15 @@ void Renderer::updateLightData()
 
 	float angle = time;
 
-	Light& l = lights[0];
-
+	Light* sun_ptr = nullptr; //For now the sun is the first directional light
 
 	LightData data;
 	size_t offset = 0;
 	for (auto& l : lights)
 	{
+		if (l.type == LightType::Directional && sun_ptr == nullptr)
+			sun_ptr = &l;
+
 		glm::vec3 scale;
 		glm::quat rotation;
 		glm::vec3 translation;
@@ -1661,6 +1746,18 @@ void Renderer::updateLightData()
 
 		memcpy((uint8_t*)(light_data_gpu.mapped_memory) + offset, &data, sizeof(data));
 		offset += sizeof(data);
+	}
+
+	if (sun_ptr && sunViewProj->buffer != VK_NULL_HANDLE)
+	{
+		UniformBufferObject sun_ubo{};
+		sun_ubo.proj = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 20.0f);
+		sun_ubo.view = glm::lookAt(
+			glm::vec3(sun_ptr->position[0], sun_ptr->position[1], sun_ptr->position[2]),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f)
+		);
+		memcpy(sunViewProj->mapped_memory, &sun_ubo, sizeof(UniformBufferObject));
 	}
 }
 
