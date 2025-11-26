@@ -7,6 +7,7 @@
 #include <filesystem>
 
 #include <glm/gtc/type_ptr.hpp>
+#include <tracy/Tracy.hpp>
 
 #include "FileUtils.h"
 
@@ -326,6 +327,7 @@ private:
 
 	void mainLoop() {
 		while (!glfwWindowShouldClose(window)) {
+			ZoneScopedN("Main Loop");
 			glfwPollEvents();
 			processEvents();
 
@@ -343,6 +345,7 @@ private:
 				m_renderer.loadScene(next_scene_path);
 				next_scene_path.clear();
 			}
+			FrameMark;
 		}
 
 		m_renderer.waitIdle();
@@ -350,30 +353,30 @@ private:
 
 public:
 	void run() {
-
-		initWindow();
-		m_renderer.init(window, device_options);
-
-		loadSkybox();
-
-		loadPackets();
-		//loadSpheres();
-		float sun[3] = { 0.0, -1.0f, 0.0f };
-		//m_renderer.addDirectionalLight(sun);
-
-		float dir[3] = { 0.5, -0.7071068286895752,-0.4999999701976776};
-		float dir2[3] = { -0.49999985098838806, 0.70710688829422,0.5000001192092896};
-		m_renderer.addDirectionalLight(dir);
-		m_renderer.addDirectionalLight(dir2);
-
-		const float lightPos[2][3] = { 
-			{3.0f, 3.0f, 3.0f},
-			{0.0f, 2.0f, 0.0f} 
-		};
-		//m_renderer.addLight(lightPos[0]);
-		//m_renderer.addSpotlight(lightPos[1]);
-
-
+		{
+			ZoneScopedN("App::run init");
+			initWindow();
+			m_renderer.init(window, device_options);
+	
+			loadSkybox();
+	
+			// loadPackets();
+			loadSpheres();
+			float sun[3] = { 0.0, -1.0f, 0.0f };
+			//m_renderer.addDirectionalLight(sun);
+	
+			float dir[3] = { 0.5, -0.7071068286895752,-0.4999999701976776};
+			float dir2[3] = { -0.49999985098838806, 0.70710688829422,0.5000001192092896};
+			m_renderer.addDirectionalLight(dir);
+			m_renderer.addDirectionalLight(dir2);
+	
+			const float lightPos[2][3] = { 
+				{3.0f, 3.0f, 3.0f},
+				{0.0f, 2.0f, 0.0f} 
+			};
+			//m_renderer.addLight(lightPos[0]);
+			//m_renderer.addSpotlight(lightPos[1]);
+		}	
 
 		mainLoop();
 

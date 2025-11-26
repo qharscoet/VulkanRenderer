@@ -5,6 +5,7 @@
     "stb",
     "tinyobjloader",
     "tinygltf",
+    "tracy",
     {
       "name": "imgui",
       "features": [
