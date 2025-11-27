@@ -80,14 +80,15 @@ struct PipelineDesc {
 	VkRenderPass renderPassMsaa;
 	bool hasDepth;
 	uint32_t attachmentCount;
+	struct { uint32_t x; uint32_t y;  } extent = { 0, 0 };
 };
 
 struct GpuImage;
 struct FramebufferDesc {
 	std::vector<const GpuImage*> images;
 	GpuImage* depth;
-	uint32_t width;
-	uint32_t height;
+	uint32_t width = 0;
+	uint32_t height = 0;
 };
 
 enum ImageLayout {

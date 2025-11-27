@@ -40,7 +40,7 @@ PSInput VSMain(VSInput input, uniform Constants pc)
 }
 
 [shader("pixel")]
-float4 PSMain(PSInput input) : SV_TARGET
+void PSMain(PSInput input) : SV_TARGET
 {
-    return 0;
+	
 }

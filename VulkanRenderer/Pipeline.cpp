@@ -170,7 +170,7 @@ VkRenderPass Device::createRenderPass(RenderPassDesc desc)
 
 	VkRenderPass out_renderPass;
 
-	size_t colorAttachment_count = std::max(desc.framebufferDesc.images.size(), (size_t)1);
+	size_t colorAttachment_count = std::max(desc.framebufferDesc.images.size(), (size_t)desc.colorAttachement_count);
 
 	std::vector<VkAttachmentDescription> colorAttachments;
 	std::vector<VkAttachmentReference> colorAttachmentRefs;
@@ -330,17 +330,18 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	inputAssembly.primitiveRestartEnable = VK_FALSE;
 
 
+	bool hasExtent = desc.extent.x > 0 && desc.extent.y > 0;
 	VkViewport viewport{};
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
-	viewport.width = (float)swapChainExtent.width;
-	viewport.height = (float)swapChainExtent.height;
+	viewport.width = (float)(hasExtent ? desc.extent.x : swapChainExtent.width);
+	viewport.height = (float)(hasExtent ? desc.extent.y : swapChainExtent.height);;
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 1.0f;
 
 	VkRect2D scissor{};
 	scissor.offset = { 0, 0 };
-	scissor.extent = swapChainExtent;
+	scissor.extent = hasExtent? VkExtent2D{desc.extent.x, desc.extent.y} : swapChainExtent;
 
 	VkPipelineViewportStateCreateInfo viewportState{};
 	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -597,15 +598,18 @@ RenderPass Device::createRenderPassAndPipeline(RenderPassDesc renderPassDesc, Pi
 	renderPassDesc.useMsaa = true;
 	VkRenderPass renderpassMsaa = renderPassDesc.writeSwapChain ? createRenderPass(renderPassDesc) : VK_NULL_HANDLE;
 
+	unsigned int colorAttachment_count = std::max(renderPassDesc.framebufferDesc.images.size(), (size_t)renderPassDesc.colorAttachement_count);
+
 	pipelineDesc.renderPass = renderpass;
 	pipelineDesc.renderPassMsaa = renderpassMsaa;
 	//pipelineDesc.useMsaa = renderPassDesc.useMsaa;
 	pipelineDesc.hasDepth = renderPassDesc.hasDepth;
 	pipelineDesc.attachmentCount = std::max(renderPassDesc.framebufferDesc.images.size(), (size_t)1);
+	pipelineDesc.extent = { renderPassDesc.framebufferDesc.width, renderPassDesc.framebufferDesc.height };
 	Pipeline pipeline = createPipeline(pipelineDesc);
 
 	VkFramebuffer framebuffer = VK_NULL_HANDLE;
-	if (renderPassDesc.framebufferDesc.images.size() > 0)
+	if (renderPassDesc.framebufferDesc.images.size() > 0 || renderPassDesc.framebufferDesc.depth != nullptr)
 	{
 
 		auto& images = renderPassDesc.framebufferDesc.images;
@@ -646,7 +650,7 @@ RenderPass Device::createRenderPassAndPipeline(RenderPassDesc renderPassDesc, Pi
 	return {
 		.renderPass = renderpass,
 		.renderPassMsaa = renderpassMsaa,
-		.colorAttachement_count = pipelineDesc.attachmentCount,
+		.colorAttachement_count = colorAttachment_count,
 		.hasDepth = renderPassDesc.hasDepth,
 		.pipeline = pipeline,
 		.framebuffer = framebuffer,
@@ -989,12 +993,31 @@ void Device::recordRenderPass(VkCommandBuffer commandBuffer, RenderPass& renderP
 {
 	PushCmdLabel(commandBuffer, &renderPass.markerInfo);
 	currentPipeline = &renderPass.pipeline;
+
+	VkExtent2D extent = renderPass.framebuffer != VK_NULL_HANDLE ? renderPass.extent : swapChainExtent;
+
 	VkRenderPassBeginInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderPassInfo.renderPass = this->usesMsaa? renderPass.renderPassMsaa:  renderPass.renderPass;
 	renderPassInfo.framebuffer = renderPass.framebuffer != VK_NULL_HANDLE ? renderPass.framebuffer : swapChainFramebuffers[current_framebuffer_idx];
 	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = renderPass.framebuffer != VK_NULL_HANDLE ?  renderPass.extent : swapChainExtent;
+	renderPassInfo.renderArea.extent = extent;
+
+
+	//These are define dynamic in the pipeline so we have to set them
+	VkViewport viewport{};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = static_cast<float>(extent.width);
+	viewport.height = static_cast<float>(extent.height);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+	VkRect2D scissor{};
+	scissor.offset = { 0, 0 };
+	scissor.extent = extent;
+	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
 	std::vector<VkClearValue> clearValues{};
 	clearValues.resize(renderPass.colorAttachement_count + (renderPass.hasDepth ? 1 : 0));

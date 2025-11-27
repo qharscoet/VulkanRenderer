@@ -16,6 +16,8 @@ struct PSInput
 	[[vk::location(3)]] float3 worldPos : WORLDPOSITION;
 	[[vk::location(4)]] float3 tangent : TANGENT;
 	[[vk::location(5)]] float sign : BINORMAL;
+	[[vk::location(6)]] float4 lightSpacePos : LIGHTSPACEPOS;
+	
 };
 
 
@@ -71,6 +73,12 @@ cbuffer material_data : register(b1, space1)
 	float3 mat_specular;
 	float pad3;
 	float mat_shininess;
+}
+
+[[vk::binding(2, 1)]]
+cbuffer sun_viewproj : register(b2, space1)
+{
+	UBO sun_ubo;
 }
 
 struct Constants
@@ -129,9 +137,11 @@ PSInput VSMain(VSInput input)
 {
 	PSInput result = (PSInput)0;
 
-	result.position = mul(ubo.proj, mul(ubo.view, mul(pc.model, float4(input.Position.xyz, 1.0))));;
+	result.worldPos = mul(pc.model, float4(input.Position.xyz, 1.0f));
+	result.position = mul(ubo.proj, mul(ubo.view, float4(result.worldPos, 1.0f)));;
 	result.uv = input.TexCoords;
 	result.color = input.Color;
+	result.lightSpacePos = mul(sun_ubo.proj, mul(sun_ubo.view, float4(result.worldPos, 1.0f)));
 	
 	// Extract the upper-left 3x3 part of the model matrix
 	float3x3 normalMatrix = (float3x3) pc.model;
@@ -142,7 +152,6 @@ PSInput VSMain(VSInput input)
 	result.normal = normalize(mul(normalMatrix, input.Normal));
 	result.tangent = normalize(mul(normalMatrix, input.Tangent.xyz));
 	result.sign = input.Tangent.w;//normalize(cross(result.tangent, result.normal));
-	result.worldPos = mul(pc.model, float4(input.Position.xyz, 1.0f));
 	return result;
 }
 
@@ -156,6 +165,30 @@ SamplerState g_sampler : register(s0);
 [[vk::binding(2,0)]]
 Texture2D g_normal : register(t1);
 
+
+[[vk::binding(3,1)]]
+Texture2D g_shadowMap : register(t2);
+
+float calcShadow(float4 lightSpacePos)
+{
+	//Perform perspective divide
+	float3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+	//Transform to [0,1] range
+	projCoords = projCoords * 0.5f + 0.5f;
+	//Get closest depth value from light's perspective (using [0,1] range frag pos as coords)
+	float closestDepth = g_shadowMap.Sample(g_sampler, projCoords.xy).r;
+	//Get depth of current fragment from light's perspective
+	float currentDepth = projCoords.z;
+	//Check whether current frag pos is in shadow
+	float bias = 0.005;
+	float shadow = currentDepth - bias > closestDepth ? 1.0f : 0.0f;
+	
+	//Keep the shadow at 0 outside the far plane of the light's orthographic frustum
+	if (projCoords.z > 1.0f)
+		shadow = 0.0f;
+		
+	return shadow;
+}
 
 float4 calcLight(PSInput input, Light l, float3 norm)
 {
@@ -211,7 +244,7 @@ float4 calcLight(PSInput input, Light l, float3 norm)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	float4 texColor = g_texture.Sample(g_sampler, input.uv) * float4(input.color, 1.0f);
+	float4 texColor = g_shadowMap.Sample(g_sampler, input.uv) * float4(input.color, 1.0f);
 	
 	if(texColor.a < pc.alphaCutoff)
 		discard;
@@ -221,15 +254,6 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 NTex = g_normal.Sample(g_sampler, input.uv) * 2.0f - 1.0f;
 	
 	 // Transform normal from tangent space to world space
-	//NTex = normalize(input.tangent * NTex.x +
-	//                       input.binormal * NTex.y +
-	//                       input.normal * NTex.z);
-	
-	
-	//float3x3 TBN = float3x3(input.tangent, input.binormal, input.normal);
-
-	//NTex = normalize(mul(TBN, NTex));
-	
 	float3 vN = normalize(input.normal);
 	float3 vT = normalize(input.tangent);
 	float3 vNt = normalize(NTex);
@@ -246,7 +270,9 @@ float4 PSMain(PSInput input) : SV_TARGET
 	
 	//output += g_normal.Sample(g_sampler, input.uv);
 	
-	float4 final_output = output;
+	float shadow = calcShadow(input.lightSpacePos);
+	
+	float4 final_output = shadow * output;
 	
 	switch (pc.debug_mode)
 	{

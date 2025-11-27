@@ -482,7 +482,8 @@ void Renderer::sortTransparentPackets()
 }
 
 void Renderer::drawRenderPass(const std::vector<MeshPacket>& packets) {
-	m_device.bindRessources(1, {&light_data_gpu, &material_data }, {});
+	const ImageBindInfo shadowMapBindInfo = ImageBindInfo{ shadowMap->view, *defaultSampler };
+	m_device.bindRessources(1, {&light_data_gpu, &material_data, sunViewProj.get()}, {shadowMapBindInfo});
 	m_device.pushConstants(cameraInfo.position, sizeof(MeshPacket::PushConstantsData), 3 * sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
 
 	uint32_t count = lights.size();
@@ -554,7 +555,19 @@ void Renderer::initPipeline()
 					.slot = 1,
 					.type = BindingType::UBO,
 					.stageFlags = e_Pixel,
-				}
+				},
+				// Sun View Projection
+				{
+					.slot = 2,
+					.type = BindingType::UBO,
+					.stageFlags = e_Vertex,
+				},
+				//Shadow map
+				{
+					.slot = 3,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				},
 			}
 		},
 		.pushConstantsRanges = {
@@ -988,23 +1001,14 @@ void Renderer::initDrawShadowMapRenderPass()
 		.framebufferDesc = {
 			.images = {},
 			.depth = shadowMap.get(),
-			.width = 800,
-			.height = 600,
+			.width = 1024,
+			.height = 1024,
 		},
 		.colorAttachement_count = 0,
 		.hasDepth = true,
 		.useMsaa = false,
 		.doClear = true,
 		.drawFunction = [&]() { 
-			BarrierDesc transitionBarrier = {
-						.image = shadowMap.get(),
-						.oldLayout = ImageLayout::ShaderRead,
-						.newLayout = ImageLayout::DepthTarget,
-						.mipLevels = shadowMap->mipLevels,
-						.layerCount = shadowMap->layerCount,
-					};
-			//m_device.transitionImage(transitionBarrier, PipelineType::Graphics);
-
 			m_device.bindRessources(0, { sunViewProj.get()}, {});
 			for (const auto& packet : packets)
 			{
@@ -1012,12 +1016,12 @@ void Renderer::initDrawShadowMapRenderPass()
 			}	
 		},
 		.postDrawBarriers = {
-			/* {
+			{
 				.image = shadowMap.get(),
 				.oldLayout = ImageLayout::DepthTarget,
 				.newLayout = ImageLayout::ShaderRead,
 				.mipLevels = 1
-			}*/
+			}
 		},
 		.debugInfo = {
 			.name = "Draw Shadow Map",
