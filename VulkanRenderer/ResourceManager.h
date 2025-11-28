@@ -81,10 +81,8 @@ public:
 			buf = m_device->createVertexBuffer(size, src_data);
 		else if constexpr (type == DeviceBufferType::Index)
 			buf = m_device->createIndexBuffer(size, src_data);
-		else if constexpr (type == DeviceBufferType::Uniform)
+		else //Uniform
 			buf = m_device->createUniformBuffer(size, src_data);
-		else
-			static_assert(false, "Unsupported BufferType");
 
 		return BufferHandle(&buf, [this](Buffer* buf) {
 			m_device->destroyBuffer(*buf);
@@ -120,10 +118,8 @@ public:
 			m_device->createRWTexture(img, std::forward<decltype(args)>(args)...);
 		else if constexpr (type == DeviceTextureType::RenderTarget)
 			m_device->createRenderTarget(img, std::forward<decltype(args)>(args)...);
-		else if constexpr (type == DeviceTextureType::DepthTarget)
+		else // DepthTarget
 			m_device->createDepthTarget(img, std::forward<decltype(args)>(args)...);
-		else
-			static_assert(false, "Unsupported TextureType");
 
 		return GpuImageHandle(&img, [this](GpuImage* img) {
 			m_device->destroyImage(*img);

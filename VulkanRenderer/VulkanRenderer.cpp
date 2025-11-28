@@ -365,9 +365,9 @@ public:
 			float sun[3] = { 0.0, -1.0f, 0.0f };
 			//m_renderer.addDirectionalLight(sun);
 	
-			float dir[3] = { 0.5, -0.7071068286895752,-0.4999999701976776};
-			float dir2[3] = { -0.49999985098838806, 0.70710688829422,0.5000001192092896};
-			m_renderer.addDirectionalLight(dir);
+			float dir[3] = {2.5* 0.5, 2.5* -0.7071068286895752,2.5* -0.4999999701976776};
+			float dir2[3] = { 2.5 * -0.49999985098838806, 2.5 * 0.70710688829422,2.5 * 0.5000001192092896};
+			//m_renderer.addDirectionalLight(dir);
 			m_renderer.addDirectionalLight(dir2);
 	
 			const float lightPos[2][3] = { 

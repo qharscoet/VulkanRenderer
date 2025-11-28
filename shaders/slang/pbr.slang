@@ -175,7 +175,7 @@ float3 getRadiance(Light l, PSInput input, float3 V)
 {
     float3 L = normalize(l.position - input.worldPos);
     if (l.type == DIRLIGHT)
-        L = normalize(-l.position); // position is used as direction in dirlight
+        L = normalize(l.position); // position is used as direction in dirlight
 
     float3 H = normalize(V + L);
 

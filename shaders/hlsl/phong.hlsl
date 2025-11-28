@@ -174,11 +174,11 @@ float calcShadow(float4 lightSpacePos)
 	//Perform perspective divide
 	float3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
 	//Transform to [0,1] range
-	projCoords = projCoords * 0.5f + 0.5f;
+	projCoords.xy = projCoords.xy * 0.5f + 0.5f;
 	//Get closest depth value from light's perspective (using [0,1] range frag pos as coords)
 	float closestDepth = g_shadowMap.Sample(g_sampler, projCoords.xy).r;
 	//Get depth of current fragment from light's perspective
-	float currentDepth = projCoords.z;
+	float currentDepth = projCoords.z;	
 	//Check whether current frag pos is in shadow
 	float bias = 0.005;
 	float shadow = currentDepth - bias > closestDepth ? 1.0f : 0.0f;
@@ -198,7 +198,7 @@ float4 calcLight(PSInput input, Light l, float3 norm)
 	float3 light_vec;
 	
 	if (l.type == DIRLIGHT)
-		light_vec = normalize(-l.position); //position is used as direction in dirlight
+		light_vec = normalize(l.position); //position is used as direction in dirlight
 	else	
 		light_vec = normalize(l.position - input.worldPos.xyz);
 	
@@ -238,13 +238,15 @@ float4 calcLight(PSInput input, Light l, float3 norm)
 		attenuation = c > l.cutOff && n > 0;
 	}
 	
-	return (ambiantLight + diffuseLight + specularLight) * attenuation;
+	float shadow = calcShadow(input.lightSpacePos);
+	
+	return (ambiantLight + (1 - shadow) * (diffuseLight + specularLight)) * attenuation;
 	
 }
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	float4 texColor = g_shadowMap.Sample(g_sampler, input.uv) * float4(input.color, 1.0f);
+	float4 texColor = g_texture.Sample(g_sampler, input.uv) * float4(input.color, 1.0f);
 	
 	if(texColor.a < pc.alphaCutoff)
 		discard;
@@ -270,9 +272,9 @@ float4 PSMain(PSInput input) : SV_TARGET
 	
 	//output += g_normal.Sample(g_sampler, input.uv);
 	
-	float shadow = calcShadow(input.lightSpacePos);
 	
-	float4 final_output = shadow * output;
+	
+	float4 final_output =  output;
 	
 	switch (pc.debug_mode)
 	{
