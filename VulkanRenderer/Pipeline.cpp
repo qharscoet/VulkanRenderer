@@ -350,6 +350,13 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	viewportState.scissorCount = 1;
 	viewportState.pScissors = &scissor;
 
+	VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
+	switch (desc.cullMode)
+	{
+		case CullMode::None: cullMode = VK_CULL_MODE_NONE; break;
+		case CullMode::Front: cullMode = VK_CULL_MODE_FRONT_BIT; break;
+		case CullMode::Back: cullMode = VK_CULL_MODE_BACK_BIT; break;
+	}
 
 	//Reminder : activating lots of stuff here like wireframe mode require a GPU feature
 	VkPipelineRasterizationStateCreateInfo rasterizer{};
@@ -358,7 +365,7 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	rasterizer.rasterizerDiscardEnable = VK_FALSE;
 	rasterizer.polygonMode = desc.isWireframe ? VK_POLYGON_MODE_LINE: VK_POLYGON_MODE_FILL;
 	rasterizer.lineWidth = 1.0f;
-	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizer.cullMode = cullMode;
 	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterizer.depthBiasEnable = VK_FALSE;
 	rasterizer.depthBiasConstantFactor = 0.0f; // Optional

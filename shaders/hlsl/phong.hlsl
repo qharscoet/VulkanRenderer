@@ -169,7 +169,7 @@ Texture2D g_normal : register(t1);
 [[vk::binding(3,1)]]
 Texture2D g_shadowMap : register(t2);
 
-float calcShadow(float4 lightSpacePos)
+float calcShadow(float4 lightSpacePos, float NDotL)
 {
 	//Perform perspective divide
 	float3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
@@ -180,8 +180,22 @@ float calcShadow(float4 lightSpacePos)
 	//Get depth of current fragment from light's perspective
 	float currentDepth = projCoords.z;	
 	//Check whether current frag pos is in shadow
-	float bias = 0.005;
-	float shadow = currentDepth - bias > closestDepth ? 1.0f : 0.0f;
+	float bias = max(0.05 * (1.0 - NDotL), 0.005);
+	//float shadow = currentDepth - bias > closestDepth ? 1.0f : 0.0f;
+	
+	float2 shadowMapSize;
+	g_shadowMap.GetDimensions(shadowMapSize.x, shadowMapSize.y);
+	float shadow = 0.0;
+	float2 texelSize = 1.0 / shadowMapSize;
+	for (int x = -1; x <= 1; ++x)
+	{
+		for (int y = -1; y <= 1; ++y)
+		{
+			float pcfDepth = g_shadowMap.Sample(g_sampler,projCoords.xy + float2(x, y) * texelSize).r;
+			shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
+		}
+	}
+	shadow /= 9.0;
 	
 	//Keep the shadow at 0 outside the far plane of the light's orthographic frustum
 	if (projCoords.z > 1.0f)
@@ -238,7 +252,8 @@ float4 calcLight(PSInput input, Light l, float3 norm)
 		attenuation = c > l.cutOff && n > 0;
 	}
 	
-	float shadow = calcShadow(input.lightSpacePos);
+	float NDotL = max(dot(norm, light_vec), 0.0f);
+	float shadow = calcShadow(input.lightSpacePos, NDotL);
 	
 	return (ambiantLight + (1 - shadow) * (diffuseLight + specularLight)) * attenuation;
 	

@@ -978,6 +978,7 @@ void Renderer::initDrawShadowMapRenderPass()
 		.attributeDescriptionsCount = attributeDescriptions.size(),
 
 		.blendMode = BlendMode::Opaque,
+		.cullMode = CullMode::Front,
 		.topology = PrimitiveToplogy::TriangleList,
 		.bindings = {
 			{

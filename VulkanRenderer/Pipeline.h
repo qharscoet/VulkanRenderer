@@ -8,6 +8,12 @@ enum class BlendMode {
 	AlphaBlend
 };
 
+enum class CullMode {
+	None,
+	Back,
+	Front,
+};
+
 enum class PrimitiveToplogy {
 	PointList,
 	TriangleList,
@@ -68,6 +74,7 @@ struct PipelineDesc {
 
 	//Descriptors params
 	BlendMode blendMode;
+	CullMode cullMode;
 	PrimitiveToplogy topology;
 	DepthCompareOp	depthCompareOp = DepthCompareOp::Less;
 	std::vector<std::vector<BindingDesc>> bindings; //vector of sets of bindings
