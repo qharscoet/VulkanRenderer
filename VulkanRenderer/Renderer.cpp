@@ -116,6 +116,7 @@ void Renderer::init(GLFWwindow* window, DeviceOptions options)
 	initSkyboxRenderPass();
 
 	initDrawShadowMapRenderPass();
+	initDrawPointShadowMapRenderPass();
 
 	initComputePipeline();
 	initComputeSkyboxPasses();
@@ -185,6 +186,7 @@ void Renderer::draw()
 	m_device.beginDraw();
 
 	m_device.recordRenderPass(renderPasses[(size_t)RenderPasses::DrawShadowMap]);
+	m_device.recordRenderPass(renderPasses[(size_t)RenderPasses::DrawPointShadowMap]);
 	m_device.recordRenderPass(renderPasses[(size_t)RenderPasses::DrawSkybox]);
 	m_device.recordRenderPass(use_pbr ? renderPasses[(size_t)RenderPasses::MainPBR] : renderPasses[(size_t)RenderPasses::Main]);
 	m_device.recordRenderPass(use_pbr ? renderPasses[(size_t)RenderPasses::MainAlphaPBR] : renderPasses[(size_t)RenderPasses::MainAlpha]);
@@ -965,7 +967,7 @@ void Renderer::initDrawShadowMapRenderPass()
 	auto attributeDescriptions = Vertex::getAttributeDescriptions();
 	auto bindingDescription = Vertex::getBindingDescription();
 
-	shadowMap = m_resourceManager.createTexture<DeviceTextureType::DepthTarget>(1024, 1024, false, true);
+	shadowMap = m_resourceManager.createTexture<DeviceTextureType::DepthTarget>(1024, 1024, false, false, true);
 	sunViewProj = m_resourceManager.createBuffer<DeviceBufferType::Uniform>(sizeof(UniformBufferObject));
 
 	PipelineDesc desc = {
@@ -1033,6 +1035,80 @@ void Renderer::initDrawShadowMapRenderPass()
 	renderPasses[(size_t)RenderPasses::DrawShadowMap] = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
 }
 
+void Renderer::initDrawPointShadowMapRenderPass()
+{
+	pointShadowMap = m_resourceManager.createTexture<DeviceTextureType::DepthTarget>(1024, 1024, false, true, true);
+	pointLightViewProj = m_resourceManager.createBuffer<DeviceBufferType::Uniform>(sizeof(glm::mat4) * 6 + sizeof(float) * 4); // 6 viewproj + light pos + far plane
+
+	auto attributeDescriptions = Vertex::getAttributeDescriptions();
+	auto bindingDescription = Vertex::getBindingDescription();
+
+	PipelineDesc desc = {
+		.type = PipelineType::Graphics,
+		.vertexShader = "point_shadow.slang.spv",
+		.pixelShader = "point_shadow.slang.spv",
+		.geometryShader = "point_shadow.slang.spv",
+
+		.bindingDescription = &bindingDescription,
+		.attributeDescriptions = attributeDescriptions.data(),
+		.attributeDescriptionsCount = attributeDescriptions.size(),
+
+		.blendMode = BlendMode::Opaque,
+		.cullMode = CullMode::Front,
+		.topology = PrimitiveToplogy::TriangleList,
+		.bindings = {
+			{
+				{
+					.slot = 0,
+					.type = BindingType::UBO,
+					.stageFlags = e_Geometry | e_Pixel,
+				},
+			}
+		},
+		.pushConstantsRanges = {
+			{
+				.offset = 0,
+				.size = sizeof(MeshPacket::PushConstantsData),
+				.stageFlags = (StageFlags)(e_Vertex | e_Pixel | e_Geometry)
+			}
+		}
+	};
+
+	RenderPassDesc renderPassDesc = {
+		.framebufferDesc = {
+			.images = {},
+			.depth = pointShadowMap.get(),
+			.width = 1024,
+			.height = 1024,
+			.layers = 6,
+		},
+		.colorAttachement_count = 0,
+		.hasDepth = true,
+		.useMsaa = false,
+		.doClear = true,
+		.drawFunction = [&]() {
+			m_device.bindRessources(0, { pointLightViewProj.get()}, {});
+			for (const auto& packet : packets)
+			{
+				drawPacket(packet);
+			}
+		},
+		.postDrawBarriers = {
+			{
+				.image = pointShadowMap.get(),
+				.oldLayout = ImageLayout::DepthTarget,
+				.newLayout = ImageLayout::ShaderRead,
+				.mipLevels = 1
+			}
+		},
+		.debugInfo = {
+			.name = "Draw Point Shadow Map",
+			.color = DebugColor::Grey,
+		}
+	};
+
+	renderPasses[(size_t)RenderPasses::DrawPointShadowMap] = m_device.createRenderPassAndPipeline(renderPassDesc, desc);
+}
 
 void Renderer::drawRenderPassPBR(const std::vector<MeshPacket>& packets) {
 	const ImageBindInfo irradiance = { irradianceMap->view , *defaultSampler};
@@ -1310,7 +1386,7 @@ void Renderer::initTestPipeline()
 	
 	m_device.createRenderTarget(test_images[0], 800, 600, false, true);
 	m_device.createRenderTarget(test_images[1], 800,600 , false, true);
-	m_device.createDepthTarget(test_depth, 800, 600, false);
+	m_device.createDepthTarget(test_depth, 800, 600, false,false);
 	//defaultSampler = m_device.createTextureSampler(1);
 
 	RenderPassDesc renderPassDesc = {
@@ -1684,6 +1760,7 @@ void Renderer::updateLightData()
 	float angle = time;
 
 	Light* sun_ptr = nullptr; //For now the sun is the first directional light
+	Light* pointlight_ptr = nullptr;
 
 	LightData data;
 	size_t offset = 0;
@@ -1691,6 +1768,8 @@ void Renderer::updateLightData()
 	{
 		if (l.type == LightType::Directional && sun_ptr == nullptr)
 			sun_ptr = &l;
+		else if (l.type == LightType::Point && pointlight_ptr == nullptr)
+			pointlight_ptr = &l;
 
 		glm::vec3 scale;
 		glm::quat rotation;
@@ -1764,6 +1843,27 @@ void Renderer::updateLightData()
 		);
 		memcpy(sunViewProj->mapped_memory, &sun_ubo, sizeof(UniformBufferObject));
 	}
+
+	if (pointlight_ptr && pointLightViewProj->buffer != VK_NULL_HANDLE)
+	{
+		glm::vec3 lightPos = glm::vec3(pointlight_ptr->position[0], pointlight_ptr->position[1], pointlight_ptr->position[2]);
+		
+		float farPlane = 25.0f;
+		glm::mat4 shadowProj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, farPlane);
+		glm::mat4 shadowViews[] =
+		{
+			shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)),
+			shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)),
+			shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+			shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f)),
+			shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, -1.0f, 0.0f)),
+			shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, -1.0f, 0.0f))
+		};
+		size_t view_size = sizeof(shadowViews);
+		memcpy(pointLightViewProj->mapped_memory, shadowViews, view_size );
+		memcpy((uint8_t*)pointLightViewProj->mapped_memory + view_size, &lightPos[0], 3 * sizeof(float));
+		memcpy((uint8_t*)pointLightViewProj->mapped_memory + view_size + 3*sizeof(float), &farPlane, sizeof(float));
+	}
 }
 
 void Renderer::updateCamera(const CameraInfo& cameraInfo)
@@ -1800,7 +1900,7 @@ void Renderer::addDirectionalLight(const float pos[3])
 
 	light.type = LightType::Directional;
 	light.light_autorotate = false;
-
+	//light.cube = createCubePacket(pos, 0.2f);
 	//light.cube = m_device.createCubePacket(pos, 0.5f);
 
 	lights.push_back(light);

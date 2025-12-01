@@ -253,7 +253,9 @@ float4 calcLight(PSInput input, Light l, float3 norm)
 	}
 	
 	float NDotL = max(dot(norm, light_vec), 0.0f);
-	float shadow = calcShadow(input.lightSpacePos, NDotL);
+	float shadow = 0.0f;
+	if (l.type == DIRLIGHT)
+		shadow = calcShadow(input.lightSpacePos, NDotL);
 	
 	return (ambiantLight + (1 - shadow) * (diffuseLight + specularLight)) * attenuation;
 	

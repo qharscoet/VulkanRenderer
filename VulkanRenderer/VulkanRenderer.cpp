@@ -374,7 +374,7 @@ public:
 				{3.0f, 3.0f, 3.0f},
 				{0.0f, 2.0f, 0.0f} 
 			};
-			//m_renderer.addLight(lightPos[0]);
+			m_renderer.addLight(lightPos[0]);
 			//m_renderer.addSpotlight(lightPos[1]);
 		}	
 

@@ -679,7 +679,7 @@ public:
 	GpuImage createTexture(Texture tex);
 	void createRWTexture(GpuImage& out_image, uint32_t width, uint32_t height, ImageFormat format, bool is_cubemap, bool sampled = false, bool allocateMips = false);
 	void createRenderTarget(GpuImage& out_image, uint32_t width, uint32_t height, bool msaa, bool sampled = false);
-	void createDepthTarget(GpuImage& out_image, uint32_t width, uint32_t height, bool msaa, bool sampled = false);
+	void createDepthTarget(GpuImage& out_image, uint32_t width, uint32_t height, bool msaa, bool is_cubemap,  bool sampled = false);
 	void destroyImage(GpuImage image);
 
 	void destroySampler(VkSampler sampler) {

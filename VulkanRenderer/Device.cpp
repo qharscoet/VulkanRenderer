@@ -465,6 +465,12 @@ void Device::createLogicalDevice() {
 	VkPhysicalDeviceFeatures deviceFeatures{};
 	deviceFeatures.samplerAnisotropy = VK_TRUE;
 	deviceFeatures.fillModeNonSolid = VK_TRUE;
+	deviceFeatures.geometryShader = VK_TRUE;
+
+	VkPhysicalDeviceFeatures2 deviceFeatures2{};
+	VkPhysicalDeviceVulkan12Features deviceVulkan12Features{};
+	deviceVulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+	deviceVulkan12Features.shaderOutputLayer = VK_TRUE;
 
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -473,6 +479,7 @@ void Device::createLogicalDevice() {
 	createInfo.pEnabledFeatures = &deviceFeatures;
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
 	createInfo.ppEnabledExtensionNames = deviceExtensions.data();
+	createInfo.pNext = &deviceVulkan12Features;
 
 
 	// This is to ensure compatibility with older implems, current Vulkan use the same layers for both instances & devices
@@ -1732,7 +1739,7 @@ void Device::createRenderTarget(GpuImage& out_image, uint32_t width, uint32_t he
 
 }
 
-void Device::createDepthTarget(GpuImage& out_image, uint32_t width, uint32_t height, bool msaa, bool sampled)
+void Device::createDepthTarget(GpuImage& out_image, uint32_t width, uint32_t height, bool msaa, bool is_cubemap, bool sampled)
 {
 	ImageDesc desc = {
 		.width = width,
@@ -1744,10 +1751,11 @@ void Device::createDepthTarget(GpuImage& out_image, uint32_t width, uint32_t hei
 		.usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | (sampled ? VK_IMAGE_USAGE_SAMPLED_BIT : 0u),
 		.memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.is_cubemap = is_cubemap
 	};
 	createImage(desc, out_image);
 	out_image.format = getFormat(findDepthFormat());
-	out_image.view = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_DEPTH_BIT,0,  1, false);
+	out_image.view = createImageView(out_image.image, desc.format, VK_IMAGE_ASPECT_DEPTH_BIT,0,  1,  is_cubemap);
 }
 
 
@@ -1855,7 +1863,7 @@ void Device::createColorResources() {
 
 void Device::createDepthBufferResources() {
 
-	createDepthTarget(depthBuffer, swapChainExtent.width, swapChainExtent.height, this->usesMsaa);
+	createDepthTarget(depthBuffer, swapChainExtent.width, swapChainExtent.height, this->usesMsaa, false);
 }
 
 

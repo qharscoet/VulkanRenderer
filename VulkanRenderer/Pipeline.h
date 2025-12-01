@@ -41,7 +41,8 @@ enum class BindingType {
 enum StageFlags {
 	e_Pixel		= (1 << 0),
 	e_Vertex	= (1 << 1),
-	e_Compute	= (1 << 2),
+	e_Geometry  = (1 << 2),
+	e_Compute	= (1 << 3),
 };
 
 struct BindingDesc {
@@ -64,8 +65,9 @@ enum class PipelineType {
 struct PipelineDesc {
 	
 	PipelineType type;
-	const char* vertexShader;
-	const char* pixelShader;
+	const char* vertexShader = nullptr;
+	const char* pixelShader = nullptr;
+	const char* geometryShader = nullptr;
 	const char* computeShader;
 
 	VkVertexInputBindingDescription* bindingDescription;
@@ -96,6 +98,7 @@ struct FramebufferDesc {
 	GpuImage* depth;
 	uint32_t width = 0;
 	uint32_t height = 0;
+	uint32_t layers = 1;
 };
 
 enum ImageLayout {

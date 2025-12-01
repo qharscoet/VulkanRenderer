@@ -46,6 +46,7 @@ uint32_t getVkStageFlags(StageFlags stageFlags)
 	uint32_t vkStageFlags = 0;
 	if ( stageFlags & e_Pixel)		vkStageFlags |= VK_SHADER_STAGE_FRAGMENT_BIT;
 	if ( stageFlags & e_Vertex)		vkStageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
+	if ( stageFlags & e_Geometry)	vkStageFlags |= VK_SHADER_STAGE_GEOMETRY_BIT;
 	if ( stageFlags & e_Compute)	vkStageFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
 
 	return vkStageFlags;
@@ -75,6 +76,7 @@ VkDescriptorSetLayout Device::createDescriptorSetLayout(BindingDesc* bindingDesc
 		uint32_t stageFlags = 0;
 		if (desc.stageFlags & e_Pixel)		stageFlags |= VK_SHADER_STAGE_FRAGMENT_BIT;
 		if (desc.stageFlags & e_Vertex)		stageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
+		if (desc.stageFlags & e_Geometry)	stageFlags |= VK_SHADER_STAGE_GEOMETRY_BIT;
 		if (desc.stageFlags & e_Compute)	stageFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
 
 		bindings[i].stageFlags = stageFlags;
@@ -291,7 +293,22 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	fragShaderStageInfo.module = fragShaderModule;
 	fragShaderStageInfo.pName = isFragHLSL ? "PSMain":"main";
 
-	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+	std::vector<VkPipelineShaderStageCreateInfo> shaderStages = { vertShaderStageInfo, fragShaderStageInfo };
+
+	if (desc.geometryShader)
+	{
+		VkShaderModule geomShaderModule = createShaderModule(readFile(baseShaderPath + desc.geometryShader));
+		SetShaderModuleName(geomShaderModule, desc.geometryShader);
+
+		const bool isGeomHLSL = strstr(desc.geometryShader, ".gs") != NULL || strstr(desc.geometryShader, ".slang") != NULL;
+		VkPipelineShaderStageCreateInfo geomShaderStageInfo{};
+		geomShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		geomShaderStageInfo.stage = VK_SHADER_STAGE_GEOMETRY_BIT;
+		geomShaderStageInfo.module = geomShaderModule;
+		geomShaderStageInfo.pName = isGeomHLSL ? "GSMain" : "main";
+
+		shaderStages.push_back(geomShaderStageInfo);
+	}
 
 
 	std::vector<VkDynamicState> dynamicStates = {
@@ -474,8 +491,8 @@ Pipeline Device::createPipeline(PipelineDesc desc)
 	// FINALLY ! 
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineInfo.stageCount = 2;
-	pipelineInfo.pStages = shaderStages;
+	pipelineInfo.stageCount = shaderStages.size();
+	pipelineInfo.pStages = shaderStages.data();
 
 	pipelineInfo.pVertexInputState = &vertexInputInfo;
 	pipelineInfo.pInputAssemblyState = &inputAssembly;
@@ -636,7 +653,7 @@ RenderPass Device::createRenderPassAndPipeline(RenderPassDesc renderPassDesc, Pi
 		framebufferInfo.pAttachments = imageViews.data();
 		framebufferInfo.width = renderPassDesc.framebufferDesc.width;
 		framebufferInfo.height = renderPassDesc.framebufferDesc.height;
-		framebufferInfo.layers = 1;
+		framebufferInfo.layers = renderPassDesc.framebufferDesc.layers;
 
 		if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &framebuffer) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create framebuffer!");

@@ -97,6 +97,7 @@ private:
 		DrawSkybox,
 		DrawLightsRenderPass,
 		DrawShadowMap,
+		DrawPointShadowMap,
 		Test,
 		Test2,
 
@@ -123,7 +124,9 @@ private:
 	GpuImageHandle BRDF_LUT;
 
 	GpuImageHandle shadowMap;
+	GpuImageHandle pointShadowMap;
 	BufferHandle sunViewProj;
+	BufferHandle pointLightViewProj;
 
 	GpuImageHandle defaultTexture;
 	GpuImageHandle defaultTextureBlack;
@@ -161,6 +164,7 @@ private:
 	void initSkyboxRenderPass();
 
 	void initDrawShadowMapRenderPass();
+	void initDrawPointShadowMapRenderPass();
 
 	void initParticlesBuffers();
 	void cleanupParticles();
