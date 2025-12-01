@@ -59,8 +59,8 @@ void GSMain(triangle GSInput input[3],
             output.render_idx = face;
 			triStream.Append(output);
         }
+		triStream.RestartStrip();
     }
-    triStream.RestartStrip();
 }
 
 [shader("pixel")]

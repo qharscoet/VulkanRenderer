@@ -169,6 +169,9 @@ Texture2D g_normal : register(t1);
 [[vk::binding(3,1)]]
 Texture2D g_shadowMap : register(t2);
 
+[[vk::binding(4, 1)]]
+TextureCube g_depthCubeMap : register(t3);
+
 float calcShadow(float4 lightSpacePos, float NDotL)
 {
 	//Perform perspective divide
@@ -201,6 +204,40 @@ float calcShadow(float4 lightSpacePos, float NDotL)
 	if (projCoords.z > 1.0f)
 		shadow = 0.0f;
 		
+	return shadow;
+}
+
+static const float3 g_sampleOffsetDirections[20] =
+{
+	float3(1, 1, 1), float3(1, -1, 1), float3(-1, -1, 1), float3(-1, 1, 1),
+	float3(1, 1, -1), float3(1, -1, -1), float3(-1, -1, -1), float3(-1, 1, -1),
+	float3(1, 1, 0), float3(1, -1, 0), float3(-1, -1, 0), float3(-1, 1, 0),
+	float3(1, 0, 1), float3(-1, 0, 1), float3(1, 0, -1), float3(-1, 0, -1),
+	float3(0, 1, 1), float3(0, -1, 1), float3(0, -1, -1), float3(0, 1, -1)
+};
+
+float calcPointShadow(float3 worldPos, float3 lightPos)
+{
+	float3 fragToLight = worldPos - lightPos;
+	float closestDepth = g_depthCubeMap.Sample(g_sampler, fragToLight).r * 25.0f; // [0,1] => [0,far_plane]
+	float currentDepth = length(fragToLight);
+	float bias = 0.05;
+	
+	
+	float shadow = 0.0;
+	int samples = 20;
+	float viewDistance = length(pc.eye - worldPos);
+	float diskRadius = (1.0 + (viewDistance / 25.0)) / 100.0; // 25 is far_plane
+	for (int i = 0; i < samples; ++i)
+	{
+		float3 sampleOffset = normalize(fragToLight) * g_sampleOffsetDirections[i] * diskRadius;
+		float closestDepth = g_depthCubeMap.Sample(g_sampler, fragToLight + sampleOffset).r;
+		closestDepth *= 25.0f; // [0,1] => [0,far_plane]
+		if (currentDepth - bias > closestDepth)
+			shadow += 1.0;
+	}
+	shadow /= samples;
+	
 	return shadow;
 }
 
@@ -256,6 +293,8 @@ float4 calcLight(PSInput input, Light l, float3 norm)
 	float shadow = 0.0f;
 	if (l.type == DIRLIGHT)
 		shadow = calcShadow(input.lightSpacePos, NDotL);
+	else if (l.type == POINTLIGHT)
+		shadow = calcPointShadow(input.worldPos, l.position);
 	
 	return (ambiantLight + (1 - shadow) * (diffuseLight + specularLight)) * attenuation;
 	

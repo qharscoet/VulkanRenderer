@@ -485,7 +485,8 @@ void Renderer::sortTransparentPackets()
 
 void Renderer::drawRenderPass(const std::vector<MeshPacket>& packets) {
 	const ImageBindInfo shadowMapBindInfo = ImageBindInfo{ shadowMap->view, *defaultSampler };
-	m_device.bindRessources(1, {&light_data_gpu, &material_data, sunViewProj.get()}, {shadowMapBindInfo});
+	const ImageBindInfo depthShadowMapBindInfo = ImageBindInfo{ pointShadowMap->view, *defaultSampler };
+	m_device.bindRessources(1, {&light_data_gpu, &material_data, sunViewProj.get()}, {shadowMapBindInfo, depthShadowMapBindInfo});
 	m_device.pushConstants(cameraInfo.position, sizeof(MeshPacket::PushConstantsData), 3 * sizeof(float), (StageFlags)(e_Pixel | e_Vertex));
 
 	uint32_t count = lights.size();
@@ -570,6 +571,12 @@ void Renderer::initPipeline()
 					.type = BindingType::ImageSampler,
 					.stageFlags = e_Pixel,
 				},
+				// Depth Shadow Map
+				{
+					.slot = 4,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				}
 			}
 		},
 		.pushConstantsRanges = {
@@ -1098,7 +1105,8 @@ void Renderer::initDrawPointShadowMapRenderPass()
 				.image = pointShadowMap.get(),
 				.oldLayout = ImageLayout::DepthTarget,
 				.newLayout = ImageLayout::ShaderRead,
-				.mipLevels = 1
+				.mipLevels = 1,
+				.layerCount = 6,
 			}
 		},
 		.debugInfo = {
