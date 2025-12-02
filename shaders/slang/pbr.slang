@@ -16,6 +16,7 @@ struct PSInput
     float3 worldPos : WORLDPOSITION;
     float3 tangent : TANGENT;
     float sign : BINORMAL;
+    float4 lightSpacePos : LIGHTSPACEPOS;
 };
 
 struct UniformBuffer
@@ -24,6 +25,9 @@ struct UniformBuffer
     float4x4 proj;
 };
 ConstantBuffer<UniformBuffer> ubo;
+
+[[vk::binding(4, 1)]]
+ConstantBuffer<UniformBuffer> sun_ubo;
 
 
 struct Constants
@@ -87,7 +91,9 @@ PSInput VSMain(VSInput input, uniform Constants pc)
 {
     PSInput result = (PSInput)0;
 
-    result.position = mul(ubo.proj, mul(ubo.view, mul(pc.model, float4(input.Position.xyz, 1.0)))); ;
+    result.worldPos = mul(pc.model, float4(input.Position.xyz, 1.0f)).xyz;
+    result.position = mul(ubo.proj, mul(ubo.view, float4(result.worldPos.xyz, 1.0f)));
+    result.lightSpacePos = mul(sun_ubo.proj, mul(sun_ubo.view, float4(result.worldPos, 1.0f)));
     result.uv = input.TexCoords;
     result.color = input.Color;
 
@@ -100,7 +106,6 @@ PSInput VSMain(VSInput input, uniform Constants pc)
     result.normal = normalize(mul(normalMatrix, input.Normal));
     result.tangent = normalize(mul(normalMatrix, input.Tangent.xyz));
     result.sign = input.Tangent.w; // normalize(cross(result.tangent, result.normal));
-    result.worldPos = mul(pc.model, float4(input.Position.xyz, 1.0f)).xyz;
     return result;
 }
 
@@ -144,6 +149,12 @@ SamplerCube irradianceMap;
 SamplerCube specularMap; 
 [[vk::binding(3, 1)]]
 Sampler2D brdfLUT;
+
+[[vk::binding(5, 1)]]
+Sampler2D shadowMap;
+
+[[vk::binding(6, 1)]]
+SamplerCube shadowCubeMap;
 
 
 Sampler2D g_baseColor;
@@ -193,6 +204,8 @@ float3 getRadiance(Light l, PSInput input, float3 V)
         float epsilon = 0.01;
         float intensity = saturate((theta - (l.cutOff - epsilon)) / epsilon);
         attenuation *= intensity;
+    } else {
+        attenuation = 5.0f; // directional light
     }
 
     return l.color * attenuation;
@@ -231,6 +244,73 @@ float GeometrySmith(float NdotV, float NdotL, float roughness)
 	float ggx1 = GeometrySchlickGGX(NdotV, roughness);
 	float ggx2 = GeometrySchlickGGX(NdotL, roughness);
     return ggx1 * ggx2;
+}
+
+float calcShadow(float4 lightSpacePos, float NDotL)
+{
+    // Perform perspective divide
+    float3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+    // Transform to [0,1] range
+    projCoords.xy = projCoords.xy * 0.5f + 0.5f;
+    // Get closest depth value from light's perspective (using [0,1] range frag pos as coords)
+    float closestDepth = shadowMap.Sample(projCoords.xy).r;
+    // Get depth of current fragment from light's perspective
+    float currentDepth = projCoords.z;
+    // Check whether current frag pos is in shadow
+    float bias = max(0.05 * (1.0 - NDotL), 0.005);
+    // float shadow = currentDepth - bias > closestDepth ? 1.0f : 0.0f;
+
+    float2 shadowMapSize;
+    shadowMap.GetDimensions(shadowMapSize.x, shadowMapSize.y);
+    float shadow = 0.0;
+    float2 texelSize = 1.0 / shadowMapSize;
+    for (int x = -1; x <= 1; ++x)
+    {
+        for (int y = -1; y <= 1; ++y)
+        {
+            float pcfDepth = shadowMap.Sample(projCoords.xy + float2(x, y) * texelSize).r;
+            shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
+        }
+    }
+    shadow /= 9.0;
+
+    // Keep the shadow at 0 outside the far plane of the light's orthographic frustum
+    if (projCoords.z > 1.0f)
+        shadow = 0.0f;
+
+    return shadow;
+}
+
+static const float3 g_sampleOffsetDirections[20] =
+{
+    float3(1, 1, 1),   float3(1, -1, 1),   float3(-1, -1, 1), float3(-1, 1, 1),
+	float3(1, 1, -1), float3(1, -1, -1), float3(-1, -1, -1), float3(-1, 1, -1),
+	float3(1, 1, 0),   float3(1, -1, 0), float3(-1, -1, 0), float3(-1, 1, 0),
+	float3(1, 0, 1),   float3(-1, 0, 1),  float3(1, 0, -1), float3(-1, 0, -1),
+	float3(0, 1, 1),    float3(0, -1, 1),  float3(0, -1, -1), float3(0, 1, -1)
+};
+
+float calcPointShadow(float3 fragToLight, float3 viewVec)
+{
+    float closestDepth = shadowCubeMap.Sample(fragToLight).r * 25.0f; // [0,1] => [0,far_plane]
+    float currentDepth = length(fragToLight);
+    float bias = 0.05;
+
+    float shadow = 0.0;
+    int samples = 20;
+    float viewDistance = length(viewVec);
+    float diskRadius = (1.0 + (viewDistance / 25.0)) / 100.0; // 25 is far_plane
+    for (int i = 0; i < samples; ++i)
+    {
+        float3 sampleOffset = normalize(fragToLight) * g_sampleOffsetDirections[i] * diskRadius;
+        float closestDepth = shadowCubeMap.Sample(fragToLight + sampleOffset).r;
+        closestDepth *= 25.0f; // [0,1] => [0,far_plane]
+        if (currentDepth - bias > closestDepth)
+            shadow += 1.0;
+    }
+    shadow /= samples;
+
+    return shadow;
 }
 
 [shader("pixel")]
@@ -285,7 +365,13 @@ float4 PSMain(PSInput input, uniform Constants pc) : SV_TARGET
 		float3 kD = 1.0 - kS;
 		kD *= 1.0 - metallic;
 
-		Lo += (kD * (baseColor.rgb/ PI) + specular ) * radiance * NdotL;
+        float shadow = 0.0f;
+        if (l.type == DIRLIGHT)
+            shadow = calcShadow(input.lightSpacePos, NdotL);
+        else if (l.type == POINTLIGHT)
+            shadow = calcPointShadow(input.worldPos - l.position, V);
+
+        Lo += (1 - shadow) * ((kD * (baseColor.rgb / PI) + specular) * radiance * NdotL);
 	}
 
     float3 ambient;

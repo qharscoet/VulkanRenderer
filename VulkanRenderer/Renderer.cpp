@@ -1122,7 +1122,9 @@ void Renderer::drawRenderPassPBR(const std::vector<MeshPacket>& packets) {
 	const ImageBindInfo irradiance = { irradianceMap->view , *defaultSampler};
 	const ImageBindInfo specular = { specularMap->view , *defaultSampler};
 	const ImageBindInfo brdf = { BRDF_LUT->view , *defaultSampler };
-	m_device.bindRessources(1, { &light_data_gpu}, { irradiance, specular, brdf});
+	const ImageBindInfo shadowMapBindInfo = ImageBindInfo{ shadowMap->view, *defaultSampler };
+	const ImageBindInfo depthShadowMapBindInfo = ImageBindInfo{ pointShadowMap->view, *defaultSampler };
+	m_device.bindRessources(1, { &light_data_gpu, sunViewProj.get()}, {irradiance, specular, brdf, shadowMapBindInfo, depthShadowMapBindInfo});
 
 	uint32_t count = lights.size();
 	size_t start_offset = sizeof(MeshPacket::PushConstantsData);
@@ -1228,6 +1230,24 @@ void Renderer::initPipelinePBR()
 				// BRDF LUT
 				{
 					.slot = 3,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				},
+				// Sun View Projection
+				{
+					.slot = 4,
+					.type = BindingType::UBO,
+					.stageFlags = e_Vertex,
+				},
+				//Shadow map
+				{
+					.slot = 5,
+					.type = BindingType::ImageSampler,
+					.stageFlags = e_Pixel,
+				},
+				// Depth Shadow Map
+				{
+					.slot = 6,
 					.type = BindingType::ImageSampler,
 					.stageFlags = e_Pixel,
 				}
